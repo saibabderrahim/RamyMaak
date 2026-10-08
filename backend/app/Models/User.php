@@ -113,6 +113,12 @@ class User extends Authenticatable
             ->useLogName('users')
             ->logOnly(['username', 'name', 'email', 'phone', 'client_id', 'is_active'])
             ->logOnlyDirty()
-            ->dontSubmitEmptyLogs();
+            ->dontSubmitEmptyLogs()
+            ->setDescriptionForEvent(fn (string $event) => match ($event) {
+                'created' => 'Compte créé',
+                'updated' => 'Compte modifié',
+                'deleted' => 'Compte supprimé',
+                default => $event,
+            });
     }
 }

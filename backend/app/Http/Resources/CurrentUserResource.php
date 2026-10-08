@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Domain\Auth\PasswordPolicy;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -32,6 +33,7 @@ class CurrentUserResource extends JsonResource
             'permissions' => $this->getAllPermissions()->pluck('name')->sort()->values(),
             'client_id' => $this->client_id,
             'must_change_password' => $this->must_change_password,
+            'password_min_length' => app(PasswordPolicy::class)->minLength($role),
             // Les régions couvertes (RG-S01) sont calculées à partir des
             // affectations, introduites au lot 2.
             'perimeter' => [

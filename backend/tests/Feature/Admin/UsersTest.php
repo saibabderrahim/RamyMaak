@@ -116,7 +116,8 @@ it('updates an account and journals the changes', function () {
         ->and($user->fresh()->getRoleNames()->all())->toBe(['adv']);
 
     $logs = AuditLog::query()->where('subject_type', 'user')->where('subject_id', $user->id)->get()->keyBy('event');
-    expect($logs['updated']->properties['old']['name'])->toBe('Ancien nom')
+    expect($logs['updated']->description)->toBe('Compte modifié')
+        ->and($logs['updated']->properties['old']['name'])->toBe('Ancien nom')
         ->and($logs['updated']->properties['attributes']['name'])->toBe('Nouveau nom')
         ->and($logs['updated']->causer_id)->toBe($this->admin->id)
         ->and($logs['role.changed']->properties['old']['role'])->toBe('regional')

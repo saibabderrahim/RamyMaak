@@ -92,3 +92,14 @@ it('journals the change without the password', function () {
     expect($entry->subject_id)->toBe($user->id)
         ->and($entry->toJson())->not->toContain('kiwi4567');
 });
+
+it('tells the PWA which minimum length applies to the user', function (Role $role, int $length) {
+    $this->actingAs(userWithRole($role));
+
+    $this->getJson('/api/v1/auth/me')->assertJsonPath('password_min_length', $length);
+})->with([
+    [Role::Client, 8],
+    [Role::Regional, 8],
+    [Role::Adv, 12],
+    [Role::Admin, 12],
+]);
