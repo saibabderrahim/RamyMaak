@@ -6,6 +6,7 @@ Chaîne quotidienne : **ADV** (quota région × produit) → **Régional** (born
 
 - Spécification : [docs/specification-technique-v1.0.md](docs/specification-technique-v1.0.md)
 - Avancement et décisions du lot en cours : [docs/lot-1-socle.md](docs/lot-1-socle.md)
+- Déploiement : [docs/deploiement.md](docs/deploiement.md)
 
 ## Organisation du dépôt (§9.3)
 
@@ -49,14 +50,13 @@ La CI exécute en plus les tests de l'API sur MySQL 8.4, l'audit des dépendance
 
 ## Recette et production (Docker Compose)
 
+Installation d'un serveur, HTTPS, premier compte Admin, livraisons et retour arrière : **[docs/deploiement.md](docs/deploiement.md)**.
+
+En résumé, une fois le serveur préparé et `.env` rempli :
+
 ```bash
-cp .env.example .env        # compléter les valeurs « À DÉFINIR »
-docker compose build
-docker compose up -d --wait mysql
-docker compose run --rm --no-deps app php artisan migrate --force
-docker compose run --rm --no-deps app php artisan db:seed --class='Database\Seeders\RolesAndPermissionsSeeder' --force
-docker compose up -d --wait
+scripts/deploy.sh v0.1.0          # FORCE_DAYTIME=1 hors production (déploiement interdit 06:00 – 20:00)
 docker compose run --rm --no-deps app php artisan ramymaak:create-admin a.benali --name="Amina Benali"
 ```
 
-L'application écoute sur `127.0.0.1:8090` et le WebSocket sur `127.0.0.1:8091`. Le frontal HTTPS de l'hôte se configure avec [`docker/nginx-host/ramymaak.conf`](docker/nginx-host/ramymaak.conf) et certbot (§14.3). Les livraisons suivantes passent par `scripts/deploy.sh <étiquette>`.
+L'application écoute sur `127.0.0.1:8090` et le WebSocket sur `127.0.0.1:8091`, derrière le nginx de l'hôte ([`docker/nginx-host/ramymaak.conf`](docker/nginx-host/ramymaak.conf)).
