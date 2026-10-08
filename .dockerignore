@@ -1,0 +1,14 @@
+.git
+.github
+**/node_modules
+**/dist
+backend/vendor
+backend/.env
+backend/storage/logs/*
+backend/storage/framework/cache/data/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+backend/database/*.sqlite
+backend/.phpunit.cache
+.env
+docs

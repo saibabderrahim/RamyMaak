@@ -1,0 +1,111 @@
+# RamyMaak — services du serveur dédié (§14.2).
+# Le frontal HTTPS (nginx de l'hôte + certbot, §14.3) relaie vers
+# 127.0.0.1:8090 (application) et 127.0.0.1:8091 (WebSocket).
+
+x-php: &php
+  image: ramymaak/php:${RAMYMAAK_VERSION:-local}
+  build:
+    context: .
+    dockerfile: docker/php/Dockerfile
+  env_file: .env
+  restart: unless-stopped
+  depends_on:
+    mysql:
+      condition: service_healthy
+  volumes:
+    - storage:/var/www/html/storage/app
+
+services:
+  web:
+    image: ramymaak/web:${RAMYMAAK_VERSION:-local}
+    build:
+      context: .
+      dockerfile: docker/web/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8090:80"
+    depends_on:
+      app:
+        condition: service_healthy
+    mem_limit: 128m
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  app:
+    <<: *php
+    command: ["php-fpm"]
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "SCRIPT_NAME=/fpm-ping SCRIPT_FILENAME=/fpm-ping REQUEST_METHOD=GET cgi-fcgi -bind -connect 127.0.0.1:9000 | grep -q pong"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  worker:
+    <<: *php
+    command: ["php", "artisan", "queue:work", "--sleep=1", "--tries=3", "--max-time=3600"]
+    # Deux processus de traitement des files d'attente (§14.2).
+    deploy:
+      replicas: 2
+    mem_limit: 512m
+    stop_grace_period: 60s
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'artisan queue:work' > /dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  scheduler:
+    <<: *php
+    command: ["php", "artisan", "schedule:work"]
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'artisan schedule:work' > /dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  reverb:
+    <<: *php
+    command: ["php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8080"]
+    ports:
+      - "127.0.0.1:8091:8080"
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@fsockopen('127.0.0.1', 8080) ? 0 : 1);"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+00:00
+      # Journaux binaires conservés 7 jours : restauration à un instant donné (§14.5).
+      - --binlog-expire-logs-seconds=604800
+    # Jamais publié hors du serveur (§14.2).
+    volumes:
+      - mysql:/var/lib/mysql
+    mem_limit: 2g
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  mysql:
+  storage:
