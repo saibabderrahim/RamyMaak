@@ -7,8 +7,8 @@ import { VitePWA } from 'vite-plugin-pwa'
 // Couleur provisoire : à remplacer par la couleur de la charte Ramy (§9.5).
 const THEME_COLOR = '#0B6E4F'
 
-// Code réservé au back-office (§9.5) : modules ADV et Admin.
-const BACK_OFFICE_MODULE = /\/src\/modules\/(adv|admin)\//
+// Code réservé au back-office (§9.5) : modules ADV, Admin et écrans back-office partagés.
+const BACK_OFFICE_MODULE = /\/src\/modules\/(adv|admin|backoffice)\//
 const BACK_OFFICE_CHUNK = 'backoffice-'
 
 /**

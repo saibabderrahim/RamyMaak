@@ -4,6 +4,15 @@ namespace App\Providers;
 
 use App\Domain\Settings\Settings;
 use App\Models\AuditLog;
+use App\Models\Client;
+use App\Models\ClientCategory;
+use App\Models\Depot;
+use App\Models\Import;
+use App\Models\Product;
+use App\Models\ProductFamily;
+use App\Models\ProductPrice;
+use App\Models\Region;
+use App\Models\RegionAssignment;
 use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -32,6 +41,15 @@ class AppServiceProvider extends ServiceProvider
             'user' => User::class,
             'setting' => Setting::class,
             'audit_log' => AuditLog::class,
+            'depot' => Depot::class,
+            'region' => Region::class,
+            'region_assignment' => RegionAssignment::class,
+            'client_category' => ClientCategory::class,
+            'client' => Client::class,
+            'product_family' => ProductFamily::class,
+            'product' => Product::class,
+            'product_price' => ProductPrice::class,
+            'import' => Import::class,
         ]);
 
         // Limitation de débit (§11.1).

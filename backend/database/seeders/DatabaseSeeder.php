@@ -11,7 +11,7 @@ class DatabaseSeeder extends Seeder
         $this->call(RolesAndPermissionsSeeder::class);
 
         if (app()->environment(['local', 'testing', 'recette'])) {
-            $this->call(DemoUsersSeeder::class);
+            $this->call([DemoUsersSeeder::class, DemoReferentialsSeeder::class]);
         }
     }
 }

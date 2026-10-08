@@ -1,9 +1,20 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Admin\AuditLogController;
+use App\Http\Controllers\Api\V1\Admin\ClientAccountController;
+use App\Http\Controllers\Api\V1\Admin\DepotController;
+use App\Http\Controllers\Api\V1\Admin\RegionAssignmentController;
 use App\Http\Controllers\Api\V1\Admin\SettingsController;
 use App\Http\Controllers\Api\V1\Admin\UserController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\ClientCategoryController;
+use App\Http\Controllers\Api\V1\ClientController;
+use App\Http\Controllers\Api\V1\ImportController;
+use App\Http\Controllers\Api\V1\ProductController;
+use App\Http\Controllers\Api\V1\ProductFamilyController;
+use App\Http\Controllers\Api\V1\ProductMediaController;
+use App\Http\Controllers\Api\V1\ProductPriceController;
+use App\Http\Controllers\Api\V1\RegionController;
 use App\Http\Middleware\EnforceSessionPolicy;
 use App\Http\Middleware\EnsurePasswordIsChanged;
 use Illuminate\Support\Facades\Route;
@@ -26,7 +37,58 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::put('auth/password', [AuthController::class, 'changePassword'])->name('auth.password');
 
         Route::middleware(EnsurePasswordIsChanged::class)->group(function () {
+            // Référentiels (lot 2) — contrat : docs/lot-2-contrat-api.md
+            Route::get('regions', [RegionController::class, 'index'])->name('regions.index');
+            Route::get('regions/{region}', [RegionController::class, 'show'])->name('regions.show');
+
+            Route::get('clients', [ClientController::class, 'index'])->name('clients.index');
+            Route::post('clients', [ClientController::class, 'store'])->name('clients.store');
+            Route::get('clients/{client}', [ClientController::class, 'show'])->name('clients.show');
+            Route::patch('clients/{client}', [ClientController::class, 'update'])->name('clients.update');
+            Route::get('client-categories', [ClientCategoryController::class, 'index'])->name('client-categories.index');
+
+            Route::get('products', [ProductController::class, 'index'])->name('products.index');
+            Route::post('products', [ProductController::class, 'store'])->name('products.store');
+            Route::get('products/{product}', [ProductController::class, 'show'])->name('products.show');
+            Route::patch('products/{product}', [ProductController::class, 'update'])->name('products.update');
+            Route::get('products/{product}/prices', [ProductPriceController::class, 'index'])->name('products.prices.index');
+            Route::post('products/{product}/prices', [ProductPriceController::class, 'store'])->name('products.prices.store');
+            Route::post('products/{product}/media', [ProductMediaController::class, 'store'])->name('products.media.store');
+            Route::scopeBindings()->group(function () {
+                Route::patch('products/{product}/media/{media}', [ProductMediaController::class, 'update'])->name('products.media.update');
+                Route::delete('products/{product}/media/{media}', [ProductMediaController::class, 'destroy'])->name('products.media.destroy');
+            });
+            Route::get('product-families', [ProductFamilyController::class, 'index'])->name('product-families.index');
+
+            Route::get('imports/templates/{type}', [ImportController::class, 'template'])
+                ->whereIn('type', ['clients', 'products', 'prices'])
+                ->name('imports.template');
+            Route::get('imports', [ImportController::class, 'index'])->name('imports.index');
+            Route::post('imports', [ImportController::class, 'store'])->name('imports.store');
+            Route::get('imports/{import}', [ImportController::class, 'show'])->whereNumber('import')->name('imports.show');
+            Route::post('imports/{import}/apply', [ImportController::class, 'apply'])->whereNumber('import')->name('imports.apply');
+            Route::get('imports/{import}/error-report', [ImportController::class, 'errorReport'])
+                ->whereNumber('import')
+                ->name('imports.error-report');
+
             Route::prefix('admin')->name('admin.')->group(function () {
+                Route::get('depots', [DepotController::class, 'index'])->name('depots.index');
+                Route::post('depots', [DepotController::class, 'store'])->name('depots.store');
+                Route::patch('depots/{depot}', [DepotController::class, 'update'])->name('depots.update');
+                Route::get('regions', [RegionController::class, 'index'])->name('regions.index');
+                Route::post('regions', [RegionController::class, 'store'])->name('regions.store');
+                Route::patch('regions/{region}', [RegionController::class, 'update'])->name('regions.update');
+                Route::get('regions/{region}/assignments', [RegionAssignmentController::class, 'index'])->name('regions.assignments.index');
+                Route::post('regions/{region}/assignments', [RegionAssignmentController::class, 'store'])->name('regions.assignments.store');
+                Route::delete('assignments/{assignment}', [RegionAssignmentController::class, 'destroy'])->name('assignments.destroy');
+
+                Route::post('client-categories', [ClientCategoryController::class, 'store'])->name('client-categories.store');
+                Route::patch('client-categories/{category}', [ClientCategoryController::class, 'update'])->name('client-categories.update');
+                Route::post('client-accounts', [ClientAccountController::class, 'store'])->name('client-accounts.store');
+
+                Route::post('product-families', [ProductFamilyController::class, 'store'])->name('product-families.store');
+                Route::patch('product-families/{family}', [ProductFamilyController::class, 'update'])->name('product-families.update');
+
                 Route::get('users', [UserController::class, 'index'])->name('users.index');
                 Route::post('users', [UserController::class, 'store'])->name('users.store');
                 Route::get('users/{user}', [UserController::class, 'show'])->name('users.show');

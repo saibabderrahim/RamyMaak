@@ -1,5 +1,8 @@
+import backoffice from './fr/backoffice'
+import field from './fr/field'
+
 // Libellés en français (V1). L'arabe arrive en V1.1 avec un fichier ar.ts de
-// même structure (ENF-12).
+// même structure (ENF-12). Les écrans du lot 2 ont leurs propres fichiers.
 const fr = {
   app: {
     name: 'RamyMaak',
@@ -69,6 +72,11 @@ const fr = {
     users: 'Comptes',
     audit: 'Journal d’audit',
     settings: 'Paramètres',
+    regions: 'Régions',
+    clients: 'Clients',
+    products: 'Produits',
+    imports: 'Imports',
+    myClients: 'Mes clients',
     menu: 'Menu principal',
   },
   pwa: {
@@ -219,6 +227,8 @@ const fr = {
       weekdays: ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'],
     },
   },
+  backoffice,
+  field,
 } as const
 
 export default fr

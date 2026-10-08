@@ -6,6 +6,8 @@ use App\Domain\Access\Role;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -86,6 +88,22 @@ class User extends Authenticatable
     public static function normalizeUsername(string $username): string
     {
         return mb_strtolower(trim($username));
+    }
+
+    /**
+     * Client auquel le compte est rattaché (comptes clients).
+     *
+     * @return BelongsTo<Client, $this>
+     */
+    public function client(): BelongsTo
+    {
+        return $this->belongsTo(Client::class);
+    }
+
+    /** @return HasMany<RegionAssignment, $this> */
+    public function regionAssignments(): HasMany
+    {
+        return $this->hasMany(RegionAssignment::class);
     }
 
     public function appRole(): ?Role

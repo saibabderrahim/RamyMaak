@@ -1,4 +1,14 @@
 import { Navigate, Route, Routes } from 'react-router'
+import ClientCreatePage from '../backoffice/clients/ClientCreatePage'
+import ClientDetailPage from '../backoffice/clients/ClientDetailPage'
+import ClientsPage from '../backoffice/clients/ClientsPage'
+import ImportDetailPage from '../backoffice/imports/ImportDetailPage'
+import ImportsPage from '../backoffice/imports/ImportsPage'
+import ProductCreatePage from '../backoffice/products/ProductCreatePage'
+import ProductDetailPage from '../backoffice/products/ProductDetailPage'
+import ProductsPage from '../backoffice/products/ProductsPage'
+import RegionDetailPage from '../backoffice/regions/RegionDetailPage'
+import RegionsPage from '../backoffice/regions/RegionsPage'
 import AuditLogPage from './AuditLogPage'
 import SettingsPage from './SettingsPage'
 import UserCreatePage from './UserCreatePage'
@@ -16,6 +26,16 @@ export default function AdminModule() {
       <Route path="comptes" element={<UsersPage />} />
       <Route path="comptes/nouveau" element={<UserCreatePage />} />
       <Route path="comptes/:id" element={<UserDetailPage />} />
+      <Route path="regions" element={<RegionsPage />} />
+      <Route path="regions/:id" element={<RegionDetailPage />} />
+      <Route path="clients" element={<ClientsPage />} />
+      <Route path="clients/nouveau" element={<ClientCreatePage />} />
+      <Route path="clients/:id" element={<ClientDetailPage />} />
+      <Route path="produits" element={<ProductsPage />} />
+      <Route path="produits/nouveau" element={<ProductCreatePage />} />
+      <Route path="produits/:id" element={<ProductDetailPage />} />
+      <Route path="imports" element={<ImportsPage />} />
+      <Route path="imports/:id" element={<ImportDetailPage />} />
       <Route path="journal" element={<AuditLogPage />} />
       <Route path="parametres" element={<SettingsPage />} />
     </Routes>

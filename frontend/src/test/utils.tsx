@@ -57,7 +57,7 @@ export function makeUser(role: Role, overrides: Partial<CurrentUser> = {}): Curr
     client_id: null,
     must_change_password: false,
     password_min_length: role === 'admin' || role === 'adv' ? 12 : 8,
-    perimeter: { region_ids: [] },
+    perimeter: { all_regions: role === 'admin', region_ids: [] },
     last_login_at: null,
     ...overrides,
   }

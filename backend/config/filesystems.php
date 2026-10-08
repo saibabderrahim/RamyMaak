@@ -47,6 +47,17 @@ return [
             'report' => false,
         ],
 
+        // Photos produits (§9.8) : fichiers publics servis à /media par le
+        // serveur web (cache long ; une photo remplacée change d'adresse).
+        'media' => [
+            'driver' => 'local',
+            'root' => storage_path('app/public/media'),
+            'url' => '/media',
+            'visibility' => 'public',
+            'throw' => true,
+            'report' => false,
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),
@@ -74,7 +85,7 @@ return [
     */
 
     'links' => [
-        public_path('storage') => storage_path('app/public'),
+        public_path('media') => storage_path('app/public/media'),
     ],
 
 ];

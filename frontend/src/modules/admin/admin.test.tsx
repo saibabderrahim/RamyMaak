@@ -12,6 +12,7 @@ const account: User = {
   phone: null,
   role: 'client',
   client_id: 12,
+  client: { id: 12, code: 'C0012', name: 'Superette El Baraka' },
   is_active: true,
   is_locked: false,
   locked_until: null,

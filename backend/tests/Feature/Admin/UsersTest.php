@@ -2,6 +2,7 @@
 
 use App\Domain\Access\Role;
 use App\Models\AuditLog;
+use App\Models\Client;
 use App\Models\User;
 use Database\Factories\UserFactory;
 use Illuminate\Support\Facades\DB;
@@ -56,19 +57,20 @@ it('rejects unknown filters, sorts and roles', function () {
 
 it('creates an account with a one-time temporary password', function () {
     $this->actingAs($this->admin);
+    $client = Client::factory()->create(['code' => 'C0012']);
 
     $response = $this->postJson('/api/v1/admin/users', [
         'username' => ' C0012 ',
         'name' => 'Superette El Baraka',
         'phone' => '0550 12 34 56',
         'role' => 'client',
-        'client_id' => 12,
+        'client_id' => $client->id,
     ]);
 
     $response->assertCreated()
         ->assertJsonPath('user.username', 'c0012')
         ->assertJsonPath('user.role', 'client')
-        ->assertJsonPath('user.client_id', 12)
+        ->assertJsonPath('user.client_id', $client->id)
         ->assertJsonPath('user.must_change_password', true);
 
     $temporary = $response->json('temporary_password');
@@ -126,7 +128,7 @@ it('updates an account and journals the changes', function () {
 
 it('detaches the client when an account leaves the client role', function () {
     $this->actingAs($this->admin);
-    $user = userWithRole(Role::Client, ['client_id' => 12]);
+    $user = userWithRole(Role::Client, ['client_id' => Client::factory()->create()->id]);
 
     $this->patchJson("/api/v1/admin/users/{$user->id}", ['role' => 'regional'])
         ->assertOk()
