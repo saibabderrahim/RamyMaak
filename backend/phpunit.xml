@@ -21,6 +21,8 @@
         <env name="APP_ENV" value="testing"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="APP_URL" value="http://localhost"/>
+        <!-- Clé réservée aux tests (aucune donnée réelle) : la CI n'a pas de .env. -->
+        <env name="APP_KEY" value="base64:2W1sBZyfoJwXSruJETv5zicWYEMGrKoKZV1o3o6pOqY="/>
         <env name="APP_LOCALE" value="fr"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="HASH_DRIVER" value="bcrypt"/>
