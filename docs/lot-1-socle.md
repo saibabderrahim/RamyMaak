@@ -34,7 +34,7 @@ Ce lot ne dépend d'aucun point ouvert du §18 : il a pu démarrer avant la clô
   connexion de chaque rôle (téléphone, tablette, PC), refus d'un mauvais mot de passe, création d'un compte et connexion avec son mot de passe temporaire, refus d'un mot de passe courant, changement imposé, modification des paramètres puis trace dans le journal, accès refusé hors de son rôle, verrouillage après 5 échecs.
 - **Service worker** : actif, 19 fichiers pré-cachés, aucun fichier du back-office, aucune violation de la CSP, coquille chargée sans réseau.
 - **Isolation du back-office** : le build échoue si le code ADV ou Admin est importé par le reste de l'application (essai d'une violation volontaire : build refusé).
-- **Images** : l'image web et les configurations nginx (interne et hôte) ont été construites et validées. L'image PHP n'a pas pu être construite dans l'environnement de développement (dépôts Debian inaccessibles) : la CI la construit et démarre la pile complète.
+- **Images et pile complète** : la CI construit les deux images, démarre les 6 services jusqu'à leurs vérifications de santé, applique les migrations, puis contrôle la page d'entrée, les en-têtes de cache du service worker, la réponse « Problem Details » de l'API et la création d'un Admin. Les configurations nginx (interne et hôte) ont aussi été validées avec `nginx -t`.
 
 ## Décisions d'implémentation à valider
 
