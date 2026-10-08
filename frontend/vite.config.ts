@@ -98,6 +98,7 @@ export default defineConfig({
       '/api': API_TARGET,
       '/sanctum': API_TARGET,
       '/broadcasting': API_TARGET,
+      '/media': API_TARGET,
     },
   },
   test: {
