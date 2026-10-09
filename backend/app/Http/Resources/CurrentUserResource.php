@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Domain\Access\Perimeter;
 use App\Domain\Auth\PasswordPolicy;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -21,6 +22,9 @@ class CurrentUserResource extends JsonResource
     public function toArray(Request $request): array
     {
         $role = $this->appRole();
+        // Régions couvertes aujourd'hui (§3.3) : recalculées à chaque appel,
+        // une affectation ajoutée ou révoquée compte aussitôt (RG-S03).
+        $regionIds = app(Perimeter::class)->regionIds($this->resource);
 
         return [
             'id' => $this->id,
@@ -34,10 +38,9 @@ class CurrentUserResource extends JsonResource
             'client_id' => $this->client_id,
             'must_change_password' => $this->must_change_password,
             'password_min_length' => app(PasswordPolicy::class)->minLength($role),
-            // Les régions couvertes (RG-S01) sont calculées à partir des
-            // affectations, introduites au lot 2.
             'perimeter' => [
-                'region_ids' => [],
+                'all_regions' => $regionIds === null,
+                'region_ids' => $regionIds ?? [],
             ],
             'last_login_at' => $this->last_login_at?->toIso8601String(),
         ];

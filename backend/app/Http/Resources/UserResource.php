@@ -24,6 +24,12 @@ class UserResource extends JsonResource
             'phone' => $this->phone,
             'role' => $this->appRole()?->value,
             'client_id' => $this->client_id,
+            // Client rattaché (comptes clients) ; chargé d'avance par les listes.
+            'client' => $this->client === null ? null : [
+                'id' => $this->client->id,
+                'code' => $this->client->code,
+                'name' => $this->client->name,
+            ],
             'is_active' => $this->is_active,
             'is_locked' => $this->isLocked(),
             'locked_until' => $this->locked_until?->toIso8601String(),

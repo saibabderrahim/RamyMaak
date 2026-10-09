@@ -27,6 +27,9 @@ use Spatie\QueryBuilder\QueryBuilder;
  */
 class UserController extends Controller
 {
+    /** Rôle et client rattaché (UserResource). */
+    private const RELATIONS = ['roles', 'client:id,code,name'];
+
     public function __construct(
         private readonly AuthAudit $audit,
         private readonly SessionRevoker $revoker,
@@ -36,7 +39,7 @@ class UserController extends Controller
     {
         Gate::authorize('viewAny', User::class);
 
-        $users = QueryBuilder::for(User::query()->with('roles'))
+        $users = QueryBuilder::for(User::query()->with(self::RELATIONS))
             ->allowedFilters(
                 AllowedFilter::callback('role', function (Builder $query, mixed $value): void {
                     $roles = collect((array) $value)->map(fn ($r) => Role::tryFrom((string) $r));
@@ -46,10 +49,16 @@ class UserController extends Controller
                     $query->role($roles->map->value->all());
                 }),
                 AllowedFilter::exact('is_active'),
+                AllowedFilter::exact('client_id'),
+                // Une recherche peut contenir une virgule : pas de découpage en liste.
                 AllowedFilter::callback('search', function (Builder $query, mixed $value): void {
-                    $term = '%'.str_replace(['%', '_'], ['\%', '\_'], (string) $value).'%';
-                    $query->where(fn (Builder $q) => $q->where('username', 'like', $term)->orWhere('name', 'like', $term));
-                }),
+                    // Échappement explicite (« ! ») : « _ » et « % » lus littéralement sur MySQL comme SQLite.
+                    $term = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], trim((string) $value)).'%';
+                    $grammar = $query->getQuery()->getGrammar();
+                    $query->where(fn (Builder $q) => $q
+                        ->whereRaw($grammar->wrap('username')." LIKE ? ESCAPE '!'", [$term])
+                        ->orWhereRaw($grammar->wrap('name')." LIKE ? ESCAPE '!'", [$term]));
+                })->delimiter(''),
             )
             ->allowedSorts('username', 'name', 'created_at', 'last_login_at')
             ->defaultSort('username')
@@ -84,7 +93,7 @@ class UserController extends Controller
         // Le mot de passe temporaire n'est communiqué qu'une fois, pour la
         // fiche d'accès remise en main propre (EF-ADM-02).
         return response()->json([
-            'user' => new UserResource($user->load('roles')),
+            'user' => new UserResource($user->load(self::RELATIONS)),
             'temporary_password' => $temporaryPassword,
         ], 201);
     }
@@ -93,7 +102,7 @@ class UserController extends Controller
     {
         Gate::authorize('view', $user);
 
-        return new UserResource($user->load('roles'));
+        return new UserResource($user->load(self::RELATIONS));
     }
 
     public function update(UpdateUserRequest $request, User $user): UserResource
@@ -134,7 +143,7 @@ class UserController extends Controller
             }
         });
 
-        return new UserResource($user->refresh()->load('roles'));
+        return new UserResource($user->refresh()->load(self::RELATIONS));
     }
 
     public function resetPassword(Request $request, User $user): JsonResponse
@@ -163,7 +172,7 @@ class UserController extends Controller
         });
 
         return response()->json([
-            'user' => new UserResource($user->load('roles')),
+            'user' => new UserResource($user->load(self::RELATIONS)),
             'temporary_password' => $temporaryPassword,
         ]);
     }

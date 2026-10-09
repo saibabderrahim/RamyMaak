@@ -1,0 +1,78 @@
+<?php
+
+// Référentiel clients (EF-CLI-01 à 04), catégories et comptes clients (EF-ADM-02).
+return [
+    'attributes' => [
+        'code' => 'code client',
+        'name' => 'raison sociale',
+        'trade_name' => 'enseigne',
+        'category_id' => 'catégorie',
+        'region_id' => 'région',
+        'address' => 'adresse',
+        'wilaya' => 'wilaya',
+        'commune' => 'commune',
+        'lat' => 'latitude',
+        'lng' => 'longitude',
+        'phone' => 'téléphone',
+        'phone2' => 'second téléphone',
+        'email' => 'adresse e-mail',
+        'nif' => 'NIF',
+        'nis' => 'NIS',
+        'rc' => 'RC',
+        'ai' => 'article d\'imposition',
+        'status' => 'statut',
+        'status_reason' => 'motif',
+        'client_ids' => 'clients',
+        'client_ids.*' => 'client',
+    ],
+    'category_attributes' => [
+        'code' => 'code',
+        'name' => 'libellé',
+    ],
+    'code_format' => 'Le code client ne peut contenir que des lettres, des chiffres, des tirets et des tirets bas (30 caractères au plus).',
+    'category_code_format' => 'Le code ne peut contenir que des lettres, des chiffres, des tirets et des tirets bas (20 caractères au plus).',
+    'code_immutable' => 'Le code ne peut pas être modifié : il sert de clé aux fichiers Excel et à l\'ERP.',
+    'region_unavailable' => 'Choisissez une région active.',
+    'coordinates_pair' => 'Renseignez la latitude et la longitude ensemble.',
+    'status_reason_required' => 'Un motif est obligatoire pour bloquer un client.',
+    'unknown_status' => 'Statut inconnu.',
+    'invalid_identifier' => 'Identifiant invalide.',
+
+    'accounts' => [
+        'client_required' => 'Un compte client doit être rattaché à un client.',
+        'client_inactive' => 'Ce client est inactif : un compte ne peut pas lui être rattaché.',
+        'reactivation_blocked' => 'Le client de ce compte est inactif : réactivez d\'abord le client.',
+        'none_created' => 'Aucun compte créé : les clients sélectionnés ont déjà un compte, sont inactifs, ou leur identifiant est déjà utilisé.',
+        'audit' => 'Compte client créé (fiche d\'accès)',
+    ],
+
+    // Fiche d'accès remise en main propre (EF-ADM-02).
+    'access_sheet' => [
+        'document_title' => 'Fiches d’accès RamyMaak',
+        'title' => 'Fiche d’accès',
+        'confidential' => 'Confidentiel — à remettre en main propre',
+        'client' => 'Client',
+        'code' => 'Code client',
+        'trade_name' => 'Enseigne',
+        'credentials' => 'Vos identifiants',
+        'username' => 'Identifiant',
+        'password' => 'Mot de passe temporaire',
+        'password_notice' => 'Ce mot de passe ne sert qu’une fois : vous choisirez votre propre mot de passe à la première connexion.',
+        'address' => 'Adresse de l’application',
+        'install' => 'Installer l’application sur votre téléphone',
+        'android_title' => 'Android (Chrome)',
+        'android_steps' => [
+            'Ouvrez Chrome et saisissez l’adresse de l’application.',
+            'Touchez le menu (les trois points en haut à droite).',
+            'Touchez « Installer l’application » ou « Ajouter à l’écran d’accueil ».',
+        ],
+        'ios_title' => 'iPhone (Safari)',
+        'ios_steps' => [
+            'Ouvrez Safari et saisissez l’adresse de l’application.',
+            'Touchez le bouton Partager (le carré avec une flèche vers le haut).',
+            'Touchez « Sur l’écran d’accueil », puis « Ajouter ».',
+        ],
+        'help' => 'Une question ou un mot de passe oublié ? Contactez votre responsable régional.',
+        'issued_on' => 'Fiche éditée le :date',
+    ],
+];

@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Domain\Access\Perimeter;
 use App\Domain\Access\Permission;
 use App\Domain\Access\Role;
 use App\Models\User;
@@ -11,6 +12,8 @@ use App\Models\User;
  */
 class UserPolicy
 {
+    public function __construct(private readonly Perimeter $perimeter) {}
+
     public function viewAny(User $actor): bool
     {
         return $actor->can(Permission::UserManage->value);
@@ -32,9 +35,8 @@ class UserPolicy
     }
 
     /**
-     * Admin : tout compte. Régional : comptes clients de son périmètre
-     * (EF-AUTH-05). Le périmètre (RG-S01) repose sur les affectations aux
-     * régions, introduites au lot 2 ; d'ici là, aucun compte n'y entre.
+     * Admin : tout compte. Régional : comptes clients dont le client est dans
+     * son périmètre (EF-AUTH-05, RG-S01) — jamais un compte du personnel.
      */
     public function resetPassword(User $actor, User $target): bool
     {
@@ -44,11 +46,7 @@ class UserPolicy
 
         return $actor->can(Permission::UserResetClientPassword->value)
             && $target->hasAppRole(Role::Client)
-            && $this->clientInPerimeter($actor, $target);
-    }
-
-    private function clientInPerimeter(User $actor, User $target): bool
-    {
-        return false;
+            && $target->client !== null
+            && $this->perimeter->canAccessClient($actor, $target->client);
     }
 }

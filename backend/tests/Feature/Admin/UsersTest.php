@@ -1,8 +1,12 @@
 <?php
 
 use App\Domain\Access\Role;
+use App\Domain\Referentials\ClientRegistry;
+use App\Domain\Referentials\ClientStatus;
 use App\Models\AuditLog;
 use App\Models\Client;
+use App\Models\Region;
+use App\Models\RegionAssignment;
 use App\Models\User;
 use Database\Factories\UserFactory;
 use Illuminate\Support\Facades\DB;
@@ -36,6 +40,12 @@ it('lists users with filters, search, sort and pagination', function () {
     $this->getJson('/api/v1/admin/users?filter[search]=baraka')
         ->assertJsonPath('data.*.username', ['c0012']);
 
+    // Virgule conservée, « _ » et « % » lus littéralement.
+    $this->getJson('/api/v1/admin/users?filter[search]='.urlencode('Saïdi, Karim'))->assertOk()->assertJsonPath('meta.total', 0);
+    $this->getJson('/api/v1/admin/users?filter[search]=c00_')->assertJsonPath('meta.total', 0);
+    $this->getJson('/api/v1/admin/users?filter[search]='.urlencode('%'))->assertJsonPath('meta.total', 0);
+    $this->getJson('/api/v1/admin/users?filter[search]=k.sa')->assertJsonPath('data.*.username', ['k.saidi']);
+
     $this->getJson('/api/v1/admin/users?filter[is_active]=0')
         ->assertJsonPath('data.*.username', ['c0047']);
 
@@ -45,6 +55,21 @@ it('lists users with filters, search, sort and pagination', function () {
         ->assertJsonPath('meta.total', 4);
 
     $this->getJson('/api/v1/admin/users?per_page=500')->assertJsonPath('meta.per_page', 100);
+});
+
+it('shows the client an account is attached to, and filters by client', function () {
+    $this->actingAs($this->admin);
+    $client = Client::factory()->create(['code' => 'C0012', 'name' => 'Superette El Baraka']);
+    $account = userWithRole(Role::Client, ['username' => 'c0012', 'client_id' => $client->id]);
+    userWithRole(Role::Client, ['username' => 'c0047', 'client_id' => Client::factory()->create()->id]);
+
+    $this->getJson("/api/v1/admin/users?filter[client_id]={$client->id}")
+        ->assertOk()
+        ->assertJsonPath('data.*.username', ['c0012'])
+        ->assertJsonPath('data.0.client', ['id' => $client->id, 'code' => 'C0012', 'name' => 'Superette El Baraka']);
+
+    $this->getJson("/api/v1/admin/users/{$account->id}")->assertJsonPath('client.code', 'C0012');
+    $this->getJson("/api/v1/admin/users/{$this->admin->id}")->assertJsonPath('client', null);
 });
 
 it('rejects unknown filters, sorts and roles', function () {
@@ -71,6 +96,7 @@ it('creates an account with a one-time temporary password', function () {
         ->assertJsonPath('user.username', 'c0012')
         ->assertJsonPath('user.role', 'client')
         ->assertJsonPath('user.client_id', $client->id)
+        ->assertJsonPath('user.client', ['id' => $client->id, 'code' => 'C0012', 'name' => $client->name])
         ->assertJsonPath('user.must_change_password', true);
 
     $temporary = $response->json('temporary_password');
@@ -101,9 +127,80 @@ it('validates account creation', function (array $payload, string $field) {
     'username with spaces' => [['username' => 'jean dupont'], 'username'],
     'unknown role' => [['role' => 'superuser'], 'role'],
     'client link on staff' => [['client_id' => 3], 'client_id'],
+    'client role without client' => [['role' => 'client'], 'client_id'],
+    'unknown client' => [['role' => 'client', 'client_id' => 999999], 'client_id'],
     'invalid email' => [['email' => 'pas-un-email'], 'email'],
     'missing name' => [['name' => ''], 'name'],
 ]);
+
+it('requires a client that exists for a client account, and refuses a staff link', function () {
+    $this->actingAs($this->admin);
+    $client = Client::factory()->create();
+    $payload = ['username' => 'c0099', 'name' => 'Client', 'role' => 'client'];
+
+    $this->postJson('/api/v1/admin/users', $payload)
+        ->assertJsonValidationErrors(['client_id' => __('clients.accounts.client_required')]);
+    $this->postJson('/api/v1/admin/users', [...$payload, 'role' => 'regional', 'client_id' => $client->id])
+        ->assertJsonValidationErrors(['client_id' => __('users.client_id_client_only')]);
+    $this->postJson('/api/v1/admin/users', [...$payload, 'role' => 'regional', 'client_id' => null])->assertCreated();
+});
+
+it('refuses to attach an account to an inactive client (§3.5)', function () {
+    $this->actingAs($this->admin);
+    $inactive = Client::factory()->inactive()->create();
+    $blocked = Client::factory()->blocked()->create();
+
+    $this->postJson('/api/v1/admin/users', ['username' => 'c0001', 'name' => 'Client', 'role' => 'client', 'client_id' => $inactive->id])
+        ->assertJsonValidationErrors(['client_id' => __('clients.accounts.client_inactive')]);
+
+    // Un client bloqué garde ses comptes : il consulte sans commander.
+    $this->postJson('/api/v1/admin/users', ['username' => 'c0002', 'name' => 'Client', 'role' => 'client', 'client_id' => $blocked->id])
+        ->assertCreated();
+
+    $account = userWithRole(Role::Client, ['client_id' => $blocked->id]);
+    $this->patchJson("/api/v1/admin/users/{$account->id}", ['client_id' => $inactive->id])
+        ->assertJsonValidationErrors(['client_id' => __('clients.accounts.client_inactive')]);
+});
+
+it('requires a client when an account becomes a client account', function () {
+    $this->actingAs($this->admin);
+    $staff = userWithRole(Role::Regional);
+    $client = Client::factory()->create();
+
+    $this->patchJson("/api/v1/admin/users/{$staff->id}", ['role' => 'client'])
+        ->assertJsonValidationErrors(['client_id' => __('clients.accounts.client_required')]);
+    $this->patchJson("/api/v1/admin/users/{$staff->id}", ['role' => 'client', 'client_id' => 999999])
+        ->assertJsonValidationErrors('client_id');
+    $this->patchJson("/api/v1/admin/users/{$staff->id}", ['client_id' => $client->id])
+        ->assertJsonValidationErrors(['client_id' => __('users.client_id_client_only')]);
+
+    $this->patchJson("/api/v1/admin/users/{$staff->id}", ['role' => 'client', 'client_id' => $client->id])
+        ->assertOk()
+        ->assertJsonPath('role', 'client')
+        ->assertJsonPath('client.id', $client->id);
+
+    $this->patchJson("/api/v1/admin/users/{$staff->id}", ['client_id' => null])
+        ->assertJsonValidationErrors(['client_id' => __('clients.accounts.client_required')]);
+});
+
+it('keeps an account of a client that became inactive editable', function () {
+    $this->actingAs($this->admin);
+    $client = Client::factory()->create();
+    $account = userWithRole(Role::Client, ['client_id' => $client->id]);
+    app(ClientRegistry::class)->changeStatus($client, ClientStatus::Inactive, null, $this->admin);
+
+    $this->patchJson("/api/v1/admin/users/{$account->id}", ['name' => 'Ancien client', 'role' => 'client', 'client_id' => $client->id, 'is_active' => false])
+        ->assertOk()
+        ->assertJsonPath('name', 'Ancien client')
+        ->assertJsonPath('is_active', false);
+
+    // Il ne se réactive pas tant que le client reste inactif (§3.5).
+    $this->patchJson("/api/v1/admin/users/{$account->id}", ['is_active' => true])
+        ->assertJsonValidationErrors(['is_active' => __('clients.accounts.reactivation_blocked')]);
+
+    app(ClientRegistry::class)->changeStatus($client, ClientStatus::Active, null, $this->admin);
+    $this->patchJson("/api/v1/admin/users/{$account->id}", ['is_active' => true])->assertOk()->assertJsonPath('is_active', true);
+});
 
 it('updates an account and journals the changes', function () {
     $this->actingAs($this->admin);
@@ -192,7 +289,8 @@ it('lets an inactive admin be changed freely', function () {
     $this->actingAs($this->admin);
     $inactiveAdmin = admin(['is_active' => false]);
 
-    $this->patchJson("/api/v1/admin/users/{$inactiveAdmin->id}", ['role' => 'client'])->assertOk();
+    $this->patchJson("/api/v1/admin/users/{$inactiveAdmin->id}", ['role' => 'client', 'client_id' => Client::factory()->create()->id])
+        ->assertOk();
 });
 
 it('resets a password: temporary password, forced change, sessions revoked, lock cleared', function () {
@@ -221,11 +319,88 @@ it('resets a password: temporary password, forced change, sessions revoked, lock
         ->and($entry->toJson())->not->toContain($response->json('temporary_password'));
 });
 
-it('does not let a regional reset accounts outside their perimeter', function () {
-    $this->actingAs(userWithRole(Role::Regional));
+describe('password reset by a regional (EF-AUTH-05)', function () {
+    beforeEach(function () {
+        $this->centre = Region::factory()->create(['code' => 'CENTRE']);
+        $this->est = Region::factory()->create(['code' => 'EST']);
+        $this->regional = userWithRole(Role::Regional);
+        RegionAssignment::factory()->create(['user_id' => $this->regional->id, 'region_id' => $this->centre->id]);
+        $this->accountIn = fn (Region $region, array $state = []) => userWithRole(Role::Client, [
+            'client_id' => Client::factory()->create(['region_id' => $region->id, ...$state])->id,
+        ]);
+    });
 
-    expectProblem($this->postJson('/api/v1/admin/users/'.userWithRole(Role::Client)->id.'/reset-password'), 403, 'FORBIDDEN');
-    expectProblem($this->postJson('/api/v1/admin/users/'.userWithRole(Role::Adv)->id.'/reset-password'), 403, 'FORBIDDEN');
+    it('resets the password of a client account within the perimeter', function () {
+        $account = ($this->accountIn)($this->centre);
+        $this->actingAs($this->regional);
+
+        $response = $this->postJson("/api/v1/admin/users/{$account->id}/reset-password")
+            ->assertOk()
+            ->assertJsonPath('user.id', $account->id)
+            ->assertJsonPath('user.must_change_password', true);
+
+        expect(Hash::check($response->json('temporary_password'), $account->fresh()->password))->toBeTrue();
+        $entry = AuditLog::query()->where('event', 'password.reset')->sole();
+        expect($entry->subject_id)->toBe($account->id)->and($entry->causer_id)->toBe($this->regional->id);
+    });
+
+    it('also lets a deputy reset passwords during the deputy period (§3.4)', function () {
+        $deputy = userWithRole(Role::Regional);
+        RegionAssignment::factory()->deputy()->create(['user_id' => $deputy->id, 'region_id' => $this->est->id]);
+        $this->actingAs($deputy);
+
+        $this->postJson('/api/v1/admin/users/'.($this->accountIn)($this->est)->id.'/reset-password')->assertOk();
+    });
+
+    it('refuses accounts outside the perimeter, staff accounts and inactive clients', function () {
+        $this->actingAs($this->regional);
+        $targets = [
+            'other region' => ($this->accountIn)($this->est),
+            'inactive client' => ($this->accountIn)($this->centre, ['status' => 'INACTIVE']),
+            'client account without client' => userWithRole(Role::Client),
+            'ADV' => userWithRole(Role::Adv),
+            'regional' => userWithRole(Role::Regional),
+            'admin' => admin(),
+        ];
+
+        foreach ($targets as $label => $target) {
+            $before = $target->password;
+            expectProblem($this->postJson("/api/v1/admin/users/{$target->id}/reset-password"), 403, 'FORBIDDEN');
+            expect($target->fresh()->password)->toBe($before, $label);
+        }
+    });
+
+    it('follows the client region change from the next day only (RG-S04)', function () {
+        $estRegional = userWithRole(Role::Regional);
+        RegionAssignment::factory()->create(['user_id' => $estRegional->id, 'region_id' => $this->est->id]);
+        $account = ($this->accountIn)($this->centre);
+        app(ClientRegistry::class)->update($account->client, ['region_id' => $this->est->id], null);
+
+        $this->actingAs($this->regional);
+        $this->postJson("/api/v1/admin/users/{$account->id}/reset-password")->assertOk();
+        $this->actingAs($estRegional);
+        expectProblem($this->postJson("/api/v1/admin/users/{$account->id}/reset-password"), 403, 'FORBIDDEN');
+
+        $this->travel(1)->days();
+
+        $this->postJson("/api/v1/admin/users/{$account->id}/reset-password")->assertOk();
+        $this->actingAs($this->regional);
+        expectProblem($this->postJson("/api/v1/admin/users/{$account->id}/reset-password"), 403, 'FORBIDDEN');
+    });
+
+    it('never gives the ADV nor a client account the reset', function (Role $role) {
+        $this->actingAs(userWithRole($role));
+
+        expectProblem($this->postJson('/api/v1/admin/users/'.($this->accountIn)($this->centre)->id.'/reset-password'), 403, 'FORBIDDEN');
+    })->with([Role::Adv, Role::Client]);
+
+    it('still keeps the rest of account management to the Admin', function () {
+        $account = ($this->accountIn)($this->centre);
+        $this->actingAs($this->regional);
+
+        expectProblem($this->getJson("/api/v1/admin/users/{$account->id}"), 403, 'FORBIDDEN');
+        expectProblem($this->patchJson("/api/v1/admin/users/{$account->id}", ['is_active' => false]), 403, 'FORBIDDEN');
+    });
 });
 
 it('returns a problem document for unknown users', function () {

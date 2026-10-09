@@ -3,9 +3,12 @@
 namespace App\Http\Requests\Admin;
 
 use App\Domain\Access\Role;
+use App\Domain\Referentials\ClientStatus;
+use App\Models\Client;
 use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreUserRequest extends FormRequest
 {
@@ -34,9 +37,34 @@ class StoreUserRequest extends FormRequest
             'email' => ['nullable', 'email:rfc', 'max:255'],
             'phone' => ['nullable', 'string', 'max:30'],
             'role' => ['required', Rule::enum(Role::class)],
-            // Devient obligatoire pour le rôle client au lot 2 (référentiel clients).
-            'client_id' => ['nullable', 'integer', 'min:1', Rule::prohibitedIf(fn () => $this->input('role') !== Role::Client->value)],
+            // Obligatoire pour un compte client (EF-ADM-01), interdit pour le personnel.
+            'client_id' => [
+                'bail',
+                Rule::requiredIf(fn () => $this->input('role') === Role::Client->value),
+                Rule::prohibitedIf(fn () => $this->input('role') !== Role::Client->value),
+                'nullable', 'integer', 'min:1', Rule::exists('clients', 'id'),
+            ],
             'is_active' => ['sometimes', 'boolean'],
+        ];
+    }
+
+    /**
+     * Un client inactif est archivé (§3.5) : aucun compte ne s'y rattache.
+     *
+     * @return list<callable>
+     */
+    public function after(): array
+    {
+        return [
+            function (Validator $validator): void {
+                if ($validator->errors()->has('client_id') || ! $this->filled('client_id')) {
+                    return;
+                }
+
+                if (Client::query()->whereKey((int) $this->input('client_id'))->where('status', ClientStatus::Inactive->value)->exists()) {
+                    $validator->errors()->add('client_id', __('clients.accounts.client_inactive'));
+                }
+            },
         ];
     }
 
@@ -55,6 +83,8 @@ class StoreUserRequest extends FormRequest
     {
         return [
             'username.regex' => __('users.username_format'),
+            'client_id.required' => __('clients.accounts.client_required'),
+            'client_id.prohibited' => __('users.client_id_client_only'),
         ];
     }
 }
