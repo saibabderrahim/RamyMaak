@@ -6,10 +6,12 @@ import { formatDateTime } from '../../shared/format'
 import { InstallHelp } from '../../shared/pwa/components'
 import { Button, Card, ErrorAlert, PageHeader } from '../../shared/ui'
 import { ChangePasswordForm } from '../auth/ChangePasswordForm'
+import { MyCompanyCard } from './MyCompanyCard'
 
 /**
- * Profil (EF-CLT-06) : compte, mot de passe, déconnexion de tous les
- * appareils (EF-AUTH-07), aide à l'installation de l'application.
+ * Profil (EF-CLT-06) : compte, entreprise (comptes clients), mot de passe,
+ * déconnexion de tous les appareils (EF-AUTH-07), aide à l'installation de
+ * l'application.
  */
 export default function ProfilePage() {
   const { t } = useTranslation()
@@ -38,6 +40,8 @@ export default function ProfilePage() {
             <dd className="text-slate-900">{formatDateTime(user.last_login_at)}</dd>
           </dl>
         </Card>
+
+        {user.role === 'client' && user.client_id !== null && <MyCompanyCard clientId={user.client_id} />}
 
         <Card title={t('profile.app')}>
           <InstallHelp />

@@ -1,0 +1,165 @@
+<?php
+
+namespace App\Domain\Imports;
+
+use App\Models\Import;
+use App\Models\User;
+use Closure;
+use Illuminate\Support\Facades\Storage;
+
+/**
+ * Contrôle d'un fichier importé (§8.1, §8.3), sans rien écrire : en-tête
+ * (colonnes obligatoires, doublons de colonnes), lignes une à une, doublons
+ * de clé dans le fichier. Rejoué à l'application avec les données du moment.
+ */
+final class ImportAnalyzer
+{
+    /** Garde-fou mémoire, largement au-dessus des volumes attendus (§13.1). */
+    public const MAX_ROWS = 10000;
+
+    /** Fréquence de mise à jour de la progression (lignes). */
+    public const PROGRESS_EVERY = 100;
+
+    /**
+     * @param  (Closure(int $total, int $processed): void)|null  $progress
+     */
+    public function run(Import $import, User $actor, ?Closure $progress = null): AnalysisResult
+    {
+        $definition = ImportDefinition::for($import->type, $actor);
+        $result = new AnalysisResult($definition);
+
+        try {
+            $sheet = ImportSheet::open(Storage::disk('local')->path($import->file_path), self::MAX_ROWS);
+        } catch (UnreadableSheet $e) {
+            $result->fileError(null, $e->getMessage());
+
+            return $result;
+        }
+
+        $result->readable = true;
+
+        try {
+            $this->analyze($sheet, $definition, $result, $progress);
+        } finally {
+            $sheet->release();
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param  (Closure(int $total, int $processed): void)|null  $progress
+     */
+    private function analyze(ImportSheet $sheet, ImportDefinition $definition, AnalysisResult $result, ?Closure $progress): void
+    {
+        $result->columns = $this->columns($sheet, $definition, $result);
+        if ($result->hasErrors()) {
+            return;
+        }
+
+        $rows = [];
+        foreach ($sheet->rows($result->columns) as $line => $cells) {
+            if (count($rows) === self::MAX_ROWS) {
+                $result->fileError(null, __('imports.errors.too_many_rows', ['max' => number_format(self::MAX_ROWS, 0, ',', "\u{202F}")]));
+
+                return;
+            }
+            $rows[$line] = new RowContext($line, $cells);
+        }
+
+        $result->rowsTotal = count($rows);
+        if ($rows === []) {
+            $result->fileError(null, __('imports.errors.empty'));
+
+            return;
+        }
+
+        $progress?->__invoke($result->rowsTotal, 0);
+
+        // Clés d'abord : les fiches existantes sont chargées en une fois.
+        $keys = [];
+        foreach ($rows as $line => $row) {
+            $keys[$line] = $definition->key($row);
+        }
+        $definition->preload(array_values(array_unique(array_filter($keys, fn (?string $key) => $key !== null))));
+
+        $summary = [RowPlan::CREATE => 0, RowPlan::UPDATE => 0, RowPlan::UNCHANGED => 0];
+        $firstLines = [];
+        $processed = 0;
+
+        foreach ($rows as $line => $row) {
+            $key = $keys[$line];
+            $plan = null;
+
+            if ($key !== null) {
+                if (isset($firstLines[$key])) {
+                    $row->fail($definition->keyColumn(), __('imports.errors.duplicate', [
+                        'subject' => $definition->describe($key),
+                        'first' => $firstLines[$key],
+                    ]));
+                } else {
+                    $firstLines[$key] = $line;
+                }
+
+                $plan = $definition->check($row, $key);
+            } else {
+                $definition->checkWithoutKey($row);
+            }
+
+            if ($row->hasErrors() || $plan === null) {
+                $result->rowsError++;
+                array_push($result->errors, ...$row->errors());
+            } else {
+                $result->rowsOk++;
+                $summary[$plan->action]++;
+                if ($plan->changes()) {
+                    $result->plans[] = $plan;
+                }
+            }
+
+            if (++$processed % self::PROGRESS_EVERY === 0) {
+                $progress?->__invoke($result->rowsTotal, $processed);
+            }
+        }
+
+        $result->summary = $summary;
+    }
+
+    /**
+     * Colonnes reconnues de l'en-tête ; les colonnes inconnues sont ignorées.
+     *
+     * @return array<string, int>
+     */
+    private function columns(ImportSheet $sheet, ImportDefinition $definition, AnalysisResult $result): array
+    {
+        $known = array_flip($definition->columns());
+        $columns = [];
+        $duplicates = [];
+
+        foreach ($sheet->header() as $index => $name) {
+            if (! isset($known[$name])) {
+                continue;
+            }
+
+            if (isset($columns[$name])) {
+                $duplicates[$name] = true;
+
+                continue;
+            }
+
+            $columns[$name] = $index;
+        }
+
+        foreach (array_keys($duplicates) as $name) {
+            $result->fileError($name, __('imports.errors.header', ['column' => $name, 'message' => __('imports.errors.duplicate_column')]));
+        }
+
+        foreach ($definition->requiredColumns() as $name) {
+            if (! isset($columns[$name])) {
+                $result->fileError($name, __('imports.errors.header', ['column' => $name, 'message' => __('imports.errors.missing_column')]));
+            }
+        }
+
+        return $columns;
+    }
+}

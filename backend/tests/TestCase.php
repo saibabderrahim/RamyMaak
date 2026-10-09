@@ -18,6 +18,10 @@ abstract class TestCase extends BaseTestCase
     {
         parent::setUp();
 
+        // Pas de purge aléatoire des sessions (2 % des requêtes) : les tests qui
+        // comptent les requêtes SQL restent déterministes.
+        config(['session.lottery' => [0, 100]]);
+
         // Requêtes émises par la PWA : Sanctum les traite en mode SPA (session).
         $this->withHeaders([
             'Accept' => 'application/json',

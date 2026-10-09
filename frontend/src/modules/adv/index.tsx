@@ -1,6 +1,7 @@
 import { Route, Routes } from 'react-router'
 import ClientDetailPage from '../backoffice/clients/ClientDetailPage'
 import ClientsPage from '../backoffice/clients/ClientsPage'
+import ProductCreatePage from '../backoffice/products/ProductCreatePage'
 import ProductDetailPage from '../backoffice/products/ProductDetailPage'
 import ProductsPage from '../backoffice/products/ProductsPage'
 import RegionDetailPage from '../backoffice/regions/RegionDetailPage'
@@ -21,6 +22,8 @@ export default function AdvModule() {
       <Route path="clients" element={<ClientsPage />} />
       <Route path="clients/:id" element={<ClientDetailPage />} />
       <Route path="produits" element={<ProductsPage />} />
+      {/* Création possible si l'ADV reçoit en option le droit product.manage. */}
+      <Route path="produits/nouveau" element={<ProductCreatePage />} />
       <Route path="produits/:id" element={<ProductDetailPage />} />
     </Routes>
   )

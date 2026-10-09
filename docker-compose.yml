@@ -27,6 +27,10 @@ services:
     depends_on:
       app:
         condition: service_healthy
+    # Photos produits (§9.8) servies directement par nginx depuis le volume de
+    # l'application (/srv/storage/public/media), en lecture seule.
+    volumes:
+      - storage:/srv/storage:ro
     mem_limit: 128m
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]

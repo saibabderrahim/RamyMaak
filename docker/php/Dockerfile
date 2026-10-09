@@ -22,8 +22,17 @@ RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 
 WORKDIR /var/www/html
 COPY --from=vendor --chown=www-data:www-data /app ./
+# Photos produits (§9.8) : disque « media » (storage/app/public/media, dans le
+# volume « storage ») et lien public/media vers lui, pour les adresses /media
+# générées par l'application ; en production, le conteneur web les sert
+# directement depuis le volume. Les photos et le lien d'un poste de
+# développement éventuellement copiés sont écartés : un volume neuf est
+# initialisé avec le contenu de l'image.
 RUN rm -f .env \
  && php artisan package:discover --ansi \
+ && rm -rf public/media storage/app/public/media \
+ && mkdir -p storage/app/public/media \
+ && php artisan storage:link --no-ansi \
  && chown -R www-data:www-data storage bootstrap/cache
 
 USER www-data

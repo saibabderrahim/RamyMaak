@@ -6,7 +6,7 @@ import { formatDateTime } from '../../shared/format'
 import { Button, Card, ErrorAlert, Field, Input, PageHeader, Select, Spinner } from '../../shared/ui'
 import { type UserFilters, useUsers } from './api'
 import { Pagination, UserStatusBadges } from './components'
-import { useDebouncedValue } from './useDebouncedValue'
+import { useDebouncedValue } from '../../shared/useDebouncedValue'
 
 export default function UsersPage() {
   const { t } = useTranslation()

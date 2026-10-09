@@ -5,7 +5,7 @@ import { formatDateTime } from '../../shared/format'
 import { Card, ErrorAlert, Field, Input, PageHeader, Select, Spinner } from '../../shared/ui'
 import { type AuditFilters, auditExportUrl, useAuditLogs } from './api'
 import { Pagination } from './components'
-import { useDebouncedValue } from './useDebouncedValue'
+import { useDebouncedValue } from '../../shared/useDebouncedValue'
 
 const LOG_NAMES = ['auth', 'users', 'settings'] as const
 

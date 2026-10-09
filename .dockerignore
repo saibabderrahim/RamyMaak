@@ -8,6 +8,11 @@ backend/storage/logs/*
 backend/storage/framework/cache/data/*
 backend/storage/framework/sessions/*
 backend/storage/framework/views/*
+# Photos, imports et fichiers temporaires d'un poste de développement.
+backend/public/media
+backend/storage/app/public/*
+backend/storage/app/private/*
+backend/storage/media-library
 backend/database/*.sqlite
 backend/.phpunit.cache
 .env
