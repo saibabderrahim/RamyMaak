@@ -3,7 +3,10 @@
 FROM composer:2 AS vendor
 WORKDIR /app
 COPY backend/composer.json backend/composer.lock ./
-RUN composer install --no-dev --no-interaction --no-scripts --no-autoloader --prefer-dist
+# gd (PhpSpreadsheet, photos) et exif (photos) manquent à l'image composer ;
+# l'image finale ci-dessous les installe.
+RUN composer install --no-dev --no-interaction --no-scripts --no-autoloader --prefer-dist \
+    --ignore-platform-req=ext-gd --ignore-platform-req=ext-exif
 COPY backend/ ./
 RUN composer dump-autoload --no-dev --classmap-authoritative --no-scripts
 
