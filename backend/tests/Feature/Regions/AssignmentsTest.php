@@ -208,7 +208,7 @@ describe('creation', function () {
             ->assertJsonPath('titular.id', $response->json('id'))
             ->assertJsonPath('titular.user.name', 'Nadia Belkacem');
 
-        $entry = AuditLog::query()->where('subject_type', 'region_assignment')->where('subject_id', $current->id)->where('event', 'updated')->sole();
+        $entry = AuditLog::query()->where('subject_type', 'region_assignment')->where('subject_id', $current->id)->where('event', 'revoked')->sole();
         expect($entry->causer_id)->toBe($this->admin->id)
             ->and($entry->properties['old']['revoked_at'])->toBeNull()
             ->and($entry->properties['attributes']['revoked_by'])->toBe($this->admin->id);
@@ -308,8 +308,9 @@ describe('revocation', function () {
         $this->getJson('/api/v1/regions')->assertJsonCount(0, 'data');
         expectProblem($this->getJson("/api/v1/regions/{$this->centre->id}"), 404, 'NOT_FOUND');
 
-        $entry = AuditLog::query()->where('subject_type', 'region_assignment')->where('subject_id', $assignment->id)->where('event', 'updated')->sole();
-        expect($entry->causer_id)->toBe($this->admin->id)
+        $entry = AuditLog::query()->where('subject_type', 'region_assignment')->where('subject_id', $assignment->id)->where('event', 'revoked')->sole();
+        expect($entry->description)->toBe('Affectation révoquée')
+            ->and($entry->causer_id)->toBe($this->admin->id)
             ->and($entry->properties['old']['revoked_at'])->toBeNull()
             ->and($entry->properties['attributes']['revoked_by'])->toBe($this->admin->id)
             ->and($entry->properties['attributes']['revoked_at'])->not->toBeNull();

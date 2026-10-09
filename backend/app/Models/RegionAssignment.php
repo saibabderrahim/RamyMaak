@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use Spatie\Activitylog\Contracts\Activity;
 use Spatie\Activitylog\LogOptions;
 
 /**
@@ -122,5 +123,17 @@ class RegionAssignment extends Model
     {
         // revoked_at / revoked_by ne sont pas « fillable » mais doivent être tracés.
         return $this->referentialLogOptions()->logOnly(['revoked_at', 'revoked_by']);
+    }
+
+    /**
+     * Une révocation (RG-S03) est un événement à part entière du journal
+     * (EF-ADM-06), filtrable par action.
+     */
+    public function tapActivity(Activity $activity, string $eventName): void
+    {
+        if ($eventName === 'updated' && $this->revoked_at !== null && $this->wasChanged('revoked_at')) {
+            $activity->event = 'revoked';
+            $activity->description = 'Affectation révoquée';
+        }
     }
 }

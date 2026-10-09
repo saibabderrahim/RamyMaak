@@ -80,6 +80,13 @@ Règles de création d'une affectation :
 - doublon (même utilisateur, même nature, périodes qui se chevauchent, non révoqué) → 422 ;
 - `starts_on` ne peut pas être dans le passé (une affectation se crée aujourd'hui ou plus tard).
 
+Précisions (implémentation) :
+- PATCH région, dépôt, client ou catégorie : renvoyer le code actuel (quelle que soit la casse) est accepté ; un autre code → 422 sur `code`.
+- Une région inactive est invisible sans `region.manage` (absente des listes, 404 sur la fiche et l'historique).
+- `filter[active]=0` sur l'historique renvoie les affectations non actives aujourd'hui ; ordre : `starts_on` décroissant.
+- `replace: true` révoque immédiatement tous les titulaires non révoqués qui chevauchent (en cours et à venir).
+- Une révocation est journalisée avec l'action `revoked` (« Affectation révoquée »).
+
 ### Profil (`/auth/me`)
 
 `perimeter` devient : `{ "all_regions": true|false, "region_ids": [3, 4] }` (`region_ids` vide si `all_regions`).
@@ -126,6 +133,14 @@ Comptes utilisateurs (lot 1, à compléter) :
 - `POST/PATCH /admin/users` : `client_id` **obligatoire** et existant pour le rôle client, interdit pour les autres ;
 - `UserResource` gagne `client: { id, code, name } | null` ;
 - `POST /admin/users/{id}/reset-password` : autorisé au régional pour un compte client dont le client est dans son périmètre (EF-AUTH-05).
+
+Précisions (implémentation) :
+- `GET /clients` → 403 pour le rôle client : un compte client lit sa propre fiche via `GET /clients/{id}`.
+- PATCH `/clients/{id}` : `client.block` n'est exigé que si le statut ou son motif change réellement ; `status_reason` seul modifie le motif du statut actuel. `region_id` égal à la région actuelle **annule** un changement programmé : un formulaire n'envoie `region_id` que si l'utilisateur l'a modifié.
+- `region_id` : région active dans le périmètre de l'utilisateur (la région actuelle ou programmée reste acceptée si elle a été désactivée) ; `lat` et `lng` vont ensemble.
+- Le libellé d'une catégorie est unique comme son code (l'import identifie la catégorie par l'un ou l'autre).
+- `POST /admin/client-accounts` : identifiants inconnus → 422 ; doublons fusionnés ; clients hors périmètre ou dont l'identifiant est déjà pris ignorés ; le compte reprend le nom, l'e-mail et le téléphone du client ; réponse `Cache-Control: no-store`.
+- `GET /admin/users` accepte `filter[client_id]` ; `PATCH /admin/users/{id}` avec `is_active=true` sur un compte dont le client est inactif → 422.
 
 ## 5. Produits, familles, prix, photos
 
