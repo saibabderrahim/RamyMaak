@@ -264,12 +264,12 @@ Déclarés dans `routes/channels.php`, ils passent par `POST /broadcasting/auth`
 Chaque lot de travail ne crée ou ne modifie **que** ses fichiers.
 
 La fondation fournit les éléments communs ; un besoin de modification s'y signale au lieu d'être fait :
-- côté API : migrations, modèles, énumérations, services `DayCalendar`, `QuotaBook` et `RegionStaff`, événements de domaine, `routes/api.php`, `routes/channels.php`, `routes/console.php`, `bootstrap/app.php`, `User::receivesBroadcastNotificationsOn`, `CurrentUserResource.realtime` ;
+- côté API : migrations, modèles, énumérations, services `DayCalendar`, `QuotaBook` et `RegionStaff`, événements de domaine, `routes/api.php`, `routes/channels.php`, `routes/console.php`, `bootstrap/app.php`, `User::receivesBroadcastNotificationsOn`, `CurrentUserResource.realtime`, `DayResource` (avec `DayResource::visibleRegionDays`) et `RegionDayResource`, relation `Import::businessDay` et conversion de `Import::mode` en `ImportMode` ;
 - côté PWA : `types.ts`, navigation, routes de la PWA, dépendances npm, client temps réel `frontend/src/shared/realtime/` (`useChannel`, `useLiveRefresh`, `useRealtimeStatus`, `NOTIFICATION_EVENT`), `csrfHeaders()` de `shared/api/client.ts`.
 
 | Lot de travail | Fichiers |
 |---|---|
-| A — Journées (API) | `Api/V1/Adv/DayController`, `Http/Requests/Days/*`, `Http/Resources/DayResource`, `RegionDayResource`, `Policies/BusinessDayPolicy`, `Console/Commands/CloseDays` (`ramymaak:close-days`), `lang/fr/days.php`, `tests/Feature/Days/*` |
+| A — Journées (API) | `Api/V1/Adv/DayController`, `Http/Requests/Days/*`, `Policies/BusinessDayPolicy`, `Console/Commands/CloseDays` (`ramymaak:close-days`), `lang/fr/days.php`, `tests/Feature/Days/*` |
 | B — Quotas (API) | `Api/V1/Adv/QuotaController`, `Api/V1/RegionalQuotaController`, `Http/Requests/Quotas/*`, `Http/Resources/QuotaMatrixResource` (et ressources associées), `lang/fr/quotas.php`, `tests/Feature/Quotas/*` ; RG-Q07 : `Api/V1/ProductController` (désactivation programmée), `Http/Requests/Products/UpdateProductRequest`, `Http/Resources/ProductResource`, `Console/Commands/ApplyProductDeactivations`, `tests/Feature/Products/ProductDeactivationTest.php` |
 | C — Import des quotas (API) | `Domain/Imports/*` (sauf `ImportStatus`), `Api/V1/ImportController`, `Http/Resources/ImportResource`, `Policies/ImportPolicy`, `Jobs/AnalyzeImport`, `lang/fr/imports.php`, `tests/Feature/Imports/*` |
 | D — Notifications et temps réel (API) | `app/Notifications/*`, `app/Listeners/*`, `app/Events/Realtime/*`, `Api/V1/NotificationController`, `Http/Resources/NotificationResource`, `lang/fr/notifications.php`, `tests/Feature/Notifications/*`, `tests/Feature/Realtime/*` |
