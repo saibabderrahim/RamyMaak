@@ -265,7 +265,7 @@ Chaque lot de travail ne crée ou ne modifie **que** ses fichiers.
 
 La fondation fournit les éléments communs ; un besoin de modification s'y signale au lieu d'être fait :
 - côté API : migrations, modèles, énumérations, services `DayCalendar`, `QuotaBook` et `RegionStaff`, événements de domaine, `routes/api.php`, `routes/channels.php`, `routes/console.php`, `bootstrap/app.php`, `User::receivesBroadcastNotificationsOn`, `CurrentUserResource.realtime` ;
-- côté PWA : `types.ts`, navigation, routes de la PWA, dépendances npm.
+- côté PWA : `types.ts`, navigation, routes de la PWA, dépendances npm, client temps réel `frontend/src/shared/realtime/` (`useChannel`, `useLiveRefresh`, `useRealtimeStatus`, `NOTIFICATION_EVENT`), `csrfHeaders()` de `shared/api/client.ts`.
 
 | Lot de travail | Fichiers |
 |---|---|
@@ -275,4 +275,4 @@ La fondation fournit les éléments communs ; un besoin de modification s'y sign
 | D — Notifications et temps réel (API) | `app/Notifications/*`, `app/Listeners/*`, `app/Events/Realtime/*`, `Api/V1/NotificationController`, `Http/Resources/NotificationResource`, `lang/fr/notifications.php`, `tests/Feature/Notifications/*`, `tests/Feature/Realtime/*` |
 | E1 — Écrans journées et imports | `frontend/src/modules/backoffice/days/**`, `frontend/src/modules/backoffice/imports/**`, `frontend/src/modules/backoffice/i18n/days.ts`, `frontend/src/modules/backoffice/i18n/imports.ts` |
 | E2 — Matrice des quotas | `frontend/src/modules/backoffice/quotas/**`, `frontend/src/modules/backoffice/i18n/quotas.ts` |
-| F — Notifications, temps réel, quotas du régional | `frontend/src/shared/realtime/**`, `frontend/src/shared/notifications/**`, `frontend/src/modules/notifications/**`, `frontend/src/modules/regional/quotas/**`, `frontend/src/shared/layout/AppShell.tsx` (cloche), `frontend/src/shared/i18n/fr/notifications.ts`, `frontend/src/shared/i18n/fr/field.ts` |
+| F — Notifications, quotas du régional | `frontend/src/shared/notifications/**`, `frontend/src/modules/notifications/**`, `frontend/src/modules/regional/quotas/**`, `frontend/src/shared/layout/AppShell.tsx` (cloche), `frontend/src/shared/i18n/fr/notifications.ts`, `frontend/src/shared/i18n/fr/field.ts` |

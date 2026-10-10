@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError, NetworkError } from '../api/client'
 import type { CurrentUser, Role } from '../api/types'
+import { disconnectRealtime } from '../realtime/connection'
 
 export const meQueryKey = ['auth', 'me'] as const
 
@@ -39,6 +40,7 @@ export function useLogin() {
   return useMutation({
     mutationFn: (input: LoginInput) => api.post<CurrentUser>('/auth/login', input),
     onSuccess: (user) => {
+      disconnectRealtime()
       queryClient.clear()
       queryClient.setQueryData(meQueryKey, user)
     },
@@ -50,6 +52,7 @@ function useEndSession(path: '/auth/logout' | '/auth/logout-all') {
   return useMutation({
     mutationFn: () => api.post<void>(path),
     onSettled: () => {
+      disconnectRealtime()
       queryClient.clear()
       queryClient.setQueryData(meQueryKey, null)
     },
