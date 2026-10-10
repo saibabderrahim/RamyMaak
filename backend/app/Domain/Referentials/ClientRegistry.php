@@ -70,7 +70,12 @@ final class ClientRegistry
 
             $status = $this->statusFrom($attributes);
             if ($status !== null) {
-                $this->changeStatus($client, $status, $attributes['status_reason'] ?? null, $by);
+                // Statut renvoyé à l'identique sans motif (formulaire complet) :
+                // le motif en place est conservé, rien ne change.
+                $reason = array_key_exists('status_reason', $attributes)
+                    ? $attributes['status_reason']
+                    : ($status === $client->status ? $client->status_reason : null);
+                $this->changeStatus($client, $status, $reason, $by);
             }
 
             return $client->refresh();

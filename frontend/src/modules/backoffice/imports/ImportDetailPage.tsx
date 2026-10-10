@@ -274,6 +274,11 @@ function ChangeList({ type, row }: { type: Import['type']; row: ImportPreviewRow
   const { t } = useTranslation()
   const fieldLabels: Partial<Record<string, string>> = t(`backoffice.imports.fields.${type}`, { returnObjects: true })
   const labels = { empty: t('backoffice.imports.detail.emptyValue'), yes: t('common.yes'), no: t('common.no') }
+  // Statut client : code interne (ACTIVE…) affiché par son libellé français.
+  const display = (field: string, value: unknown) =>
+    type === 'CLIENTS' && field === 'status' && (value === 'ACTIVE' || value === 'BLOCKED' || value === 'INACTIVE')
+      ? t(`backoffice.clients.status.${value}`)
+      : formatChangeValue(field, value, labels)
 
   return (
     <ul className="flex flex-col gap-0.5">
@@ -283,11 +288,11 @@ function ChangeList({ type, row }: { type: Import['type']; row: ImportPreviewRow
           {' : '}
           {row.action === 'update' && (
             <>
-              <span className="text-slate-500">{formatChangeValue(field, change.old, labels)}</span>
+              <span className="text-slate-500">{display(field, change.old)}</span>
               {' → '}
             </>
           )}
-          <span className="font-medium text-slate-900">{formatChangeValue(field, change.new, labels)}</span>
+          <span className="font-medium text-slate-900">{display(field, change.new)}</span>
         </li>
       ))}
     </ul>

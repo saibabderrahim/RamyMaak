@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
@@ -6,6 +7,7 @@ import { ROLES, type User } from '../../shared/api/types'
 import { applyServerErrors } from '../../shared/forms'
 import { Button, ErrorAlert, Field, Input, Select } from '../../shared/ui'
 import type { UserInput } from './api'
+import { ClientPicker, type PickedClient } from './ClientPicker'
 
 const optionalText = z
   .string()
@@ -46,8 +48,9 @@ export function UserForm({ user, submitting, error, onSubmit }: Props) {
     register,
     handleSubmit,
     setError,
+    setValue,
     control,
-    formState: { errors },
+    formState: { errors, isSubmitted },
   } = useForm<FormInput, unknown, UserInput>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -69,6 +72,11 @@ export function UserForm({ user, submitting, error, onSubmit }: Props) {
   })
 
   const isClient = useWatch({ control, name: 'role' }) === 'client'
+  const [client, setClient] = useState<PickedClient | null>(user?.client ?? null)
+  const pickClient = (picked: PickedClient | null) => {
+    setClient(picked)
+    setValue('client_id', picked ? String(picked.id) : '', { shouldValidate: isSubmitted })
+  }
   const hasFieldErrors = Object.keys(errors).length > 0
 
   return (
@@ -93,11 +101,7 @@ export function UserForm({ user, submitting, error, onSubmit }: Props) {
             </Select>
           )}
         </Field>
-        {isClient && (
-          <Field label={t('admin.users.fields.clientId')} hint={t('admin.users.fields.clientIdHint')} error={errors.client_id?.message}>
-            {(props) => <Input {...props} {...register('client_id')} inputMode="numeric" />}
-          </Field>
-        )}
+        {isClient && <ClientPicker value={client} onChange={pickClient} error={errors.client_id?.message} />}
         <Field label={t('admin.users.fields.email')} error={errors.email?.message}>
           {(props) => <Input {...props} {...register('email')} type="email" autoComplete="off" />}
         </Field>

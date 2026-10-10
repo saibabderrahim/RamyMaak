@@ -87,6 +87,12 @@ export function useApplyImport(id: number) {
     onSuccess: (applied) => {
       queryClient.setQueryData(importKey(id), applied)
       void queryClient.invalidateQueries({ queryKey: [...importsKey, 'list'] })
+      // Référentiels modifiés par l'import : listes, fiches et compteurs à relire.
+      const changed =
+        applied.type === 'CLIENTS'
+          ? [['backoffice', 'clients'], ['backoffice', 'client-categories'], ['backoffice', 'regions']]
+          : [['backoffice', 'products'], ['backoffice', 'product-families']]
+      for (const queryKey of changed) void queryClient.invalidateQueries({ queryKey })
     },
     onError: () => queryClient.invalidateQueries({ queryKey: importKey(id) }),
   })

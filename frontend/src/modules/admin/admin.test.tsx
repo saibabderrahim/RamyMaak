@@ -22,7 +22,7 @@ const account: User = {
   updated_at: '2026-10-08T08:00:00+00:00',
 }
 
-const page = (data: User[]) => ({ data, meta: { current_page: 1, last_page: 1, per_page: 25, total: data.length, from: 1, to: data.length } })
+const page = <T,>(data: T[]) => ({ data, meta: { current_page: 1, last_page: 1, per_page: 25, total: data.length, from: 1, to: data.length } })
 
 describe('admin — accounts', () => {
   it('lists accounts with their status', async () => {
@@ -42,6 +42,17 @@ describe('admin — accounts', () => {
   it('creates an account and shows the temporary password once', async () => {
     const { calls } = mockApi({
       'GET /api/v1/auth/me': () => json(makeUser('admin')),
+      'GET /api/v1/clients': ({ url }) =>
+        json(
+          page(
+            url.searchParams.get('filter[search]') === 'baraka'
+              ? [
+                  { id: 12, code: 'C0012', name: 'Superette El Baraka', status: 'ACTIVE', region: { id: 3, code: 'CENTRE', name: 'Centre' } },
+                  { id: 13, code: 'C0013', name: 'Baraka Fermée', status: 'INACTIVE', region: { id: 3, code: 'CENTRE', name: 'Centre' } },
+                ]
+              : [],
+          ),
+        ),
       'POST /api/v1/admin/users': () => json({ user: account, temporary_password: 'Kp7mX3qaRt' }, 201),
     })
     const user = userEvent.setup()
@@ -49,7 +60,11 @@ describe('admin — accounts', () => {
     renderApp('/admin/comptes/nouveau')
     await user.type(await screen.findByLabelText('Identifiant'), 'C0012')
     await user.type(screen.getByLabelText('Nom'), 'Superette El Baraka')
-    await user.type(screen.getByLabelText('Identifiant du client'), '12')
+    // Rattachement au client par recherche (code ou raison sociale) ; un client inactif n'est pas proposé.
+    await user.type(screen.getByLabelText('Client'), 'baraka')
+    expect(await screen.findByRole('button', { name: 'C0013 — Baraka Fermée (inactif)' })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: 'C0012 — Superette El Baraka · Centre' }))
+    expect(screen.getByRole('link', { name: 'C0012 — Superette El Baraka' })).toHaveAttribute('href', '/admin/clients/12')
     await user.click(screen.getByRole('button', { name: 'Enregistrer' }))
 
     expect(await screen.findByTestId('temporary-password')).toHaveTextContent('Kp7mX3qaRt')

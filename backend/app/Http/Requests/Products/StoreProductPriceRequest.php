@@ -12,7 +12,8 @@ use InvalidArgumentException;
 
 /**
  * Nouveau prix HT par UV à partir d'une date d'effet (RG-P01, EF-PRD-03) :
- * passée, présente ou future (prix programmé).
+ * aujourd'hui ou plus tard (prix programmé). Un prix déjà appliqué ne se
+ * réécrit pas (RG-P03) : une date passée est refusée.
  */
 class StoreProductPriceRequest extends FormRequest
 {
@@ -43,7 +44,7 @@ class StoreProductPriceRequest extends FormRequest
                     }
                 },
             ],
-            'valid_from' => ['required', 'date_format:Y-m-d'],
+            'valid_from' => ['bail', 'required', 'date_format:Y-m-d', 'after_or_equal:'.BusinessClock::today()->format('Y-m-d')],
         ];
     }
 
@@ -57,6 +58,14 @@ class StoreProductPriceRequest extends FormRequest
     {
         /** @var CarbonImmutable */
         return BusinessClock::parseDay((string) $this->validated('valid_from'));
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return ['valid_from.after_or_equal' => __('products.prices.past_date')];
     }
 
     /**

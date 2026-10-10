@@ -124,14 +124,20 @@ export default function RegionDetailPage() {
                   {t('backoffice.regions.detail.updated')}
                 </Alert>
               )}
-              <RegionForm
-                key={`${current.name}|${current.depot?.id ?? ''}|${current.is_active}`}
-                region={current}
-                depots={depots.data}
-                submitting={updateRegion.isPending}
-                error={updateRegion.error}
-                onSubmit={({ name, depot_id, is_active }) => updateRegion.mutateAsync({ name, depot_id, is_active })}
-              />
+              {/* Liste des dépôts attendue : une liste déroulante non contrôlée
+                  perdrait sinon le dépôt actuel à l'arrivée des options. */}
+              {depots.isPending ? (
+                <Spinner />
+              ) : (
+                <RegionForm
+                  key={`${current.name}|${current.depot?.id ?? ''}|${current.is_active}`}
+                  region={current}
+                  depots={depots.data}
+                  submitting={updateRegion.isPending}
+                  error={updateRegion.error}
+                  onSubmit={({ name, depot_id, is_active }) => updateRegion.mutateAsync({ name, depot_id, is_active })}
+                />
+              )}
             </Card>
           )}
         </div>

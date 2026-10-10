@@ -19,11 +19,12 @@ final class ProductsDefinition extends ImportDefinition
         'libelle_uv' => ['sales_unit_label', 60],
     ];
 
-    /** Colonne → [champ, minimum, maximum] (bornes des colonnes en base). */
+    /** Colonne → [champ, minimum, maximum]. */
     private const INTEGER_COLUMNS = [
         'unites_par_uv' => ['units_per_sales_unit', 1, 65535],
         'uv_par_palette' => ['sales_units_per_pallet', 1, 65535],
-        'ordre_affichage' => ['sort_order', 0, 4294967295],
+        // Mêmes bornes que la fiche produit (ProductFicheRules) : un produit importé reste modifiable.
+        'ordre_affichage' => ['sort_order', 0, 1000000],
     ];
 
     /** @var array<string, ProductFamily> code → famille */

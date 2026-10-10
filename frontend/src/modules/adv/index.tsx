@@ -1,12 +1,16 @@
 import { Route, Routes } from 'react-router'
+import '../backoffice/i18n'
 import ClientDetailPage from '../backoffice/clients/ClientDetailPage'
 import ClientsPage from '../backoffice/clients/ClientsPage'
+import ImportDetailPage from '../backoffice/imports/ImportDetailPage'
+import ImportsPage from '../backoffice/imports/ImportsPage'
 import ProductCreatePage from '../backoffice/products/ProductCreatePage'
 import ProductDetailPage from '../backoffice/products/ProductDetailPage'
 import ProductsPage from '../backoffice/products/ProductsPage'
 import RegionDetailPage from '../backoffice/regions/RegionDetailPage'
 import RegionsPage from '../backoffice/regions/RegionsPage'
 import { RoleHome } from '../home/RoleHome'
+import { NotFound } from '../../shared/layout/NotFound'
 
 /**
  * Module ADV (back-office PC, §7.5). Chargé à la demande et exclu du
@@ -25,6 +29,10 @@ export default function AdvModule() {
       {/* Création possible si l'ADV reçoit en option le droit product.manage. */}
       <Route path="produits/nouveau" element={<ProductCreatePage />} />
       <Route path="produits/:id" element={<ProductDetailPage />} />
+      {/* Imports selon les droits optionnels (product.manage, client.manage) : la page ne propose que les types permis. */}
+      <Route path="imports" element={<ImportsPage />} />
+      <Route path="imports/:id" element={<ImportDetailPage />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   )
 }

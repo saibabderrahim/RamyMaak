@@ -16,7 +16,8 @@ use Illuminate\Database\Eloquent\Builder;
  * chaque requête (RG-S02) :
  *
  * - Admin : toutes les régions ;
- * - ADV : toutes les régions, ou celles de ses affectations ADV (RG-S05) ;
+ * - ADV : toutes les régions, ou celles de ses affectations ADV actives dès
+ *   qu'il a été affecté à une région (RG-S05) ;
  * - Régional : régions de ses affectations actives, titulaire ou suppléant,
  *   à la date de la journée concernée ; clients actifs ou bloqués (RG-S01) ;
  * - Client : sa propre fiche.
@@ -38,8 +39,7 @@ final class Perimeter
 
         return match ($user->appRole()) {
             Role::Admin => null,
-            // Sans affectation ADV, l'ADV voit toutes les régions (RG-S05).
-            Role::Adv => $this->assignedRegionIds($user, [AssignmentKind::Adv], $day) ?: null,
+            Role::Adv => $this->advRegionIds($user, $day),
             Role::Regional => $this->assignedRegionIds($user, [AssignmentKind::Titular, AssignmentKind::Deputy], $day),
             Role::Client => $user->client === null ? [] : [$user->client->effectiveRegionId($day)],
             null => [],
@@ -111,6 +111,25 @@ final class Perimeter
         $regionIds = $this->regionIds($user, $day);
 
         return $regionIds === null || in_array($regionId, $regionIds, true);
+    }
+
+    /**
+     * RG-S05 : toutes les régions tant que l'ADV n'a jamais été affecté à une
+     * région. Dès sa première affectation ADV (en cours, à venir, terminée ou
+     * révoquée), il est limité à ses affectations actives du jour, éventuellement
+     * aucune : mettre fin à une affectation retire une région, jamais n'élargit
+     * le périmètre à toutes les régions.
+     *
+     * @return list<int>|null
+     */
+    private function advRegionIds(User $user, CarbonInterface $day): ?array
+    {
+        $restricted = RegionAssignment::query()
+            ->where('user_id', $user->id)
+            ->where('kind', AssignmentKind::Adv->value)
+            ->exists();
+
+        return $restricted ? $this->assignedRegionIds($user, [AssignmentKind::Adv], $day) : null;
     }
 
     /**

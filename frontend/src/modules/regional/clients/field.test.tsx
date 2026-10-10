@@ -17,7 +17,7 @@ const tomorrow = (() => {
 const centreRef = { id: 3, code: 'CENTRE', name: 'Centre' }
 const estRef = { id: 4, code: 'EST', name: 'Est' }
 
-/** Vue d'un régional : pas de clé `accounts` (pas de user.manage). */
+/** Fiche sans clé `accounts` : celle-ci n'est fournie qu'à qui peut réinitialiser un mot de passe client. */
 const baraka: Client = {
   id: 12,
   code: 'C0012',
@@ -251,6 +251,45 @@ describe('regional — client fiche', () => {
     expect(screen.getByText('Actif')).toBeInTheDocument()
     expect(screen.queryByText(/ne peut pas commander/)).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Retour à mes clients' })).toHaveAttribute('href', '/regional/clients')
+  })
+
+  it('lets the regional reset the password of an active client account (EF-AUTH-05)', async () => {
+    const withAccounts: Client = {
+      ...baraka,
+      accounts: [
+        { id: 41, username: 'c0012', is_active: true, last_login_at: null },
+        { id: 42, username: 'c0012b', is_active: false, last_login_at: null },
+      ],
+    }
+    const { calls } = mockApi({
+      'GET /api/v1/auth/me': () => json(regional()),
+      'GET /api/v1/clients/12': () => json(withAccounts),
+      'POST /api/v1/admin/users/41/reset-password': () => json({ user: { id: 41, username: 'c0012' }, temporary_password: 'Kx7mPq9Rt2' }),
+    })
+    const user = userEvent.setup()
+
+    renderApp('/regional/clients/12')
+    const reset = await screen.findByRole('button', { name: 'Réinitialiser le mot de passe du compte c0012' }, slow)
+    // Compte désactivé : pas de réinitialisation.
+    expect(screen.queryByRole('button', { name: 'Réinitialiser le mot de passe du compte c0012b' })).not.toBeInTheDocument()
+
+    await user.click(reset)
+    expect(screen.getByText(/Le mot de passe actuel de c0012 ne fonctionnera plus/)).toBeInTheDocument()
+    expect(calls.some((call) => call.method === 'POST' && call.path.endsWith('/reset-password'))).toBe(false)
+    await user.click(screen.getByRole('button', { name: 'Réinitialiser' }))
+
+    expect(await screen.findByTestId('temporary-password')).toHaveTextContent('Kx7mPq9Rt2')
+    expect(screen.getByText('Mot de passe temporaire de c0012')).toBeInTheDocument()
+    expect(calls.filter((call) => call.method === 'POST' && call.path === '/api/v1/admin/users/41/reset-password')).toHaveLength(1)
+  })
+
+  it('shows no account section to a viewer who cannot reset passwords', async () => {
+    mockApi({ 'GET /api/v1/auth/me': () => json(regional()), 'GET /api/v1/clients/12': () => json(baraka) })
+
+    renderApp('/regional/clients/12')
+
+    expect(await screen.findByRole('heading', { name: 'Superette El Baraka' }, slow)).toBeInTheDocument()
+    expect(screen.queryByText('Accès à l’application')).not.toBeInTheDocument()
   })
 
   it('flags a blocked client with its reason and the region change to come', async () => {

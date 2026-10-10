@@ -352,7 +352,7 @@ describe('password reset by a regional (EF-AUTH-05)', function () {
         $this->postJson('/api/v1/admin/users/'.($this->accountIn)($this->est)->id.'/reset-password')->assertOk();
     });
 
-    it('refuses accounts outside the perimeter, staff accounts and inactive clients', function () {
+    it('answers 404 for accounts outside the perimeter, staff accounts and inactive clients (RG-S02)', function () {
         $this->actingAs($this->regional);
         $targets = [
             'other region' => ($this->accountIn)($this->est),
@@ -365,7 +365,7 @@ describe('password reset by a regional (EF-AUTH-05)', function () {
 
         foreach ($targets as $label => $target) {
             $before = $target->password;
-            expectProblem($this->postJson("/api/v1/admin/users/{$target->id}/reset-password"), 403, 'FORBIDDEN');
+            expectProblem($this->postJson("/api/v1/admin/users/{$target->id}/reset-password"), 404, 'NOT_FOUND');
             expect($target->fresh()->password)->toBe($before, $label);
         }
     });
@@ -379,13 +379,13 @@ describe('password reset by a regional (EF-AUTH-05)', function () {
         $this->actingAs($this->regional);
         $this->postJson("/api/v1/admin/users/{$account->id}/reset-password")->assertOk();
         $this->actingAs($estRegional);
-        expectProblem($this->postJson("/api/v1/admin/users/{$account->id}/reset-password"), 403, 'FORBIDDEN');
+        expectProblem($this->postJson("/api/v1/admin/users/{$account->id}/reset-password"), 404, 'NOT_FOUND');
 
         $this->travel(1)->days();
 
         $this->postJson("/api/v1/admin/users/{$account->id}/reset-password")->assertOk();
         $this->actingAs($this->regional);
-        expectProblem($this->postJson("/api/v1/admin/users/{$account->id}/reset-password"), 403, 'FORBIDDEN');
+        expectProblem($this->postJson("/api/v1/admin/users/{$account->id}/reset-password"), 404, 'NOT_FOUND');
     });
 
     it('never gives the ADV nor a client account the reset', function (Role $role) {

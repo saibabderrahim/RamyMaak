@@ -221,6 +221,51 @@ describe('back-office — import upload and follow-up', () => {
   })
 })
 
+describe('back-office — clients import preview', () => {
+  it('shows the client statuses with their French labels', async () => {
+    const clientsReady: Import = {
+      ...ready,
+      id: 11,
+      type: 'CLIENTS',
+      type_label: 'Clients',
+      summary: { create: 0, update: 1, unchanged: 0 },
+      preview: [{ row: 2, key: 'C0012', action: 'update', changes: { status: { old: 'ACTIVE', new: 'BLOCKED' } } }],
+      preview_truncated: false,
+    }
+    mockApi({ 'GET /api/v1/auth/me': () => json(admin), 'GET /api/v1/imports/11': () => json(clientsReady) })
+
+    renderApp('/admin/imports/11')
+
+    const rows = within(await screen.findByTestId('import-preview', undefined, { timeout: 5000 })).getAllByRole('row')
+    expect(rows[0]).toHaveTextContent('Actif → Bloqué')
+    expect(rows[0]).not.toHaveTextContent('BLOCKED')
+  })
+})
+
+describe('ADV — imports under the optional rights', () => {
+  it('opens the imports to an ADV holding product.manage, with the product types only', async () => {
+    mockApi({
+      'GET /api/v1/auth/me': () => json(makeUser('adv', { permissions: ['region.view', 'client.view', 'product.view', 'product.manage'] })),
+      'GET /api/v1/imports': () => json(page([])),
+    })
+
+    renderApp('/adv/imports')
+
+    const radios = await screen.findAllByRole('radio', undefined, { timeout: 5000 })
+    expect(radios.map((radio) => radio.getAttribute('value'))).toEqual(['PRODUCTS', 'PRICES'])
+    expect(screen.getAllByRole('link', { name: 'Imports' }).at(-1)).toHaveAttribute('href', '/adv/imports')
+  })
+
+  it('shows no imports entry to a read-only ADV, and an unknown address says so', async () => {
+    mockApi({ 'GET /api/v1/auth/me': () => json(makeUser('adv', { permissions: ['region.view', 'client.view', 'product.view'] })) })
+
+    renderApp('/adv/inconnu')
+
+    expect(await screen.findByText('Page introuvable.', undefined, { timeout: 5000 })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Imports' })).not.toBeInTheDocument()
+  })
+})
+
 describe('back-office — import form and history', () => {
   it('offers only the types allowed by the permissions and checks the file', async () => {
     const productsOnly = makeUser('admin', { permissions: ['user.manage', 'product.view', 'product.manage'] })

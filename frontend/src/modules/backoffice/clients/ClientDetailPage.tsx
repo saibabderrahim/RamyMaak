@@ -128,7 +128,8 @@ export default function ClientDetailPage() {
                   date: formatDate(pending.effective_on),
                 })}
               </span>
-              {manage && (
+              {/* Pas pendant la modification : le formulaire ouvert renverrait l'ancienne région cible. */}
+              {manage && !editing && (
                 <Button
                   variant="secondary"
                   disabled={cancelRegionChange.isPending}
@@ -168,7 +169,11 @@ export default function ClientDetailPage() {
           }
           className="min-w-0"
         >
-          {editing ? (
+          {editing && (regions.isPending || categories.isPending) ? (
+            // Listes de choix attendues : une liste déroulante non contrôlée
+            // perdrait sinon la catégorie ou la région actuelle.
+            <Spinner />
+          ) : editing ? (
             <ClientForm
               client={current}
               regions={regions.data}

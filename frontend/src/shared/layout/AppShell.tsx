@@ -7,7 +7,7 @@ import { OfflineBanner } from '../pwa/components'
 
 type NavItem = { to: string; label: string; end?: boolean }
 
-function useNavItems(role: Role): NavItem[] {
+function useNavItems(role: Role, permissions: readonly string[]): NavItem[] {
   const { t } = useTranslation()
   const profile = { to: '/profil', label: t('nav.profile') }
 
@@ -29,6 +29,10 @@ function useNavItems(role: Role): NavItem[] {
         { to: '/adv/regions', label: t('nav.regions') },
         { to: '/adv/clients', label: t('nav.clients') },
         { to: '/adv/produits', label: t('nav.products') },
+        // Imports réservés aux ADV qui ont reçu en option un droit de gestion des référentiels.
+        ...(permissions.includes('product.manage') || permissions.includes('client.manage')
+          ? [{ to: '/adv/imports', label: t('nav.imports') }]
+          : []),
         profile,
       ]
     case 'regional':
@@ -56,7 +60,7 @@ export function AppShell() {
   const user = useAuthenticatedUser()
   const logout = useLogout()
   const navigate = useNavigate()
-  const items = useNavItems(user.role)
+  const items = useNavItems(user.role, user.permissions)
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     `flex min-h-11 items-center rounded-lg px-3 text-sm font-medium ${

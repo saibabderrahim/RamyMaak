@@ -74,6 +74,7 @@ return [
         'natural_integer' => ':value n\'est pas un entier positif ou nul',
         'integer_max' => ':value dépasse le maximum autorisé (:max)',
         'date' => ':value n\'est pas une date valide (JJ/MM/AAAA)',
+        'past_price_date' => 'date d\'effet passée : un prix déjà appliqué ne se modifie pas',
         'duplicate' => ':subject déjà présent ligne :first',
         'client_out_of_perimeter' => 'client :value hors de votre périmètre',
         'unknown_region' => 'code région inconnu : :value',

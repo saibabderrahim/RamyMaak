@@ -34,19 +34,20 @@ beforeEach(function () {
 });
 
 it('records prices with Excel dates and JJ/MM/AAAA texts', function () {
+    app(PriceBook::class)->setPrice($this->orange, '870', BusinessClock::parseDay('2026-10-20'), null);
     $rows = [
         ['Code produit', 'Prix HT', 'Date effet', 'designation'],
         ['P0042', 900, null, 'Jus orange'],
         ['p0042', '950,50', '01/11/2026', null],
         ['P0057', 1250.5, '15/10/2026', null],
     ];
-    $id = ($this->upload)($rows, ($this->excelDate)('C2', '2026-10-01'))->json('id');
+    $id = ($this->upload)($rows, ($this->excelDate)('C2', '2026-10-20'))->json('id');
 
     $this->getJson("/api/v1/imports/{$id}")
         ->assertJsonPath('status', 'READY')
         ->assertJsonPath('summary', ['create' => 2, 'update' => 1, 'unchanged' => 0])
         ->assertJsonPath('preview', [
-            ['row' => 2, 'key' => 'P0042 au 01/10/2026', 'action' => 'update', 'changes' => ['price_ht' => ['old' => 850, 'new' => 900]]],
+            ['row' => 2, 'key' => 'P0042 au 20/10/2026', 'action' => 'update', 'changes' => ['price_ht' => ['old' => 870, 'new' => 900]]],
             ['row' => 3, 'key' => 'P0042 au 01/11/2026', 'action' => 'create', 'changes' => ['price_ht' => ['old' => null, 'new' => 950.5], 'valid_from' => ['old' => null, 'new' => '2026-11-01']]],
             ['row' => 4, 'key' => 'P0057 au 15/10/2026', 'action' => 'create', 'changes' => ['price_ht' => ['old' => null, 'new' => 1250.5], 'valid_from' => ['old' => null, 'new' => '2026-10-15']]],
         ]);
@@ -56,7 +57,7 @@ it('records prices with Excel dates and JJ/MM/AAAA texts', function () {
     $history = fn (Product $product) => ProductPrice::query()->where('product_id', $product->id)->orderBy('valid_from')->get()
         ->map(fn (ProductPrice $p) => [$p->price_ht, $p->valid_from->format('Y-m-d'), $p->valid_to?->format('Y-m-d')])->all();
 
-    expect($history($this->orange))->toBe([['900.00', '2026-10-01', '2026-10-31'], ['950.50', '2026-11-01', null]])
+    expect($history($this->orange))->toBe([['850.00', '2026-10-01', '2026-10-19'], ['900.00', '2026-10-20', '2026-10-31'], ['950.50', '2026-11-01', null]])
         ->and($history($this->pomme))->toBe([['1250.50', '2026-10-15', null]])
         ->and(ProductPrice::query()->where('valid_from', '2026-11-01')->value('created_by'))->toBe($this->admin->id);
 
@@ -71,6 +72,23 @@ it('leaves an identical price unchanged', function () {
         ->assertJsonPath('status', 'READY')
         ->assertJsonPath('summary', ['create' => 0, 'update' => 0, 'unchanged' => 1])
         ->assertJsonPath('preview', []);
+});
+
+it('refuses to rewrite a price already applied, but accepts it unchanged (RG-P03)', function () {
+    $rows = [
+        ['code_produit', 'prix_ht', 'date_effet'],
+        ['P0042', '900', '01/10/2026'],
+        ['P0057', '400', '07/10/2026'],
+    ];
+    $id = ($this->upload)($rows)->json('id');
+
+    $this->getJson("/api/v1/imports/{$id}")
+        ->assertJsonPath('status', 'INVALID')
+        ->assertJsonPath('errors.*.message', [
+            'Ligne 2, colonne date_effet : date d\'effet passée : un prix déjà appliqué ne se modifie pas',
+            'Ligne 3, colonne date_effet : date d\'effet passée : un prix déjà appliqué ne se modifie pas',
+        ]);
+    expect(ProductPrice::query()->sole()->price_ht)->toBe('850.00');
 });
 
 it('reports invalid price rows', function () {

@@ -7,7 +7,8 @@ import { type AuditFilters, auditExportUrl, useAuditLogs } from './api'
 import { Pagination } from './components'
 import { useDebouncedValue } from '../../shared/useDebouncedValue'
 
-const LOG_NAMES = ['auth', 'users', 'settings'] as const
+// Journaux : lot 1 (connexions, comptes, paramètres), lot 2 (référentiels, imports).
+const LOG_NAMES = ['auth', 'users', 'settings', 'referentials', 'imports'] as const
 
 function summarize(entry: AuditLog): string {
   const { old, attributes, ...rest } = entry.properties as {

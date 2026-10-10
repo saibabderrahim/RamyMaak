@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router'
+import '../backoffice/i18n'
 import ClientCreatePage from '../backoffice/clients/ClientCreatePage'
 import ClientDetailPage from '../backoffice/clients/ClientDetailPage'
 import ClientsPage from '../backoffice/clients/ClientsPage'
@@ -14,6 +15,7 @@ import SettingsPage from './SettingsPage'
 import UserCreatePage from './UserCreatePage'
 import UserDetailPage from './UserDetailPage'
 import UsersPage from './UsersPage'
+import { NotFound } from '../../shared/layout/NotFound'
 
 /**
  * Module Admin (back-office PC, §7.2). Chargé à la demande et exclu du
@@ -38,6 +40,7 @@ export default function AdminModule() {
       <Route path="imports/:id" element={<ImportDetailPage />} />
       <Route path="journal" element={<AuditLogPage />} />
       <Route path="parametres" element={<SettingsPage />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   )
 }

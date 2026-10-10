@@ -67,12 +67,13 @@ export default function UsersPage() {
         {users.data && (
           <>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-start text-sm">
+              <table className="w-full min-w-[720px] text-start text-sm">
                 <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
                   <tr>
                     <th className="py-2 pe-4 text-start font-medium">{t('admin.users.columns.username')}</th>
                     <th className="py-2 pe-4 text-start font-medium">{t('admin.users.columns.name')}</th>
                     <th className="py-2 pe-4 text-start font-medium">{t('admin.users.columns.role')}</th>
+                    <th className="py-2 pe-4 text-start font-medium">{t('admin.users.columns.client')}</th>
                     <th className="py-2 pe-4 text-start font-medium">{t('admin.users.columns.status')}</th>
                     <th className="py-2 text-start font-medium">{t('admin.users.columns.lastLogin')}</th>
                   </tr>
@@ -87,6 +88,15 @@ export default function UsersPage() {
                       </td>
                       <td className="py-2 pe-4">{user.name}</td>
                       <td className="py-2 pe-4">{t(`roles.${user.role}`)}</td>
+                      <td className="py-2 pe-4">
+                        {user.client ? (
+                          <Link to={`/admin/clients/${user.client.id}`} className="text-brand-700 hover:underline">
+                            {user.client.code}
+                          </Link>
+                        ) : (
+                          t('common.none')
+                        )}
+                      </td>
                       <td className="py-2 pe-4">
                         <UserStatusBadges user={user} />
                       </td>

@@ -28,7 +28,7 @@ class ClientResource extends JsonResource
     {
         $relations = ['category:id,code,name', 'region:id,code,name', 'nextRegion:id,code,name'];
 
-        if ($viewer?->can(Permission::UserManage->value)) {
+        if (self::showsAccounts($viewer)) {
             $relations['accounts'] = fn ($query) => $query
                 ->select(['id', 'client_id', 'username', 'is_active', 'last_login_at'])
                 ->orderBy('username');
@@ -80,7 +80,7 @@ class ClientResource extends JsonResource
             'status_reason' => $this->status_reason,
             'status_changed_at' => $this->status_changed_at?->toIso8601String(),
             'accounts' => $this->when(
-                (bool) $request->user()?->can(Permission::UserManage->value),
+                self::showsAccounts($request->user()),
                 fn () => $this->accounts->sortBy('username')->values()->map(fn (User $account) => [
                     'id' => $account->id,
                     'username' => $account->username,
@@ -91,6 +91,18 @@ class ClientResource extends JsonResource
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * Comptes d'accès du client : pour l'Admin (gestion des comptes) et pour le
+     * régional, qui réinitialise le mot de passe des comptes clients de son
+     * périmètre (EF-AUTH-05) ; la fiche n'est de toute façon lisible que dans
+     * le périmètre.
+     */
+    private static function showsAccounts(?User $viewer): bool
+    {
+        return $viewer !== null
+            && ($viewer->can(Permission::UserManage->value) || $viewer->can(Permission::UserResetClientPassword->value));
     }
 
     /**

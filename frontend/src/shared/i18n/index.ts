@@ -2,6 +2,7 @@ import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import { z } from 'zod'
 import { fr as zodFr } from 'zod/locales'
+import type backoffice from '../../modules/backoffice/i18n/fr'
 import fr from './fr'
 
 export const defaultNS = 'translation'
@@ -9,7 +10,8 @@ export const defaultNS = 'translation'
 declare module 'i18next' {
   interface CustomTypeOptions {
     defaultNS: typeof defaultNS
-    resources: { translation: typeof fr }
+    // Libellés back-office chargés avec leurs modules (import de type seulement).
+    resources: { translation: typeof fr & { backoffice: typeof backoffice } }
   }
 }
 
