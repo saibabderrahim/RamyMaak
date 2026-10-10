@@ -15,6 +15,8 @@ const pending: Import = {
   type: 'PRODUCTS',
   type_label: 'Produits',
   status: 'PENDING',
+  business_day: null,
+  mode: null,
   original_name: 'produits.xlsx',
   rows_total: 0,
   rows_processed: 0,

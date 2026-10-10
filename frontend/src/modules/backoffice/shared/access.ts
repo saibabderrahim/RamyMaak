@@ -1,7 +1,17 @@
 import { useAuthenticatedUser } from '../../../shared/auth/session'
 
 /** Permissions qui conditionnent les actions des écrans back-office (§3.2). */
-export type BackofficePermission = 'region.manage' | 'client.manage' | 'client.block' | 'user.manage' | 'product.manage'
+export type BackofficePermission =
+  | 'region.manage'
+  | 'client.manage'
+  | 'client.block'
+  | 'user.manage'
+  | 'product.manage'
+  | 'quota.view'
+  | 'quota.edit'
+  | 'quota.publish'
+  | 'day.manage'
+  | 'day.extend-cutoff'
 
 /**
  * Contexte des écrans back-office partagés entre l'Admin et l'ADV : chemin

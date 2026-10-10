@@ -1,4 +1,5 @@
 import field from './fr/field'
+import notifications from './fr/notifications'
 
 // Libellés en français (V1). L'arabe arrive en V1.1 avec un fichier ar.ts de
 // même structure (ENF-12). Les écrans du lot 2 ont leurs propres fichiers ;
@@ -77,6 +78,9 @@ const fr = {
     products: 'Produits',
     imports: 'Imports',
     myClients: 'Mes clients',
+    days: 'Journées',
+    quotas: 'Quotas',
+    notifications: 'Notifications',
     menu: 'Menu principal',
   },
   pwa: {
@@ -235,6 +239,7 @@ const fr = {
     },
   },
   field,
+  notifications,
 } as const
 
 export default fr

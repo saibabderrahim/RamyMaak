@@ -10,11 +10,13 @@ const imports = {
     CLIENTS: 'Clients',
     PRODUCTS: 'Produits',
     PRICES: 'Prix',
+    QUOTAS: 'Quotas',
   },
   typeHints: {
     CLIENTS: 'Clé : code_client. Création ou mise à jour ; un changement de région prend effet le lendemain.',
     PRODUCTS: 'Clé : code_produit. Création ou mise à jour du catalogue.',
     PRICES: 'Clé : code_produit et date_effet (JJ/MM/AAAA). Une date d’effet existante remplace le prix.',
+    QUOTAS: 'Clé : code_produit, une colonne par code région. Crée des brouillons, jamais publiés automatiquement.',
   },
   template: 'Télécharger le gabarit « {{type}} »',
   templateHint: 'Pré-rempli avec les données actuelles. Une cellule vide laisse la valeur inchangée.',
@@ -142,6 +144,8 @@ const imports = {
       price_ht: 'Prix HT',
       valid_from: 'Date d’effet',
     },
+    // Aperçu des quotas : les clés sont les codes région (affichés tels quels).
+    QUOTAS: {},
   },
 } as const
 

@@ -138,5 +138,5 @@ it('offers an empty template when there is no data yet', function (string $type,
 })->with([['clients', 'code_client'], ['products', 'code_produit'], ['prices', 'code_produit']]);
 
 it('answers 404 for an unknown template', function () {
-    expectProblem($this->get('/api/v1/imports/templates/quotas'), 404, 'NOT_FOUND');
+    expectProblem($this->get('/api/v1/imports/templates/orders'), 404, 'NOT_FOUND');
 });

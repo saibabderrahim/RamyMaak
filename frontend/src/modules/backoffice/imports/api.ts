@@ -9,6 +9,7 @@ export const IMPORT_PERMISSIONS: Record<ImportType, BackofficePermission> = {
   CLIENTS: 'client.manage',
   PRODUCTS: 'product.manage',
   PRICES: 'product.manage',
+  QUOTAS: 'quota.edit',
 }
 
 /** Statuts d'un import dont l'analyse n'est pas terminée. */

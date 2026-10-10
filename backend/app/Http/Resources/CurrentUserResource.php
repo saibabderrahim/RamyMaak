@@ -43,6 +43,11 @@ class CurrentUserResource extends JsonResource
                 'region_ids' => $regionIds ?? [],
             ],
             'last_login_at' => $this->last_login_at?->toIso8601String(),
+            // Temps réel (§9.6) : clé publique de l'application Reverb, connexion
+            // au même domaine (chemin /app) ; null : rafraîchissement périodique.
+            'realtime' => config('broadcasting.default') === 'reverb' && filled(config('broadcasting.connections.reverb.key'))
+                ? ['key' => (string) config('broadcasting.connections.reverb.key')]
+                : null,
         ];
     }
 }

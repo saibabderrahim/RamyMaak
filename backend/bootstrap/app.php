@@ -14,6 +14,8 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+    // Temps réel (§9.6) : POST /broadcasting/auth, session Sanctum de la PWA.
+    ->withBroadcasting(__DIR__.'/../routes/channels.php', ['middleware' => ['web', 'auth:sanctum']])
     ->withMiddleware(function (Middleware $middleware): void {
         // Sanctum en mode SPA : cookie de session + jeton anti-CSRF (§9.4, §12).
         $middleware->statefulApi();
@@ -30,7 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
         );
 
         $exceptions->render(function (Throwable $e, Request $request) {
-            if ($request->is('api/*', 'sanctum/*')) {
+            if ($request->is('api/*', 'sanctum/*', 'broadcasting/*')) {
                 return ProblemRenderer::render($e);
             }
 

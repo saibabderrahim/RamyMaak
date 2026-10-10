@@ -15,6 +15,7 @@ function useNavItems(role: Role, permissions: readonly string[]): NavItem[] {
     case 'admin':
       return [
         { to: '/admin/comptes', label: t('nav.users') },
+        { to: '/admin/journees', label: t('nav.days') },
         { to: '/admin/regions', label: t('nav.regions') },
         { to: '/admin/clients', label: t('nav.clients') },
         { to: '/admin/produits', label: t('nav.products') },
@@ -26,11 +27,12 @@ function useNavItems(role: Role, permissions: readonly string[]): NavItem[] {
     case 'adv':
       return [
         { to: '/adv', label: t('nav.home'), end: true },
+        { to: '/adv/journees', label: t('nav.days') },
         { to: '/adv/regions', label: t('nav.regions') },
         { to: '/adv/clients', label: t('nav.clients') },
         { to: '/adv/produits', label: t('nav.products') },
-        // Imports réservés aux ADV qui ont reçu en option un droit de gestion des référentiels.
-        ...(permissions.includes('product.manage') || permissions.includes('client.manage')
+        // Imports : quotas (quota.edit) et référentiels selon les droits reçus en option.
+        ...(permissions.includes('quota.edit') || permissions.includes('product.manage') || permissions.includes('client.manage')
           ? [{ to: '/adv/imports', label: t('nav.imports') }]
           : []),
         profile,
@@ -38,6 +40,7 @@ function useNavItems(role: Role, permissions: readonly string[]): NavItem[] {
     case 'regional':
       return [
         { to: '/regional', label: t('nav.home'), end: true },
+        { to: '/regional/quotas', label: t('nav.quotas') },
         { to: '/regional/clients', label: t('nav.myClients') },
         profile,
       ]

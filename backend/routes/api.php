@@ -6,14 +6,18 @@ use App\Http\Controllers\Api\V1\Admin\DepotController;
 use App\Http\Controllers\Api\V1\Admin\RegionAssignmentController;
 use App\Http\Controllers\Api\V1\Admin\SettingsController;
 use App\Http\Controllers\Api\V1\Admin\UserController;
+use App\Http\Controllers\Api\V1\Adv\DayController;
+use App\Http\Controllers\Api\V1\Adv\QuotaController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\ClientCategoryController;
 use App\Http\Controllers\Api\V1\ClientController;
 use App\Http\Controllers\Api\V1\ImportController;
+use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\ProductFamilyController;
 use App\Http\Controllers\Api\V1\ProductMediaController;
 use App\Http\Controllers\Api\V1\ProductPriceController;
+use App\Http\Controllers\Api\V1\RegionalQuotaController;
 use App\Http\Controllers\Api\V1\RegionController;
 use App\Http\Middleware\EnforceSessionPolicy;
 use App\Http\Middleware\EnsurePasswordIsChanged;
@@ -61,7 +65,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::get('product-families', [ProductFamilyController::class, 'index'])->name('product-families.index');
 
             Route::get('imports/templates/{type}', [ImportController::class, 'template'])
-                ->whereIn('type', ['clients', 'products', 'prices'])
+                ->whereIn('type', ['clients', 'products', 'prices', 'quotas'])
                 ->name('imports.template');
             Route::get('imports', [ImportController::class, 'index'])->name('imports.index');
             Route::post('imports', [ImportController::class, 'store'])->name('imports.store');
@@ -70,6 +74,29 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::get('imports/{import}/error-report', [ImportController::class, 'errorReport'])
                 ->whereNumber('import')
                 ->name('imports.error-report');
+
+            // Journées et quotas (lot 3) — contrat : docs/lot-3-contrat-api.md
+            // {businessDay} : journée « AAAA-MM-JJ » (liaison dans AppServiceProvider).
+            Route::prefix('adv')->name('adv.')->group(function () {
+                Route::get('days', [DayController::class, 'index'])->name('days.index');
+                Route::post('days', [DayController::class, 'store'])->name('days.store');
+                Route::get('days/{businessDay}', [DayController::class, 'show'])->name('days.show');
+                Route::patch('days/{businessDay}', [DayController::class, 'update'])->name('days.update');
+                Route::post('days/{businessDay}/regions/{region}/extend-cutoff', [DayController::class, 'extendCutoff'])
+                    ->name('days.extend-cutoff');
+                Route::get('days/{businessDay}/quotas', [QuotaController::class, 'index'])->name('quotas.index');
+                Route::put('days/{businessDay}/quotas', [QuotaController::class, 'update'])->name('quotas.update');
+                Route::post('days/{businessDay}/quotas/publish', [QuotaController::class, 'publish'])->name('quotas.publish');
+                Route::post('days/{businessDay}/quotas/copy', [QuotaController::class, 'copy'])->name('quotas.copy');
+            });
+            Route::get('regional/quotas', [RegionalQuotaController::class, 'index'])->name('regional.quotas.index');
+
+            // Centre de notifications (EF-NOT-01).
+            Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
+            Route::post('notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.read-all');
+            Route::post('notifications/{notification}/read', [NotificationController::class, 'read'])
+                ->whereUuid('notification')
+                ->name('notifications.read');
 
             Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('depots', [DepotController::class, 'index'])->name('depots.index');

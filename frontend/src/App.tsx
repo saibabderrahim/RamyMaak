@@ -16,6 +16,7 @@ const RegionalModule = lazy(() => import('./modules/regional'))
 const AdvModule = lazy(() => import('./modules/adv'))
 const AdminModule = lazy(() => import('./modules/admin'))
 const ProfilePage = lazy(() => import('./modules/profile/ProfilePage'))
+const NotificationsPage = lazy(() => import('./modules/notifications/NotificationsPage'))
 
 export function AppRoutes() {
   return (
@@ -27,6 +28,7 @@ export function AppRoutes() {
           <Route element={<AppShell />}>
             <Route index element={<RoleHomeRedirect />} />
             <Route path="/profil" element={<ProfilePage />} />
+            <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/client/*" element={<RequireRole roles={['client']}><ClientModule /></RequireRole>} />
             <Route path="/regional/*" element={<RequireRole roles={['regional']}><RegionalModule /></RequireRole>} />
             <Route path="/adv/*" element={<RequireRole roles={['adv']}><AdvModule /></RequireRole>} />

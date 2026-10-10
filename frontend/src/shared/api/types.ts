@@ -15,6 +15,8 @@ export type CurrentUser = {
   password_min_length: number
   perimeter: { all_regions: boolean; region_ids: number[] }
   last_login_at: string | null
+  /** Clé publique Reverb ; null si le temps réel est désactivé (repli : rafraîchissement toutes les 30 s). */
+  realtime: { key: string } | null
 }
 
 export type User = {
@@ -213,8 +215,11 @@ export type ProductPrice = {
   created_at: string
 }
 
-export const IMPORT_TYPES = ['CLIENTS', 'PRODUCTS', 'PRICES'] as const
+export const IMPORT_TYPES = ['CLIENTS', 'PRODUCTS', 'PRICES', 'QUOTAS'] as const
 export type ImportType = (typeof IMPORT_TYPES)[number]
+
+export const IMPORT_MODES = ['REPLACE', 'COMPLETE'] as const
+export type ImportMode = (typeof IMPORT_MODES)[number]
 
 export type ImportStatus = 'PENDING' | 'ANALYZING' | 'READY' | 'INVALID' | 'APPLIED' | 'FAILED'
 
@@ -232,6 +237,9 @@ export type Import = {
   type: ImportType
   type_label: string
   status: ImportStatus
+  /** Import des quotas : journée (AAAA-MM-JJ) et mode ; null pour les référentiels. */
+  business_day: string | null
+  mode: ImportMode | null
   original_name: string
   rows_total: number
   rows_processed: number
@@ -248,4 +256,158 @@ export type Import = {
   analyzed_at: string | null
   applied_at: string | null
   failure_message: string | null
+}
+
+/* ---------- Quotas ADV (lot 3) — contrat : docs/lot-3-contrat-api.md ---------- */
+
+export const DAY_STATUSES = ['OPEN', 'CLOSED'] as const
+export type DayStatus = (typeof DAY_STATUSES)[number]
+
+export const REGION_DAY_STATUSES = [
+  'QUOTA_DRAFT',
+  'QUOTA_PUBLISHED',
+  'DISTRIBUTION_DRAFT',
+  'DISTRIBUTION_PUBLISHED',
+  'CLOSED',
+] as const
+export type RegionDayStatus = (typeof REGION_DAY_STATUSES)[number]
+
+export const CUTOFF_KINDS = ['DISTRIBUTION', 'ORDERING', 'VALIDATION', 'CLOSING'] as const
+export type CutoffKind = (typeof CUTOFF_KINDS)[number]
+/** Heures limites prolongeables pour une région (RG-A05). */
+export const EXTENDABLE_CUTOFFS = ['DISTRIBUTION', 'ORDERING'] as const
+export type ExtendableCutoff = (typeof EXTENDABLE_CUTOFFS)[number]
+
+/** Heures "HH:MM" dans le fuseau métier (Africa/Algiers). */
+export type DayCutoffs = { distribution: string; ordering: string; validation: string; closing: string }
+export type RegionCutoffs = { distribution: string; ordering: string }
+
+export type RegionDay = {
+  region: RegionRef
+  status: RegionDayStatus
+  status_label: string
+  quota_version: number
+  quota_published_at: string | null
+  quota_last_published_at: string | null
+  pending_drafts: number
+  cutoffs: RegionCutoffs
+  extended: { distribution: boolean; ordering: boolean }
+}
+
+export type Day = {
+  /** AAAA-MM-JJ */
+  day: string
+  /** 0 = dimanche … 6 = samedi */
+  weekday: number
+  is_working_day: boolean
+  status: DayStatus
+  status_label: string
+  delivery_date: string
+  cutoffs: DayCutoffs
+  cutoffs_at: DayCutoffs
+  closed_at: string | null
+  regions: RegionDay[]
+  created_by: UserRef | null
+  created_at: string
+}
+
+export type QuotaMatrixRegion = RegionRef & {
+  status: RegionDayStatus
+  quota_version: number
+  pending_drafts: number
+}
+
+export type QuotaMatrixProduct = {
+  id: number
+  sku: string
+  name: string
+  short_name: string
+  family: { id: number; code: string; name: string }
+  sales_unit_label: string
+  is_active: boolean
+}
+
+/** quantity : quota publié Q ; draft : brouillon (null = aucun changement) ; validated : compteur V. */
+export type QuotaCell = { quantity: number; draft: number | null; validated: number }
+
+export type QuotaMatrix = {
+  day: Day
+  regions: QuotaMatrixRegion[]
+  products: QuotaMatrixProduct[]
+  /** cells[productId][regionId] ; seules les cellules existantes en base. */
+  cells: Record<string, Record<string, QuotaCell>>
+}
+
+export type QuotaCellInput = { region_id: number; product_id: number; quantity: number | null }
+
+export type SavedQuotaCell = QuotaCell & { region_id: number; product_id: number }
+
+export type SaveQuotasResult = { changed: number; cells: SavedQuotaCell[] }
+
+export const COPY_MODES = ['REPLACE', 'FILL'] as const
+export type CopyMode = (typeof COPY_MODES)[number]
+
+export type PublicationSkipReason = 'NO_CHANGES' | 'EMPTY' | 'CLOSED'
+
+export type PublicationResult = {
+  published: { region_id: number; code: string; version: number; first: boolean; changes: number }[]
+  skipped: { region_id: number; code: string; reason: PublicationSkipReason }[]
+}
+
+export type QuotaViolation = {
+  region_id: number
+  region: string
+  product_id: number
+  sku: string
+  validated: number
+  requested: number
+}
+
+export type RegionalQuota = {
+  product: {
+    id: number
+    sku: string
+    name: string
+    family: { id: number; code: string; name: string }
+    sales_unit_label: string
+  }
+  quantity: number
+  validated: number
+}
+
+export type RegionalQuotaRegion = {
+  region: RegionRef
+  status: RegionDayStatus
+  quota_version: number
+  quota_last_published_at: string | null
+  cutoffs: RegionCutoffs
+  quotas: RegionalQuota[]
+}
+
+export type RegionalQuotas = {
+  day: string
+  opened: boolean
+  status: DayStatus | null
+  cutoffs: DayCutoffs | null
+  regions: RegionalQuotaRegion[]
+}
+
+export const NOTIFICATION_TYPES = ['QUOTAS_PUBLISHED', 'QUOTAS_UPDATED', 'CUTOFF_EXTENDED'] as const
+export type NotificationType = (typeof NOTIFICATION_TYPES)[number]
+
+export type AppNotification = {
+  id: string
+  type: NotificationType
+  /** Code de la spécification (N-01, N-02…) ; null pour les notifications sans code. */
+  code: string | null
+  title: string
+  body: string
+  /** Chemin de la PWA à ouvrir, ou null. */
+  url: string | null
+  read_at: string | null
+  created_at: string
+}
+
+export type NotificationsPage = Paginated<AppNotification> & {
+  meta: Paginated<AppNotification>['meta'] & { unread_count: number }
 }

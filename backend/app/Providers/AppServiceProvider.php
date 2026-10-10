@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Domain\Settings\Settings;
 use App\Models\AuditLog;
+use App\Models\BusinessDay;
 use App\Models\Client;
 use App\Models\ClientCategory;
 use App\Models\Depot;
@@ -13,13 +14,17 @@ use App\Models\ProductFamily;
 use App\Models\ProductPrice;
 use App\Models\Region;
 use App\Models\RegionAssignment;
+use App\Models\RegionDay;
+use App\Models\RegionQuota;
 use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -50,7 +55,16 @@ class AppServiceProvider extends ServiceProvider
             'product' => Product::class,
             'product_price' => ProductPrice::class,
             'import' => Import::class,
+            'business_day' => BusinessDay::class,
+            'region_day' => RegionDay::class,
+            'region_quota' => RegionQuota::class,
         ]);
+
+        // Journée désignée par sa date « AAAA-MM-JJ » dans les URL (§11.1) ;
+        // inconnue ou mal formée : 404.
+        Route::pattern('businessDay', '\d{4}-\d{2}-\d{2}');
+        Route::bind('businessDay', fn (string $value) => BusinessDay::forDay($value)
+            ?? throw (new ModelNotFoundException)->setModel(BusinessDay::class, [$value]));
 
         // Limitation de débit (§11.1).
         RateLimiter::for('api', fn (Request $request) => Limit::perMinute(
