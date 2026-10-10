@@ -118,7 +118,9 @@ describe('useLiveRefresh', () => {
     renderProbe({ key: 'app-key' })
     await waitFor(() => expect(fake.pusherOptions).toHaveLength(1))
 
-    const { customHandler } = fake.pusherOptions[0]?.channelAuthorization as {
+    const options = fake.pusherOptions[0]
+    if (options === undefined) throw new Error('Pusher non créé')
+    const { customHandler } = options.channelAuthorization as {
       customHandler: (params: { socketId: string; channelName: string }, callback: (error: Error | null, data: unknown) => void) => void
     }
     const callback = vi.fn()

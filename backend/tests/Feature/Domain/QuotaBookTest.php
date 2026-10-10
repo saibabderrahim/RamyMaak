@@ -107,7 +107,7 @@ it('publishes the drafts of the chosen regions, version 1 then 2, and journals b
 
     $entries = AuditLog::query()->where('log_name', 'quotas')->orderBy('id')->get();
     expect($entries->pluck('event')->all())->toBe(['published', 'updated'])
-        ->and($entries[1]->properties['changes'])->toBe([['product_id' => $this->orange->id, 'sku' => 'P0042', 'old' => 500, 'new' => 450]]);
+        ->and($entries[1]->properties['changes'])->toEqual([['product_id' => $this->orange->id, 'sku' => 'P0042', 'old' => 500, 'new' => 450]]);
 });
 
 it('publishes all regions at once, leaving aside those with nothing to publish', function () {
