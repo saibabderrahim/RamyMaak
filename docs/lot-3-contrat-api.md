@@ -26,6 +26,7 @@ S'y ajoutent les règles suivantes.
   Ces services lèvent eux-mêmes `DAY_NOT_OPEN` (409), `QUOTA_BELOW_VALIDATED` (409, avec `violations`), `INVALID_TRANSITION` (409) et des `ValidationException` (422).
 - **Événements de domaine**, diffusés après validation de la transaction (`ShouldDispatchAfterCommit`) :
   - `App\Events\QuotasPublished` (`regionDayId`, `version`, `first`, `changedProducts`, `actorId`) ;
+  - `App\Events\QuotaDraftsSaved` (`businessDayId`, `regionIds`, `actorId`), émis par `QuotaBook::saveDrafts` (saisie, copie, import) quand au moins une cellule change ;
   - `App\Events\CutoffExtended` (`regionDayId`, `kind`, `actorId`) ;
   - `App\Events\DayClosed` (`businessDayId`).
 
@@ -220,7 +221,7 @@ Déclarés dans `routes/channels.php`, ils passent par `POST /broadcasting/auth`
 |---|---|---|
 | `user.{id}` | l'utilisateur | notifications (`.Illuminate\Notifications\Events\BroadcastNotificationCreated`) |
 | `region-day.{regionId}.{day}` | `quota.view` + région du périmètre ce jour-là (régionaux, ADV, Admin) | `QuotaPublished` `{ region_id, day, version, first }` |
-| `adv.{day}` | ADV, Admin | `QuotaPublished` (même contenu), `DraftsUpdated` `{ region_ids, day }`, `DayClosed` `{ day }` |
+| `adv.{day}` | ADV, Admin | `QuotaPublished` (même contenu), `DraftsUpdated` `{ region_ids, day }` (sur `QuotaDraftsSaved`), `DayClosed` `{ day }` |
 
 - Un événement porte un identifiant et un résumé : l'application relit les données par l'API.
 - `GET /auth/me` gagne `realtime: { key } | null`. La connexion se fait au même domaine, sur le chemin `/app` (Reverb, protocole Pusher) ; en développement, Vite relaie `/app` vers Reverb.

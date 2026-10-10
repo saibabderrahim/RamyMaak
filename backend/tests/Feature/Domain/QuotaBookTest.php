@@ -4,6 +4,7 @@ use App\Domain\Access\Role;
 use App\Domain\Days\DayCalendar;
 use App\Domain\Days\RegionDayStatus;
 use App\Domain\Quotas\QuotaBook;
+use App\Events\QuotaDraftsSaved;
 use App\Events\QuotasPublished;
 use App\Http\Problems\ApiException;
 use App\Models\AuditLog;
@@ -22,7 +23,7 @@ use Illuminate\Validation\ValidationException;
 
 beforeEach(function () {
     $this->travelTo(CarbonImmutable::parse('2026-10-08 07:30', 'Africa/Algiers'));
-    Event::fake([QuotasPublished::class]);
+    Event::fake([QuotasPublished::class, QuotaDraftsSaved::class]);
     $this->book = app(QuotaBook::class);
     $this->adv = userWithRole(Role::Adv);
     $this->centre = Region::factory()->create(['code' => 'CENTRE']);
@@ -53,6 +54,8 @@ it('saves drafts invisible until publication (RG-Q03)', function () {
         // 0 sur une région jamais publiée : rien à publier, aucune ligne créée.
         ->and(($this->quota)($this->est, $this->orange))->toBeNull()
         ->and(($this->regionDay)($this->centre)->status)->toBe(RegionDayStatus::QuotaDraft);
+    Event::assertDispatchedTimes(QuotaDraftsSaved::class, 1);
+    Event::assertDispatched(QuotaDraftsSaved::class, fn (QuotaDraftsSaved $e) => $e->regionIds === [$this->centre->id] && $e->businessDayId === $this->day->id);
 
     // Annuler un brouillon, ou revenir à la valeur publiée : plus rien en attente.
     $this->book->saveDrafts($this->day, [($this->cell)($this->centre, $this->orange, null)], $this->adv);

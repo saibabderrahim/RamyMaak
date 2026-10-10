@@ -5,6 +5,7 @@ namespace App\Domain\Quotas;
 use App\Domain\Access\Perimeter;
 use App\Domain\Days\DayCalendar;
 use App\Domain\Days\RegionDayStatus;
+use App\Events\QuotaDraftsSaved;
 use App\Events\QuotasPublished;
 use App\Http\Problems\ApiException;
 use App\Http\Problems\ErrorCode;
@@ -93,6 +94,7 @@ final class QuotaBook
                 ->keyBy(fn (RegionQuota $q) => $q->region_day_id.'|'.$q->product_id);
 
             $changed = 0;
+            $changedRegions = [];
             foreach ($cells as $cell) {
                 $regionDay = $regionDays[$cell['region_id']];
                 $key = $regionDay->id.'|'.$cell['product_id'];
@@ -118,6 +120,11 @@ final class QuotaBook
                 $quota->save();
                 $existing->put($key, $quota);
                 $changed++;
+                $changedRegions[$cell['region_id']] = true;
+            }
+
+            if ($changed > 0) {
+                event(new QuotaDraftsSaved($day->id, array_keys($changedRegions), $by->id));
             }
 
             return $changed;
