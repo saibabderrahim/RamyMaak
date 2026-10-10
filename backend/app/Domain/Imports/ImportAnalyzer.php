@@ -14,8 +14,11 @@ use Illuminate\Support\Facades\Storage;
  */
 final class ImportAnalyzer
 {
-    /** Garde-fou mémoire, largement au-dessus des volumes attendus (§13.1). */
-    public const MAX_ROWS = 10000;
+    /**
+     * Lignes de données par fichier : 2,5 fois les volumes attendus (§13.1 :
+     * 2 000 clients, 200 produits), dans la mémoire allouée à PHP (256 Mo).
+     */
+    public const MAX_ROWS = 5000;
 
     /** Fréquence de mise à jour de la progression (lignes). */
     public const PROGRESS_EVERY = 100;
@@ -29,7 +32,8 @@ final class ImportAnalyzer
         $result = new AnalysisResult($definition);
 
         try {
-            $sheet = ImportSheet::open(Storage::disk('local')->path($import->file_path), self::MAX_ROWS);
+            // Seules les colonnes de l'annexe B sont chargées : les autres sont ignorées.
+            $sheet = ImportSheet::open(Storage::disk('local')->path($import->file_path), self::MAX_ROWS, $definition->columns());
         } catch (UnreadableSheet $e) {
             $result->fileError(null, $e->getMessage());
 

@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\ProductFamily;
 use App\Models\User;
 use App\Policies\ProductPolicy;
+use App\Support\FilterValue;
 use App\Support\Pagination;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -100,7 +101,7 @@ class ProductController extends Controller
     /** Code article, désignation ou désignation courte. */
     private function search(Builder $query, mixed $value): void
     {
-        $value = trim(is_array($value) ? implode(',', $value) : (string) $value);
+        $value = FilterValue::text($value, 'search');
         if ($value === '') {
             return;
         }

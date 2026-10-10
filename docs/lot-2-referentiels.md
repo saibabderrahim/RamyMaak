@@ -23,9 +23,9 @@ Contrat d'API et d'écrans du lot, avec les règles retenues : [lot-2-contrat-ap
 
 ## Vérifications
 
-- **API** : 563 tests Pest, exécutés sur SQLite et sur MySQL 8 ; la CI les exécute sur MySQL 8.4.
+- **API** : 572 tests Pest, exécutés sur SQLite et sur MySQL 8 ; la CI les exécute sur MySQL 8.4.
 - **PWA** : 117 tests Vitest ; lint, types et build sans avertissement. Le code et les libellés du back-office restent hors du pré-cache et du paquet initial du client (95 Ko compressés).
-- **Parcours réels dans Chromium** (Playwright), sur l'API, la base MySQL et la file d'attente réelles, 9 scénarios et 211 contrôles :
+- **Parcours réels dans Chromium** (Playwright), sur l'API, la base MySQL et la file d'attente réelles, 9 scénarios et 214 contrôles, rejoués après les corrections :
   - Admin : affectations, fiches d'accès PDF, changement de région, blocage, création d'un client, photos, prix, import Excel complet (valide, invalide avec fichier annoté, prix) ;
   - ADV : consultation seule ;
   - régional sur téléphone : « Mes clients » ;
@@ -37,7 +37,11 @@ Contrat d'API et d'écrans du lot, avec les règles retenues : [lot-2-contrat-ap
   - un prix déjà appliqué ne se réécrit plus ;
   - le fichier annoté ne garde aucune formule active ;
   - le régional réinitialise les mots de passe clients ;
-  - les photos s'ouvrent dans un nouvel onglet malgré le service worker.
+  - les photos s'ouvrent dans un nouvel onglet malgré le service worker ;
+  - les dates d'effet sont journalisées telles quelles, et non à la veille en heure UTC ;
+  - la mémoire des imports est maîtrisée (seules les colonnes utiles sont lues), et les lignes vides seulement mises en forme ne comptent plus ;
+  - un paramètre malformé reçoit une réponse 422, et non une erreur 500 ;
+  - les fiches d'accès sont générées par lots de 100.
 - **Mise à jour depuis la v0.1.0** rejouée sur MySQL (migrations, rôles, retour arrière). Elle a révélé un blocage, corrigé : un compte client créé en v0.1.0 avec un identifiant de client faisait échouer la migration.
 - **Images et pile complète** : construites et démarrées par la CI.
 
@@ -89,10 +93,10 @@ Vérification finale : un régional ne voit que les clients de ses régions dans
 | I-11 | Les codes (région, dépôt, catégorie, client, produit, famille) ne se modifient plus après création | Clés des fichiers Excel et des échanges avec l'ERP |
 | I-12 | Un ADV sans aucune affectation ADV voit toutes les régions. Dès sa première affectation, il est limité à ses affectations actives, éventuellement aucune | RG-S05 : la fin d'une affectation ne doit jamais élargir le périmètre |
 | I-13 | Un prix s'enregistre à une date d'effet d'aujourd'hui ou plus tard ; un prix programmé à la même date est remplacé | RG-P03 : l'historique des prix appliqués ne se réécrit pas |
-| I-14 | Imports : `.xlsx` seulement (pas de macros), 5 Mo et 10 000 lignes au plus ; l'application se fait pendant la requête (environ 5 s pour 2 000 clients) | Volumes du §13.1 ; un traitement en file d'attente reste possible si les fichiers grossissent |
+| I-14 | Imports : `.xlsx` seulement (pas de macros), 5 Mo et 5 000 lignes de données au plus ; seules les colonnes de l'annexe B sont lues ; l'application se fait pendant la requête (environ 5 s pour 2 000 clients) | 2,5 fois les volumes du §13.1, dans la mémoire allouée à PHP ; un traitement en file d'attente reste possible si les fichiers grossissent |
 | I-15 | Fichiers d'import et fichiers annotés conservés sans limite de durée | Historique des imports (§8.1) ; durée de conservation à décider |
 | I-16 | Photos ré-encodées en WebP de 2 400 px au plus ; image de plus de 25 mégapixels refusée | Sécurité (§12) et poids des vignettes (§9.8) |
-| I-17 | Fiches d'accès : 200 clients au plus par lot ; les clients déjà équipés d'un compte ou inactifs sont ignorés | Durée de génération du PDF (environ 20 s pour 200 fiches) |
+| I-17 | Fiches d'accès : 100 clients au plus par lot ; les clients déjà équipés d'un compte ou inactifs sont ignorés | Durée de génération (environ 10 s pour 100 fiches, mots de passe compris), loin des 60 s permises par requête |
 | I-18 | Un statut `BLOQUE` importé sans motif reçoit le motif « Import Excel du JJ/MM/AAAA » | Le motif est obligatoire pour bloquer (EF-CLI-04) |
 | I-19 | Le client bloqué voit que la commande est suspendue, sans le motif saisi par l'Admin | Le motif peut être une note interne (commerciale ou financière) |
 | I-20 | Lien « Voir sur la carte » vers Google Maps | Ouvre l'application de cartes sur Android et iPhone |

@@ -12,6 +12,7 @@ use App\Models\Client;
 use App\Models\Region;
 use App\Models\User;
 use App\Support\BusinessClock;
+use App\Support\FilterValue;
 use App\Support\Pagination;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -50,9 +51,7 @@ class RegionController extends Controller
         $regions = QueryBuilder::for($query)
             ->allowedFilters(
                 AllowedFilter::callback('search', function (Builder $query, mixed $value): void {
-                    // Une virgule découpe la valeur en liste : on la recolle.
-                    $search = is_array($value) ? implode(',', $value) : (string) $value;
-                    $term = '%'.str_replace(['%', '_'], ['\%', '\_'], trim($search)).'%';
+                    $term = '%'.str_replace(['%', '_'], ['\%', '\_'], FilterValue::text($value, 'search')).'%';
                     $query->where(fn (Builder $q) => $q->where('regions.code', 'like', $term)->orWhere('regions.name', 'like', $term));
                 }),
                 AllowedFilter::exact('is_active', 'regions.is_active'),

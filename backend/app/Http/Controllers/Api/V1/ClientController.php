@@ -12,6 +12,7 @@ use App\Http\Resources\ClientResource;
 use App\Models\Client;
 use App\Models\User;
 use App\Support\BusinessClock;
+use App\Support\FilterValue;
 use App\Support\Pagination;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -55,7 +56,7 @@ class ClientController extends Controller
                     $query->whereIn('category_id', $this->identifiers($value, 'category_id'));
                 }),
                 AllowedFilter::callback('status', function (Builder $query, mixed $value): void {
-                    $statuses = collect((array) $value)->map(fn ($s) => ClientStatus::tryFrom(mb_strtoupper((string) $s)));
+                    $statuses = collect(FilterValue::scalars($value, 'status'))->map(fn (string $s) => ClientStatus::tryFrom(mb_strtoupper($s)));
                     if ($statuses->contains(null)) {
                         throw ValidationException::withMessages(['filter.status' => [__('clients.unknown_status')]]);
                     }
@@ -102,7 +103,7 @@ class ClientController extends Controller
     /** Code, raison sociale, enseigne ou téléphone (EF-CLI-03 : retrouver et appeler un client). */
     private function search(Builder $query, mixed $value): void
     {
-        $value = trim(is_array($value) ? implode(',', $value) : (string) $value);
+        $value = FilterValue::text($value, 'search');
         if ($value === '') {
             return;
         }

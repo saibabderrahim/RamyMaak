@@ -10,7 +10,7 @@ export const clientsKey = ['backoffice', 'clients'] as const
 const categoriesKey = ['backoffice', 'client-categories'] as const
 
 /** Lot maximal de la création de comptes en masse (EF-ADM-02). */
-export const MAX_ACCOUNT_BATCH = 200
+export const MAX_ACCOUNT_BATCH = 100
 
 export type ClientFilters = {
   search?: string

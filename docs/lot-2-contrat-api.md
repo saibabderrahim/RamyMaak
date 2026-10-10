@@ -128,7 +128,7 @@ Précisions (implémentation) :
 | GET | `/client-categories` | — | `{ "data": [ClientCategory] }` |
 | POST | `/admin/client-categories` | `code` (unique, majuscules), `name` | 201 `ClientCategory` |
 | PATCH | `/admin/client-categories/{id}` | `name` | `ClientCategory` |
-| POST | `/admin/client-accounts` | `client_ids` (1 à 200 identifiants) | **PDF** `fiches-acces-AAAAMMJJ.pdf` : une fiche par compte créé (raison sociale, code, identifiant = code client en minuscules, mot de passe temporaire, adresse de l'application, aide à l'installation). Les clients qui ont déjà un compte ou qui sont inactifs sont ignorés ; en-tête `X-Accounts-Created` (nombre). Aucun compte créé → 422 sur `client_ids`. |
+| POST | `/admin/client-accounts` | `client_ids` (1 à 100 identifiants) | **PDF** `fiches-acces-AAAAMMJJ.pdf` : une fiche par compte créé (raison sociale, code, identifiant = code client en minuscules, mot de passe temporaire, adresse de l'application, aide à l'installation). Les clients qui ont déjà un compte ou qui sont inactifs sont ignorés ; en-tête `X-Accounts-Created` (nombre). Aucun compte créé → 422 sur `client_ids`. |
 
 Comptes utilisateurs (lot 1, à compléter) :
 - `POST/PATCH /admin/users` : `client_id` **obligatoire** et existant pour le rôle client, interdit pour les autres ;

@@ -12,7 +12,8 @@ use Illuminate\Validation\Validator;
  */
 class StoreClientAccountsRequest extends FormRequest
 {
-    public const MAX_CLIENTS = 200;
+    /** Une centaine de fiches : une dizaine de secondes, hachage Argon2id compris, loin des 60 s permises. */
+    public const MAX_CLIENTS = 100;
 
     // Contrôle des droits avant la validation : sans user.manage, 403 et non 422.
     public function authorize(): bool

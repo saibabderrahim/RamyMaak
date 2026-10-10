@@ -24,7 +24,11 @@ class BusinessDate implements CastsAttributes
             return null;
         }
 
-        return CarbonImmutable::createFromFormat('!Y-m-d', substr((string) $value, 0, 10), BusinessClock::timezone()) ?: null;
+        $day = CarbonImmutable::createFromFormat('!Y-m-d', substr((string) $value, 0, 10), BusinessClock::timezone());
+
+        // En JSON (journal d'audit, réponses) : la date du jour « AAAA-MM-JJ »,
+        // pas l'instant UTC de minuit à Alger, qui tombe la veille à 23:00.
+        return $day === false ? null : $day->settings(['toJsonFormat' => 'Y-m-d']);
     }
 
     public function set(Model $model, string $key, mixed $value, array $attributes): ?string

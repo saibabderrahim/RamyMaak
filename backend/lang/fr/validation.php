@@ -126,6 +126,9 @@ return [
     'ulid' => 'Le champ :attribute doit être un ULID valide.',
     'uuid' => 'Le champ :attribute doit être un UUID valide.',
 
+    // Filtre de liste dont la valeur n'est ni un texte ni une liste de textes.
+    'invalid_filter' => 'Valeur de filtre invalide.',
+
     'custom' => [],
 
     'attributes' => [],

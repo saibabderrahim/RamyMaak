@@ -55,7 +55,7 @@ class UpdateRegionRequest extends FormRequest
             function (Validator $validator): void {
                 $region = $this->region();
 
-                if ($this->has('code') && (string) $this->input('code') !== $region->code) {
+                if ($this->has('code') && (! is_string($this->input('code')) || $this->input('code') !== $region->code)) {
                     $validator->errors()->add('code', __('regions.code_immutable'));
                 }
 

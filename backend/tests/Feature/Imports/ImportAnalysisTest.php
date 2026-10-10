@@ -3,6 +3,7 @@
 use App\Domain\Access\Permission;
 use App\Domain\Access\Role;
 use App\Domain\Imports\ClientsDefinition;
+use App\Domain\Imports\ImportAnalyzer;
 use App\Domain\Imports\ImportProcessor;
 use App\Domain\Imports\ImportStatus;
 use App\Jobs\AnalyzeImport;
@@ -72,6 +73,30 @@ describe('header', function () {
         expect(($this->report)($id))
             ->status->toBe('READY')
             ->rows_total->toBe(1);
+    });
+
+    it('does not count empty rows that only carry formatting (borders down a long range)', function () {
+        $id = $this->actingAs($this->admin)->post('/api/v1/imports', [
+            'type' => 'CLIENTS',
+            'file' => Workbook::upload([
+                ['code_client', 'raison_sociale', 'code_region'],
+                ['C0001', 'Client A', 'CENTRE'],
+            ], 'clients.xlsx', function ($sheet) {
+                $sheet->getStyle('A1:C15000')->getBorders()->getAllBorders()->setBorderStyle('thin');
+            }),
+        ])->json('id');
+
+        expect(($this->report)($id))
+            ->status->toBe('READY')
+            ->rows_total->toBe(1);
+    });
+
+    it('refuses more data rows than the limit, with a usable message', function () {
+        $id = ($this->upload)(($this->clientRows)(ImportAnalyzer::MAX_ROWS + 1))->json('id');
+
+        expect(($this->report)($id))
+            ->status->toBe('INVALID')
+            ->errors->toBe([['row' => null, 'column' => null, 'message' => "Le fichier dépasse 5\u{202F}000 lignes : découpez-le en plusieurs fichiers."]]);
     });
 
     it('refuses a column given twice', function () {

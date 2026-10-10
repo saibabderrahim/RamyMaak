@@ -2,12 +2,14 @@
 
 namespace App\Domain\Imports;
 
+use Closure;
 use Generator;
 use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\Calculation\Information\ExcelError;
 use PhpOffice\PhpSpreadsheet\Cell\Cell;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\Reader\IReadFilter;
 use PhpOffice\PhpSpreadsheet\Reader\Xlsx as XlsxReader;
 use PhpOffice\PhpSpreadsheet\RichText\RichText;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
@@ -33,9 +35,20 @@ final class ImportSheet
     ) {}
 
     /**
+     * Facteur appliqué au maximum de lignes pour le contrôle préalable :
+     * listWorksheetInfo compte aussi les lignes vides seulement mises en forme
+     * (bordures, couleurs). La limite exacte porte sur les lignes de données
+     * (ImportAnalyzer) ; ce contrôle n'écarte que les feuilles démesurées.
+     */
+    private const DECLARED_ROWS_FACTOR = 10;
+
+    /**
+     * @param  list<string>|null  $columns  en-têtes normalisés à charger (null : tous) ;
+     *                                      les autres colonnes ne sont pas lues (mémoire)
+     *
      * @throws UnreadableSheet classeur illisible ou trop volumineux
      */
-    public static function open(string $path, int $maxRows): self
+    public static function open(string $path, int $maxRows, ?array $columns = null): self
     {
         $reader = new XlsxReader;
 
@@ -49,22 +62,75 @@ final class ImportSheet
             throw new UnreadableSheet(__('imports.errors.unreadable'));
         }
 
-        // Garde-fou mémoire : la feuille n'est pas chargée au-delà du maximum.
-        if ($first['totalRows'] > $maxRows + 1) {
+        if ($first['totalRows'] > $maxRows * self::DECLARED_ROWS_FACTOR) {
             throw new UnreadableSheet(__('imports.errors.too_many_rows', ['max' => number_format($maxRows, 0, ',', "\u{202F}")]));
         }
 
-        $reader->setLoadSheetsOnly([$first['worksheetName']]);
-        $reader->setReadEmptyCells(false);
-        $reader->setIncludeCharts(false);
-
         try {
-            $spreadsheet = $reader->load($path);
+            // Première lecture : la ligne d'en-tête seule, pour choisir les colonnes.
+            $letters = null;
+            if ($columns !== null) {
+                $letters = [];
+                foreach (self::readHeader(self::reader($first['worksheetName'], fn (string $column, int $row) => $row === 1), $path) as $index => $name) {
+                    if (in_array($name, $columns, true)) {
+                        $letters[Coordinate::stringFromColumnIndex($index)] = true;
+                    }
+                }
+            }
+
+            $spreadsheet = self::reader(
+                $first['worksheetName'],
+                fn (string $column, int $row) => $row === 1 || $letters === null || isset($letters[$column]),
+            )->load($path);
         } catch (Throwable) {
             throw new UnreadableSheet(__('imports.errors.unreadable'));
         }
 
         $sheet = $spreadsheet->getSheet(0);
+
+        return new self($spreadsheet, $sheet, self::headerOf($sheet));
+    }
+
+    /**
+     * @param  Closure(string $column, int $row): bool  $accept
+     */
+    private static function reader(string $worksheetName, Closure $accept): XlsxReader
+    {
+        $reader = new XlsxReader;
+        $reader->setLoadSheetsOnly([$worksheetName]);
+        $reader->setReadEmptyCells(false);
+        $reader->setIncludeCharts(false);
+        $reader->setReadFilter(new class($accept) implements IReadFilter
+        {
+            /** @param Closure(string, int): bool $accept */
+            public function __construct(private readonly Closure $accept) {}
+
+            public function readCell(string $columnAddress, int $row, string $worksheetName = ''): bool
+            {
+                return ($this->accept)($columnAddress, $row);
+            }
+        });
+
+        return $reader;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function readHeader(XlsxReader $reader, string $path): array
+    {
+        $spreadsheet = $reader->load($path);
+        $header = self::headerOf($spreadsheet->getSheet(0));
+        $spreadsheet->disconnectWorksheets();
+
+        return $header;
+    }
+
+    /**
+     * @return array<int, string> index de colonne (1 = A) → en-tête normalisé
+     */
+    private static function headerOf(Worksheet $sheet): array
+    {
         $header = [];
         $lastColumn = Coordinate::columnIndexFromString($sheet->getHighestDataColumn(1));
         for ($column = 1; $column <= $lastColumn; $column++) {
@@ -74,7 +140,7 @@ final class ImportSheet
             }
         }
 
-        return new self($spreadsheet, $sheet, $header);
+        return $header;
     }
 
     /** « Code Client », « code_client » et « CODE_CLIENT* » désignent la même colonne. */

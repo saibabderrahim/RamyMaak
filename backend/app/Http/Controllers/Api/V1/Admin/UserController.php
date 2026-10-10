@@ -11,6 +11,7 @@ use App\Http\Requests\Admin\StoreUserRequest;
 use App\Http\Requests\Admin\UpdateUserRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Support\FilterValue;
 use App\Support\Pagination;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -42,7 +43,7 @@ class UserController extends Controller
         $users = QueryBuilder::for(User::query()->with(self::RELATIONS))
             ->allowedFilters(
                 AllowedFilter::callback('role', function (Builder $query, mixed $value): void {
-                    $roles = collect((array) $value)->map(fn ($r) => Role::tryFrom((string) $r));
+                    $roles = collect(FilterValue::scalars($value, 'role'))->map(fn (string $r) => Role::tryFrom($r));
                     if ($roles->contains(null)) {
                         throw ValidationException::withMessages(['filter.role' => [__('users.unknown_role')]]);
                     }
@@ -53,7 +54,7 @@ class UserController extends Controller
                 // Une recherche peut contenir une virgule : pas de découpage en liste.
                 AllowedFilter::callback('search', function (Builder $query, mixed $value): void {
                     // Échappement explicite (« ! ») : « _ » et « % » lus littéralement sur MySQL comme SQLite.
-                    $term = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], trim((string) $value)).'%';
+                    $term = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], FilterValue::text($value, 'search')).'%';
                     $grammar = $query->getQuery()->getGrammar();
                     $query->where(fn (Builder $q) => $q
                         ->whereRaw($grammar->wrap('username')." LIKE ? ESCAPE '!'", [$term])
