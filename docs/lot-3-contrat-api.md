@@ -92,7 +92,7 @@ Périmètre :
 
 | Méthode | Chemin | Corps / filtres | Réponse |
 |---|---|---|---|
-| GET | `/adv/days` | `from`, `to` (`AAAA-MM-JJ`, défaut : aujourd'hui − 7 à aujourd'hui + 14, écart ≤ 62 jours) | `{ "data": [Day] }`, journées **ouvertes** de l'intervalle, par date ; l'écran affiche les autres comme non ouvertes |
+| GET | `/adv/days` | `from`, `to` (`AAAA-MM-JJ`, défaut : aujourd'hui − 7 à aujourd'hui + 14, écart ≤ 62 jours) | `{ "data": [Day], "meta": { "from": "2026-10-01", "to": "2026-10-22", "today": "2026-10-08", "working_days": [0, 1, 2, 3, 4] } }` : journées **ouvertes** de l'intervalle, par date ; l'écran affiche les autres comme non ouvertes (jour ouvré selon `working_days`, 0 = dimanche) |
 | POST | `/adv/days` | `day` (requis, `AAAA-MM-JJ`, de aujourd'hui à aujourd'hui + 30) | 201 `Day` (`DayCalendar::open`) ; déjà ouverte → 409 `INVALID_TRANSITION` ; jour passé → 422. Un jour non ouvré peut être ouvert : l'écran demande confirmation |
 | GET | `/adv/days/{day}` | — | `Day` |
 | PATCH | `/adv/days/{day}` | `cutoffs` : `{ distribution?, ordering?, validation?, closing? }` (`HH:MM`), `delivery_date` (≥ la journée) | `Day` (`DayCalendar::updateSchedule`) ; ordre strict répartition < commande < validation < clôture, clôture à venir ; journée clôturée → 409 `DAY_NOT_OPEN` |
