@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Domain\Imports\ImportMode;
 use App\Domain\Imports\ImportStatus;
 use App\Domain\Imports\ImportType;
 use Database\Factories\ImportFactory;
@@ -13,10 +14,11 @@ use Illuminate\Support\Carbon;
 /**
  * Import d'un fichier Excel (§8) et son rapport d'analyse.
  *
+ * @property-read ?BusinessDay $businessDay
  * @property int $id
  * @property ImportType $type
  * @property ?int $business_day_id
- * @property ?string $mode
+ * @property ?ImportMode $mode quotas : REPLACE ou COMPLETE (§8.1)
  * @property ImportStatus $status
  * @property string $original_name
  * @property string $file_path
@@ -54,6 +56,7 @@ class Import extends Model
             'type' => ImportType::class,
             'status' => ImportStatus::class,
             'business_day_id' => 'integer',
+            'mode' => ImportMode::class,
             'rows_total' => 'integer',
             'rows_processed' => 'integer',
             'rows_ok' => 'integer',
@@ -71,5 +74,11 @@ class Import extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /** Journée visée par un import de quotas (§8.1). @return BelongsTo<BusinessDay, $this> */
+    public function businessDay(): BelongsTo
+    {
+        return $this->belongsTo(BusinessDay::class);
     }
 }

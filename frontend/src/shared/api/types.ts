@@ -196,6 +196,8 @@ export type Product = {
   ean: string | null
   vat_rate: number
   is_active: boolean
+  /** Désactivation demandée alors qu'un quota publié court aujourd'hui (RG-Q07) : effective ce jour-là (AAAA-MM-JJ). */
+  pending_deactivation_on: string | null
   is_new: boolean
   is_featured: boolean
   sort_order: number
