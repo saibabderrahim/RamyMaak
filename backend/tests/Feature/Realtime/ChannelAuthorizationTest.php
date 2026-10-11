@@ -68,6 +68,12 @@ it('opens region-day.{region}.{day} to the regionals of the region that day, ADV
     ($this->denied)($this->titular, "region-day.{$this->centre->id}.2026-13-45");
 });
 
+it('refuses non-numeric identifiers in channel names with a 403, not a server error', function () {
+    ($this->denied)($this->titular, 'user.abc');
+    ($this->denied)($this->titular, "user.{$this->titular->id}x");
+    ($this->denied)(admin(), 'region-day.abc.2026-10-08');
+});
+
 it('limits region-day channels to the regions of a restricted ADV (RG-S05)', function () {
     $restricted = userWithRole(Role::Adv);
     RegionAssignment::factory()->adv()->create(['region_id' => $this->est->id, 'user_id' => $restricted->id]);

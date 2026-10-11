@@ -80,6 +80,17 @@ it('refuses inactive products, inactive regions and regions outside the ADV peri
     expect($this->book->saveDrafts($this->day, [($this->cell)($this->est, $this->orange, 10)], $restricted))->toBe(1);
 });
 
+it('judges the ADV perimeter on the date of the day, like the matrix (RG-S05)', function () {
+    // Affectation ADV à partir du 09/10 : la journée du 09 se prépare dès le 08.
+    $tomorrowAdv = userWithRole(Role::Adv);
+    RegionAssignment::factory()->adv()->create(['user_id' => $tomorrowAdv->id, 'region_id' => $this->est->id, 'starts_on' => '2026-10-09']);
+    $tomorrow = app(DayCalendar::class)->open(BusinessClock::parseDay('2026-10-09'), $this->adv);
+
+    expect($this->book->saveDrafts($tomorrow, [($this->cell)($this->est, $this->orange, 10)], $tomorrowAdv))->toBe(1)
+        ->and(fn () => $this->book->saveDrafts($this->day, [($this->cell)($this->est, $this->orange, 10)], $tomorrowAdv))
+        ->toThrow(ValidationException::class);
+});
+
 it('publishes the drafts of the chosen regions, version 1 then 2, and journals before / after (RG-Q04, RG-Q08)', function () {
     $this->book->saveDrafts($this->day, [
         ($this->cell)($this->centre, $this->orange, 500),

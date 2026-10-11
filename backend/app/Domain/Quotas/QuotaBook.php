@@ -55,7 +55,7 @@ final class QuotaBook
             $day = BusinessDay::query()->lockForUpdate()->findOrFail($day->id);
             $this->calendar->assertOpen($day);
 
-            $regions = $this->usableRegions($by, array_column($cells, 'region_id'));
+            $regions = $this->usableRegions($day, $by, array_column($cells, 'region_id'));
             $products = Product::query()
                 ->whereKey(array_unique(array_column($cells, 'product_id')))
                 ->where('is_active', true)
@@ -66,7 +66,7 @@ final class QuotaBook
             foreach ($cells as $index => $cell) {
                 $region = $regions->get($cell['region_id']);
                 if ($region === null) {
-                    $errors["cells.{$index}.region_id"] = [$this->regionError($by, $cell['region_id'])];
+                    $errors["cells.{$index}.region_id"] = [$this->regionError($day, $by, $cell['region_id'])];
                 }
                 if (! $products->has($cell['product_id'])) {
                     $errors["cells.{$index}.product_id"] = [__('quotas.product_unknown')];
@@ -141,9 +141,11 @@ final class QuotaBook
      */
     public function copyFrom(BusinessDay $target, BusinessDay $source, ?array $regionIds, bool $replace, User $by): int
     {
-        $regions = $this->usableRegions($by, $regionIds);
+        // Journée clôturée : refus même quand il n'y a rien à copier.
+        $this->calendar->assertOpen($target);
+        $regions = $this->usableRegions($target, $by, $regionIds);
         if ($regionIds !== null) {
-            $this->assertRegions($by, $regionIds, $regions);
+            $this->assertRegions($target, $by, $regionIds, $regions);
         }
         $productIds = Product::query()->where('is_active', true)->pluck('id')->all();
 
@@ -178,10 +180,10 @@ final class QuotaBook
             $day = BusinessDay::query()->lockForUpdate()->findOrFail($day->id);
             $this->calendar->assertOpen($day);
 
-            $regions = $this->usableRegions($by, $regionIds);
+            $regions = $this->usableRegions($day, $by, $regionIds);
             $explicit = $regionIds !== null;
             if ($explicit) {
-                $this->assertRegions($by, $regionIds, $regions);
+                $this->assertRegions($day, $by, $regionIds, $regions);
                 foreach ($regions as $region) {
                     $this->calendar->regionDayFor($day, $region);
                 }
@@ -311,15 +313,15 @@ final class QuotaBook
     }
 
     /**
-     * Régions actives du périmètre de l'utilisateur (RG-S05), restreintes aux
-     * identifiants demandés.
+     * Régions actives du périmètre de l'utilisateur à la date de la journée
+     * (RG-S05, comme la matrice), restreintes aux identifiants demandés.
      *
      * @param  list<int>|null  $ids
      * @return Collection<int, Region>
      */
-    private function usableRegions(User $by, ?array $ids): Collection
+    private function usableRegions(BusinessDay $day, User $by, ?array $ids): Collection
     {
-        $allowed = $this->perimeter->regionIds($by);
+        $allowed = $this->perimeter->regionIds($by, $day->day);
 
         return Region::query()
             ->where('is_active', true)
@@ -334,18 +336,18 @@ final class QuotaBook
      * @param  list<int>  $ids
      * @param  Collection<int, Region>  $usable
      */
-    private function assertRegions(User $by, array $ids, Collection $usable): void
+    private function assertRegions(BusinessDay $day, User $by, array $ids, Collection $usable): void
     {
         $missing = array_values(array_diff(array_unique($ids), $usable->keys()->all()));
         if ($missing !== []) {
-            throw ValidationException::withMessages(['region_ids' => [$this->regionError($by, $missing[0])]]);
+            throw ValidationException::withMessages(['region_ids' => [$this->regionError($day, $by, $missing[0])]]);
         }
     }
 
-    private function regionError(User $by, int $regionId): string
+    private function regionError(BusinessDay $day, User $by, int $regionId): string
     {
         $exists = Region::query()->whereKey($regionId)->where('is_active', true)->exists();
-        $allowed = $this->perimeter->regionIds($by);
+        $allowed = $this->perimeter->regionIds($by, $day->day);
 
         return $exists && $allowed !== null && ! in_array($regionId, $allowed, true)
             ? __('quotas.region_out_of_perimeter')

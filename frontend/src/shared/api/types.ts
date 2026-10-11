@@ -228,7 +228,8 @@ export type ImportStatus = 'PENDING' | 'ANALYZING' | 'READY' | 'INVALID' | 'APPL
 export type ImportError = { row: number | null; column: string | null; message: string }
 
 export type ImportPreviewRow = {
-  row: number
+  /** null : produit absent du fichier, remis à 0 par un import de quotas en mode Remplacer. */
+  row: number | null
   key: string
   action: 'create' | 'update'
   changes: Record<string, { old: unknown; new: unknown }>
