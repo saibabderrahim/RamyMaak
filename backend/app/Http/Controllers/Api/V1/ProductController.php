@@ -2,17 +2,15 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Domain\Days\BusinessDayStatus;
+use App\Domain\Quotas\ProductDeactivation;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Products\StoreProductRequest;
 use App\Http\Requests\Products\UpdateProductRequest;
 use App\Http\Resources\ProductResource;
 use App\Models\Product;
 use App\Models\ProductFamily;
-use App\Models\RegionQuota;
 use App\Models\User;
 use App\Policies\ProductPolicy;
-use App\Support\BusinessClock;
 use App\Support\FilterValue;
 use App\Support\Pagination;
 use Illuminate\Database\Eloquent\Builder;
@@ -38,6 +36,8 @@ use Spatie\QueryBuilder\QueryBuilder;
  */
 class ProductController extends Controller
 {
+    public function __construct(private readonly ProductDeactivation $deactivation) {}
+
     public function index(Request $request): AnonymousResourceCollection
     {
         Gate::authorize('viewAny', Product::class);
@@ -109,38 +109,13 @@ class ProductController extends Controller
 
             if ($active !== null) {
                 // RG-Q07 : quota publié sur la journée en cours → effet à la journée suivante.
-                $deferred = ! $active && $product->is_active && $this->hasPublishedQuotaToday($product);
-                $product->is_active = $active || $deferred;
-                $product->deactivate_on = $deferred ? BusinessClock::today()->addDay() : null;
+                $this->deactivation->setActive($product, $active);
             }
             $product->save();
-
-            $scheduled = $product->deactivate_on?->format('Y-m-d');
-            if ($scheduled !== $pending && ($scheduled !== null || $product->is_active)) {
-                activity('referentials')
-                    ->performedOn($product)
-                    ->causedBy($user)
-                    ->event($scheduled !== null ? 'deactivation.scheduled' : 'deactivation.cancelled')
-                    ->withProperties(['old' => ['deactivate_on' => $pending], 'attributes' => ['deactivate_on' => $scheduled]])
-                    ->log(__($scheduled !== null ? 'quotas.deactivation.scheduled' : 'quotas.deactivation.cancelled'));
-            }
+            $this->deactivation->logChange($product, $pending, $user);
         });
 
         return new ProductResource($this->reload($product));
-    }
-
-    /** Quota publié > 0 sur la journée ouverte d'aujourd'hui, dans une région au moins (RG-Q07). */
-    private function hasPublishedQuotaToday(Product $product): bool
-    {
-        return RegionQuota::query()
-            ->join('region_days', 'region_days.id', '=', 'region_quotas.region_day_id')
-            ->join('business_days', 'business_days.id', '=', 'region_days.business_day_id')
-            ->where('business_days.day', BusinessClock::today()->format('Y-m-d'))
-            ->where('business_days.status', BusinessDayStatus::Open->value)
-            ->where('region_days.quota_version', '>', 0)
-            ->where('region_quotas.product_id', $product->id)
-            ->where('region_quotas.quantity', '>', 0)
-            ->exists();
     }
 
     private function reload(Product $product): Product

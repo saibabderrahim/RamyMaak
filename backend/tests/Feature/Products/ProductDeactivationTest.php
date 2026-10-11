@@ -16,6 +16,8 @@ use Illuminate\Console\Scheduling\Event as ScheduledEvent;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Storage;
+use Tests\Feature\Imports\Workbook;
 
 // Désactivation d'un produit doté d'un quota publié sur la journée en cours :
 // effet à la journée suivante (RG-Q07, contrat du lot 3 §4).
@@ -212,4 +214,35 @@ it('is scheduled at 00:01, Algiers time, without overlapping', function () {
         ->and($events->first()->expression)->toBe('1 0 * * *')
         ->and($events->first()->timezone)->toBe('Africa/Algiers')
         ->and($events->first()->withoutOverlapping)->toBeTrue();
+});
+
+it('defers a deactivation imported from Excel too, and leaves a re-imported ACTIF unchanged (RG-Q07, §8.3)', function () {
+    Storage::fake('local');
+    ($this->publish)($this->today, $this->orange, 500);
+    $other = Product::factory()->create(['sku' => 'P0057', 'family_id' => $this->family->id]);
+    $this->actingAs($this->admin);
+
+    // En-têtes de l'annexe B.4 ; une cellule vide laisse la valeur inchangée.
+    $header = ['code_produit', 'designation', 'designation_courte', 'code_famille', 'format', 'libelle_uv',
+        'unites_par_uv', 'uv_par_palette', 'ean', 'taux_tva', 'statut', 'ordre_affichage'];
+    $import = function (array $rows) use ($header) {
+        $rows = array_map(fn (array $row) => [$row[0], null, null, null, null, null, null, null, null, null, $row[1], null], $rows);
+        $id = $this->post('/api/v1/imports', ['type' => 'PRODUCTS', 'file' => Workbook::upload([$header, ...$rows], 'produits.xlsx')])
+            ->assertStatus(202)->json('id');
+        $this->getJson("/api/v1/imports/{$id}")->assertJsonPath('status', 'READY');
+        $this->postJson("/api/v1/imports/{$id}/apply")->assertOk()->assertJsonPath('status', 'APPLIED');
+    };
+
+    $import([['P0042', 'INACTIF'], ['P0057', 'INACTIF']]);
+    $orange = $this->orange->fresh();
+    expect($orange->is_active)->toBeTrue()
+        ->and($orange->deactivate_on->format('Y-m-d'))->toBe('2026-10-09')
+        // Sans quota publié aujourd'hui : désactivation immédiate.
+        ->and($other->fresh()->is_active)->toBeFalse()
+        ->and($other->fresh()->deactivate_on)->toBeNull()
+        ->and(($this->entries)($this->orange)->pluck('event')->all())->toContain('deactivation.scheduled');
+
+    // « ACTIF » réimporté sur un produit encore actif : la désactivation programmée reste.
+    $import([['P0042', 'ACTIF']]);
+    expect($this->orange->fresh()->deactivate_on?->format('Y-m-d'))->toBe('2026-10-09');
 });

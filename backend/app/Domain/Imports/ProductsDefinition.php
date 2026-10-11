@@ -2,6 +2,7 @@
 
 namespace App\Domain\Imports;
 
+use App\Domain\Quotas\ProductDeactivation;
 use App\Models\Product;
 use App\Models\ProductFamily;
 
@@ -130,7 +131,26 @@ final class ProductsDefinition extends ImportDefinition
     public function apply(RowPlan $plan): void
     {
         $product = $plan->record instanceof Product ? $plan->record : new Product;
-        $product->fill($plan->attributes)->save();
+        $attributes = $plan->attributes;
+        $active = $attributes['is_active'] ?? null;
+
+        // RG-Q07 : désactiver un produit dont un quota publié court aujourd'hui
+        // prend effet demain, comme depuis la fiche produit. « ACTIF » sur un
+        // produit actif ne change rien (gabarit réimporté tel quel).
+        if ($product->exists && is_bool($active)) {
+            unset($attributes['is_active']);
+            $before = $product->deactivate_on?->format('Y-m-d');
+            $deactivation = app(ProductDeactivation::class);
+            if ($active !== $product->is_active) {
+                $deactivation->setActive($product, $active);
+            }
+            $product->fill($attributes)->save();
+            $deactivation->logChange($product, $before, $this->actor);
+
+            return;
+        }
+
+        $product->fill($attributes)->save();
     }
 
     public function templateRows(): iterable
