@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router'
 import type { Role } from '../api/types'
 import { LOGIN_PATH } from '../auth/guards'
 import { homePath, useAuthenticatedUser, useLogout } from '../auth/session'
+import { NotificationBell } from '../notifications/NotificationBell'
 import { OfflineBanner } from '../pwa/components'
 
 type NavItem = { to: string; label: string; end?: boolean }
@@ -92,6 +93,8 @@ export function AppShell() {
             ))}
           </nav>
           <div className="ms-auto flex items-center gap-3">
+            {/* Cloche des notifications, pour tous les rôles et sur téléphone (EF-NOT-01). */}
+            <NotificationBell />
             <div className="hidden text-end text-sm leading-tight sm:block">
               <div className="font-medium text-slate-900">{user.name}</div>
               <div className="text-slate-500">{t(`roles.${user.role}`)}</div>
