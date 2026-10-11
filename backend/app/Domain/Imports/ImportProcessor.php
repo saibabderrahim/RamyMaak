@@ -68,12 +68,14 @@ final class ImportProcessor
      * moment puis appliqué dans une seule transaction. Une nouvelle erreur
      * rend l'import INVALID et rien n'est écrit. Les changements de chaque
      * fiche sont regroupés par batch_uuid avec l'entrée imports / applied.
+     * Les quotas sont enregistrés en brouillon, jamais publiés (RG-Q09).
      *
-     * @throws ApiException INVALID_TRANSITION, IMPORT_HAS_ERRORS
+     * @throws ApiException INVALID_TRANSITION, IMPORT_HAS_ERRORS, DAY_NOT_OPEN (journée clôturée depuis l'analyse)
      */
     public function apply(Import $import, User $by): Import
     {
-        $applied = DB::transaction(function () use ($import, $by): bool {
+        $conflict = null;
+        $applied = DB::transaction(function () use ($import, $by, &$conflict): bool {
             /** @var Import $locked */
             $locked = Import::query()->whereKey($import->getKey())->lockForUpdate()->firstOrFail();
             $this->assertApplicable($locked);
@@ -81,14 +83,13 @@ final class ImportProcessor
             $result = $this->analyzer->run($locked, $by);
             if ($result->hasErrors()) {
                 $this->record($locked, $result);
+                $conflict = $result->conflict;
 
                 return false;
             }
 
             LogBatch::withinBatch(function () use ($locked, $result, $by): void {
-                foreach ($result->plans as $plan) {
-                    $result->definition->apply($plan);
-                }
+                $result->definition->applyAll($result->plans);
 
                 activity('imports')
                     ->performedOn($locked)
@@ -98,6 +99,7 @@ final class ImportProcessor
                         'type' => $locked->type->value,
                         'file' => $locked->original_name,
                         'summary' => $result->summary,
+                        ...$result->definition->auditProperties(),
                     ])
                     ->log(__('imports.audit.applied'));
             });
@@ -112,7 +114,7 @@ final class ImportProcessor
         });
 
         if (! $applied) {
-            throw new ApiException(ErrorCode::ImportHasErrors, __('imports.apply.new_errors'));
+            throw $conflict ?? new ApiException(ErrorCode::ImportHasErrors, __('imports.apply.new_errors'));
         }
 
         return $import->refresh();

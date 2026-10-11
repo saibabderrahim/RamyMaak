@@ -1,5 +1,6 @@
-// Libellés back-office « products » (lot 2) : catalogue, familles, photos et
-// prix (§7.3, EF-PRD-01 à 05, RG-P01 à P05).
+// Libellés back-office « products » (lots 2 et 3) : catalogue, familles,
+// photos et prix (§7.3, EF-PRD-01 à 05, RG-P01 à P05), désactivation
+// programmée (RG-Q07).
 const products = {
   title: 'Produits',
   tabs: {
@@ -39,6 +40,16 @@ const products = {
     featured: 'Mis en avant',
   },
   nextPriceShort: 'puis {{price}} le {{date}}',
+  // RG-Q07 : quota publié > 0 sur la journée ouverte d'aujourd'hui → désactivation le lendemain.
+  pendingDeactivation: {
+    badge: 'Désactivation programmée le {{date}}',
+    reason: 'Un quota publié court aujourd’hui sur ce produit : il reste commandable jusqu’à la fin de la journée.',
+    notice:
+      'Désactivation programmée le {{date}} : un quota publié court aujourd’hui sur ce produit. Il reste actif et commandable jusqu’à la fin de la journée, puis sera désactivé automatiquement (RG-Q07).',
+    saved:
+      'Fiche produit enregistrée. Désactivation programmée le {{date}} : un quota publié court aujourd’hui sur ce produit, il reste actif jusqu’à la fin de la journée (RG-Q07).',
+    checkboxHint: 'Désactivation programmée le {{date}} : cochez la case pour l’annuler.',
+  },
   fields: {
     sku: 'Code article',
     skuHint: 'Code ERP, clé des fichiers Excel : il ne change plus après la création.',

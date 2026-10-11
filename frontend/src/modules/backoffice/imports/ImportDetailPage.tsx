@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router'
 import type { Import, ImportPreviewRow } from '../../../shared/api/types'
 import { formatDateTime } from '../../../shared/format'
 import { Alert, Badge, Button, Card, ErrorAlert, PageHeader, Spinner } from '../../../shared/ui'
+import { formatDayLong } from '../days/dates'
 import { useBackoffice } from '../shared/access'
 import { ConfirmDialog } from '../shared/ui'
 import { errorReportUrl, IMPORT_PERMISSIONS, IN_PROGRESS, useApplyImport, useImport } from './api'
@@ -14,7 +15,8 @@ import { formatChangeValue, formatCount } from './values'
  * Suivi d'un import (§8.1, étapes 2 à 5) : progression interrogée chaque
  * seconde pendant l'analyse ; rapport d'erreurs et fichier annoté (aucune
  * application possible) ; ou aperçu des changements et application tout
- * ou rien après confirmation.
+ * ou rien après confirmation. Quotas : journée et mode rappelés, valeurs
+ * enregistrées en brouillon, à publier depuis la matrice (RG-Q09).
  */
 export default function ImportDetailPage() {
   const { t } = useTranslation()
@@ -44,6 +46,7 @@ export default function ImportDetailPage() {
   const item = query.data
   const summary = item.summary ?? { create: 0, update: 0, unchanged: 0 }
   const canApply = can(IMPORT_PERMISSIONS[item.type])
+  const quotaDay = item.type === 'QUOTAS' ? item.business_day : null
 
   // Refus du serveur (erreurs apparues entre-temps) : affiché sur la page, qui relit l'import.
   const confirmApply = () => apply.mutate(undefined, { onSettled: () => setConfirming(false) })
@@ -69,6 +72,16 @@ export default function ImportDetailPage() {
             <Fact label={t('backoffice.imports.detail.createdAt')}>{formatDateTime(item.created_at)}</Fact>
             <Fact label={t('backoffice.imports.detail.analyzedAt')}>{formatDateTime(item.analyzed_at)}</Fact>
             <Fact label={t('backoffice.imports.detail.appliedAt')}>{formatDateTime(item.applied_at)}</Fact>
+            {item.business_day && (
+              <>
+                <Fact label={t('backoffice.imports.detail.day')}>
+                  <span className="first-letter:uppercase">{formatDayLong(item.business_day)}</span>
+                </Fact>
+                <Fact label={t('backoffice.imports.detail.mode')}>
+                  {item.mode ? t(`backoffice.imports.quotas.modes.${item.mode}`) : t('common.none')}
+                </Fact>
+              </>
+            )}
           </dl>
         </Card>
 
@@ -102,7 +115,10 @@ export default function ImportDetailPage() {
 
         {item.status === 'READY' && (
           <>
-            <Alert>{t('backoffice.imports.detail.ready')}</Alert>
+            <Alert>
+              {t('backoffice.imports.detail.ready')}
+              {quotaDay && <span className="block">{t('backoffice.imports.quotas.drafts')}</span>}
+            </Alert>
             <Counters item={item} />
             <PreviewCard
               item={item}
@@ -124,7 +140,9 @@ export default function ImportDetailPage() {
               onCancel={() => setConfirming(false)}
             >
               <p>
-                {t('backoffice.imports.detail.applyConfirm', { create: formatCount(summary.create), update: formatCount(summary.update) })}
+                {quotaDay
+                  ? t('backoffice.imports.quotas.applyConfirm', { products: formatCount(summary.update), day: formatDayLong(quotaDay) })
+                  : t('backoffice.imports.detail.applyConfirm', { create: formatCount(summary.create), update: formatCount(summary.update) })}
               </p>
             </ConfirmDialog>
           </>
@@ -139,6 +157,14 @@ export default function ImportDetailPage() {
                 update: formatCount(summary.update),
               })}
             </Alert>
+            {quotaDay && (
+              <Alert tone="info">
+                <p className="font-semibold">{t('backoffice.imports.quotas.applied')}</p>
+                <Link to={`${base}/journees/${quotaDay}/quotas`} className="mt-1 inline-flex min-h-11 items-center font-semibold text-brand-700 underline">
+                  {t('backoffice.imports.quotas.matrixLink', { day: formatDayLong(quotaDay) })}
+                </Link>
+              </Alert>
+            )}
             <Counters item={item} />
             <PreviewCard item={item} />
           </>
@@ -251,14 +277,14 @@ function PreviewCard({ item, actions }: { item: Import; actions?: ReactNode }) {
             </thead>
             <tbody className="divide-y divide-slate-100" data-testid="import-preview">
               {item.preview.map((row) => (
-                <tr key={`${row.row}-${row.key}`} className="align-top">
-                  <td className="py-2 pe-4 tabular-nums">{row.row}</td>
+                <tr key={`${row.row ?? 'absent'}-${row.key}`} className="align-top">
+                  <td className="py-2 pe-4 tabular-nums">{previewLine(row) ?? <AbsentRow />}</td>
                   <td className="py-2 pe-4 font-mono text-xs">{row.key}</td>
                   <td className="py-2 pe-4">
                     <Badge tone={row.action === 'create' ? 'success' : 'brand'}>{t(`backoffice.imports.detail.actions.${row.action}`)}</Badge>
                   </td>
                   <td className="py-2">
-                    <ChangeList type={item.type} row={row} />
+                    {item.type === 'QUOTAS' ? <QuotaChangeList row={row} /> : <ChangeList type={item.type} row={row} />}
                   </td>
                 </tr>
               ))}
@@ -267,6 +293,44 @@ function PreviewCard({ item, actions }: { item: Import; actions?: ReactNode }) {
         </div>
       )}
     </Card>
+  )
+}
+
+/**
+ * Numéro de ligne du fichier ; null pour un produit absent du fichier,
+ * remis à 0 par le mode Remplacer (§8.1).
+ */
+function previewLine(row: ImportPreviewRow): number | null {
+  const line: unknown = row.row
+  return typeof line === 'number' ? line : null
+}
+
+function AbsentRow() {
+  const { t } = useTranslation()
+  return (
+    <span title={t('backoffice.imports.quotas.absentHint')} className="text-xs text-slate-500">
+      {t('backoffice.imports.quotas.absent')}
+      <span className="sr-only"> : {t('backoffice.imports.quotas.absentHint')}</span>
+    </span>
+  )
+}
+
+/** Aperçu des quotas : « CENTRE : 500 → 450 », par code région (valeur actuelle = brouillon ou publié). */
+function QuotaChangeList({ row }: { row: ImportPreviewRow }) {
+  const { t } = useTranslation()
+  const value = (quantity: unknown) => (typeof quantity === 'number' ? formatCount(quantity) : t('backoffice.imports.detail.emptyValue'))
+  return (
+    <ul className="flex flex-col gap-0.5">
+      {Object.entries(row.changes).map(([region, change]) => (
+        <li key={region} className="tabular-nums">
+          <span className="font-mono text-xs font-semibold text-slate-700">{region}</span>
+          {' : '}
+          <span className="text-slate-500">{value(change.old)}</span>
+          {' → '}
+          <span className="font-medium text-slate-900">{value(change.new)}</span>
+        </li>
+      ))}
+    </ul>
   )
 }
 

@@ -10,7 +10,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /**
  * Import Excel et son rapport (§8.1, étape 3) : compteurs complets, 500
  * premières erreurs, 200 premières lignes créées ou modifiées. Le chemin des
- * fichiers stockés n'est jamais exposé.
+ * fichiers stockés n'est jamais exposé. Un import de quotas indique sa
+ * journée (AAAA-MM-JJ) et son mode ; null pour les référentiels.
  *
  * @mixin Import
  */
@@ -29,6 +30,8 @@ class ImportResource extends JsonResource
             'id' => $this->id,
             'type' => $this->type->value,
             'type_label' => $this->type->label(),
+            'business_day' => $this->business_day_id === null ? null : $this->businessDay?->dayKey(),
+            'mode' => $this->mode?->value,
             'status' => $this->status->value,
             'original_name' => $this->original_name,
             'rows_total' => $this->rows_total,

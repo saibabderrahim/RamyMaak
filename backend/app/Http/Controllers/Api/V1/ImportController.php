@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Access\Permission;
+use App\Domain\Imports\ImportMode;
 use App\Domain\Imports\ImportProcessor;
 use App\Domain\Imports\ImportStatus;
 use App\Domain\Imports\ImportTemplate;
@@ -13,9 +14,12 @@ use App\Http\Problems\ApiException;
 use App\Http\Problems\ErrorCode;
 use App\Http\Resources\ImportResource;
 use App\Jobs\AnalyzeImport;
+use App\Models\BusinessDay;
 use App\Models\Import;
 use App\Models\User;
+use App\Support\BusinessClock;
 use App\Support\Pagination;
+use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,9 +38,11 @@ use Spatie\QueryBuilder\QueryBuilder;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * Imports Excel des référentiels (§8.3, Annexes B.3 à B.5) : gabarits, dépôt
- * (.xlsx sans macros, 5 Mo, §8.4), analyse en tâche de fond, rapport et
- * fichier d'erreurs annoté, application tout ou rien après revalidation.
+ * Imports Excel des quotas et des référentiels (§8.1, §8.3, Annexes B.1,
+ * B.3 à B.5) : gabarits, dépôt (.xlsx sans macros, 5 Mo, §8.4), analyse en
+ * tâche de fond, rapport et fichier d'erreurs annoté, application tout ou rien
+ * après revalidation. Un import de quotas porte sur une journée ouverte et un
+ * mode (Remplacer / Compléter) ; il crée des brouillons (RG-Q09).
  */
 class ImportController extends Controller
 {
@@ -48,13 +54,26 @@ class ImportController extends Controller
         private readonly ImportTemplate $templates,
     ) {}
 
-    /** Gabarit pré-rempli avec les données actuelles. */
+    /**
+     * Gabarit pré-rempli avec les données actuelles ; celui des quotas, avec
+     * les valeurs d'une journée ouverte (`day`, AAAA-MM-JJ).
+     */
     public function template(Request $request, string $type): StreamedResponse
     {
         $importType = ImportType::from(mb_strtoupper($type));
         Gate::authorize('create', [Import::class, $importType]);
 
-        return $this->templates->download($importType, $request->user());
+        $day = null;
+        if ($importType->isDaily()) {
+            $request->validate(
+                ['day' => ['bail', 'required', 'string', 'date_format:Y-m-d', $this->openDay()]],
+                ['day.date_format' => __('imports.day.format')],
+                __('imports.attributes'),
+            );
+            $day = BusinessDay::forDay($request->string('day')->value());
+        }
+
+        return $this->templates->download($importType, $request->user(), $day);
     }
 
     /** Historique : les imports de l'utilisateur, tous pour l'Admin. */
@@ -64,7 +83,7 @@ class ImportController extends Controller
 
         /** @var User $user */
         $user = $request->user();
-        $query = Import::query()->with('user');
+        $query = Import::query()->with(['user', 'businessDay']);
         if (! $user->can(Permission::UserManage->value)) {
             $query->where('user_id', $user->getKey());
         }
@@ -95,7 +114,8 @@ class ImportController extends Controller
     /**
      * Dépôt d'un fichier : droits du type contrôlés avant la validation,
      * contenu vérifié (classeur .xlsx sans macros, §8.4), stockage hors de la
-     * partie publique, analyse en file d'attente.
+     * partie publique, analyse en file d'attente. Quotas : journée ouverte
+     * (`business_day`) et mode (`mode`) obligatoires.
      */
     public function store(Request $request): JsonResponse
     {
@@ -106,15 +126,25 @@ class ImportController extends Controller
             Gate::authorize('create', [Import::class, $type]);
         }
 
-        $request->validate([
+        $rules = [
             'type' => ['required', Rule::enum(ImportType::class)],
             'file' => ['required', 'file', 'extensions:xlsx', 'max:'.self::MAX_KILOBYTES],
-        ], [
+        ];
+        if ($type?->isDaily()) {
+            $rules['business_day'] = ['bail', 'required', 'string', 'date_format:Y-m-d', $this->openDay()];
+            $rules['mode'] = ['required', Rule::enum(ImportMode::class)];
+        }
+
+        $request->validate($rules, [
             'file.file' => __('imports.file.format'),
             'file.uploaded' => __('imports.file.format'),
             'file.extensions' => __('imports.file.format'),
             'file.max' => __('imports.file.format'),
+            'business_day.date_format' => __('imports.day.format'),
+            'mode.enum' => __('imports.mode_invalid'),
         ], __('imports.attributes'));
+
+        $day = $type?->isDaily() ? BusinessDay::forDay($request->string('business_day')->value()) : null;
 
         /** @var UploadedFile $file */
         $file = $request->file('file');
@@ -131,6 +161,8 @@ class ImportController extends Controller
         /** @var ImportType $type */
         $import = Import::create([
             'type' => $type,
+            'business_day_id' => $day?->id,
+            'mode' => $day === null ? null : ImportMode::from($request->string('mode')->value()),
             'status' => ImportStatus::Pending,
             'original_name' => self::originalName($file),
             'file_path' => $path,
@@ -139,7 +171,7 @@ class ImportController extends Controller
 
         AnalyzeImport::dispatch($import);
 
-        return (new ImportResource($import->refresh()->load('user')))
+        return (new ImportResource($import->refresh()->load(['user', 'businessDay'])))
             ->response()
             ->setStatusCode(202);
     }
@@ -149,7 +181,7 @@ class ImportController extends Controller
     {
         Gate::authorize('view', $import);
 
-        return new ImportResource($import->load('user'));
+        return new ImportResource($import->load(['user', 'businessDay']));
     }
 
     /** Fichier d'origine annoté : colonne « erreurs » et cellules fautives surlignées. */
@@ -180,7 +212,25 @@ class ImportController extends Controller
 
         $import = $this->processor->apply($import, $request->user());
 
-        return new ImportResource($import->load('user'));
+        return new ImportResource($import->load(['user', 'businessDay']));
+    }
+
+    /**
+     * Journée ouverte (§4.1) : une journée jamais ouverte ou clôturée ne
+     * reçoit plus de quotas.
+     */
+    private function openDay(): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail): void {
+            $day = BusinessDay::forDay((string) $value);
+            $label = BusinessClock::parseDay((string) $value)?->format('d/m/Y') ?? (string) $value;
+
+            if ($day === null) {
+                $fail(__('imports.day.not_open', ['day' => $label]));
+            } elseif (! $day->isOpen()) {
+                $fail(__('imports.day.closed', ['day' => $label]));
+            }
+        };
     }
 
     /** Nom du fichier tel que déposé, sans chemin ni caractères de contrôle. */

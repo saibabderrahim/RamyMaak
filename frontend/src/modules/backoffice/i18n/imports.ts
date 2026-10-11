@@ -1,5 +1,5 @@
-// Libellés back-office « imports » (lot 2) : imports Excel des référentiels
-// (§8.1 déroulé, §8.3, §8.4, Annexes B.3 à B.5).
+// Libellés back-office « imports » (lots 2 et 3) : imports Excel des
+// référentiels et des quotas (§8.1, §8.3, §8.4, Annexes B.1, B.3 à B.5).
 const imports = {
   title: 'Imports Excel',
   newImport: 'Nouvel import',
@@ -24,6 +24,37 @@ const imports = {
   fileHint: '.xlsx uniquement, sans macros, 5 Mo maximum ; première feuille, ligne 1 = en-têtes.',
   fileRequired: 'Choisissez un fichier.',
   fileFormat: 'Fichier .xlsx attendu, 5 Mo maximum.',
+  // Import des quotas (§8.1, Annexe B.1) : journée ouverte et mode.
+  quotas: {
+    day: 'Journée',
+    dayPlaceholder: 'Choisir une journée ouverte',
+    dayHint: 'Journées ouvertes d’aujourd’hui à J+30.',
+    dayRequired: 'Choisissez une journée ouverte.',
+    noOpenDay: 'Aucune journée ouverte d’ici 30 jours : ouvrez d’abord la journée depuis le calendrier.',
+    calendarLink: 'Calendrier des journées',
+    mode: 'Mode d’import',
+    modeRequired: 'Choisissez le mode d’import.',
+    modes: {
+      REPLACE: 'Remplacer',
+      COMPLETE: 'Compléter',
+    },
+    modeHints: {
+      REPLACE:
+        'La journée prend exactement les valeurs du fichier pour chaque région présente : une cellule vide ou un produit absent vaut 0.',
+      COMPLETE: 'Seules les cellules renseignées sont mises à jour ; une cellule vide ne change rien.',
+    },
+    templateHint:
+      'Pré-rempli avec les valeurs actuelles de la journée (brouillon ou publiées) : une ligne par produit actif, une colonne par code région. La colonne « designation » est ignorée.',
+    templateDisabled: 'Choisissez d’abord la journée.',
+    drafts: 'Les valeurs importées sont enregistrées en brouillon : rien n’est publié automatiquement (RG-Q09).',
+    historyDetail: '{{day}} · {{mode}}',
+    applyConfirm:
+      '{{products}} produit(s) modifié(s) : les valeurs seront enregistrées en brouillon pour la journée du {{day}}, en une seule fois (tout ou rien). Rien n’est publié automatiquement.',
+    applied: 'Valeurs enregistrées en brouillon : publiez-les depuis la matrice.',
+    matrixLink: 'Ouvrir la matrice des quotas du {{day}}',
+    absent: 'absent',
+    absentHint: 'Produit absent du fichier (mode Remplacer) : remis à 0.',
+  },
   submit: 'Déposer et analyser',
   submitting: 'Envoi du fichier…',
   noRight: 'Vous n’avez aucun droit d’import.',
@@ -55,6 +86,8 @@ const imports = {
     createdAt: 'Déposé le',
     analyzedAt: 'Analysé le',
     appliedAt: 'Appliqué le',
+    day: 'Journée',
+    mode: 'Mode',
     pending: 'Fichier en attente d’analyse…',
     analyzing: 'Analyse en cours : {{processed}} / {{total}} lignes',
     progress: 'Progression de l’analyse',

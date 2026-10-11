@@ -2,15 +2,19 @@
 
 namespace App\Domain\Imports;
 
+use App\Models\BusinessDay;
+use App\Models\Import;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Str;
+use LogicException;
 
 /**
- * Modèle de fichier d'un type d'import (Annexes B.3 à B.5) : colonnes,
+ * Modèle de fichier d'un type d'import (Annexes B.1, B.3 à B.5) : colonnes,
  * contrôle d'une ligne, application et données du gabarit. Les contrôles
  * sont rejoués à l'application avec les données du moment (§8.1, étape 5).
+ * Un import de quotas porte en plus sur une journée et un mode (§8.1).
  */
 abstract class ImportDefinition
 {
@@ -19,15 +23,34 @@ abstract class ImportDefinition
 
     public function __construct(protected readonly User $actor) {}
 
-    public static function for(ImportType $type, User $actor): self
+    /**
+     * @param  BusinessDay|null  $day  journée visée (quotas, obligatoire)
+     * @param  ImportMode|null  $mode  mode de l'import (quotas ; Compléter par défaut, pour le gabarit)
+     */
+    public static function for(ImportType $type, User $actor, ?BusinessDay $day = null, ?ImportMode $mode = null): self
     {
         $class = match ($type) {
             ImportType::Clients => ClientsDefinition::class,
             ImportType::Products => ProductsDefinition::class,
             ImportType::Prices => PricesDefinition::class,
+            ImportType::Quotas => QuotasDefinition::class,
         };
 
-        return app()->make($class, ['actor' => $actor]);
+        $parameters = ['actor' => $actor];
+        if ($type->isDaily()) {
+            if ($day === null) {
+                throw new LogicException("Un import {$type->value} porte sur une journée.");
+            }
+            $parameters += ['day' => $day, 'mode' => $mode ?? ImportMode::Complete];
+        }
+
+        return app()->make($class, $parameters);
+    }
+
+    /** Modèle d'un import déposé : son type, et pour les quotas sa journée et son mode. */
+    public static function forImport(Import $import, User $actor): self
+    {
+        return self::for($import->type, $actor, $import->businessDay, $import->mode);
     }
 
     /**
@@ -54,6 +77,86 @@ abstract class ImportDefinition
     {
         return [];
     }
+
+    /**
+     * En-têtes du gabarit, dans l'ordre : colonnes de l'annexe B (marquées
+     * obligatoires ou non) puis colonnes d'information.
+     *
+     * @return list<array{header: string, required: bool, information: bool}>
+     */
+    public function templateColumns(): array
+    {
+        $required = array_flip($this->requiredColumns());
+
+        return [
+            ...array_map(fn (string $column) => ['header' => $column, 'required' => isset($required[$column]), 'information' => false], $this->columns()),
+            ...array_map(fn (string $column) => ['header' => self::informationHeader($column), 'required' => false, 'information' => true], $this->informationColumns()),
+        ];
+    }
+
+    /** Nom de la feuille du gabarit ; null : libellé du type. */
+    public function sheetTitle(): ?string
+    {
+        return null;
+    }
+
+    /**
+     * Contexte de l'import contrôlé avant la lecture du fichier (journée
+     * ouverte pour les quotas) : une erreur de niveau fichier l'arrête.
+     */
+    public function checkContext(AnalysisResult $result): void {}
+
+    /**
+     * Colonnes reconnues de l'en-tête (§8.3) : colonnes en double et
+     * colonnes obligatoires absentes sont des erreurs de niveau fichier ; les
+     * colonnes inconnues sont confiées à unknownHeader().
+     *
+     * @param  array<int, string>  $header  index de colonne (1 = A) → en-tête normalisé
+     * @return array<string, int> colonne → index de colonne
+     */
+    public function resolveHeader(array $header, AnalysisResult $result): array
+    {
+        $columns = [];
+        $duplicates = [];
+
+        foreach ($header as $index => $name) {
+            $column = $this->headerColumn($name);
+            if ($column === null) {
+                $this->unknownHeader($name, $result);
+
+                continue;
+            }
+
+            if (isset($columns[$column])) {
+                $duplicates[$column] = true;
+
+                continue;
+            }
+
+            $columns[$column] = $index;
+        }
+
+        foreach (array_keys($duplicates) as $name) {
+            $result->fileError($name, __('imports.errors.header', ['column' => $name, 'message' => __('imports.errors.duplicate_column')]));
+        }
+
+        foreach ($this->requiredColumns() as $name) {
+            if (! isset($columns[$name])) {
+                $result->fileError($name, __('imports.errors.header', ['column' => $name, 'message' => __('imports.errors.missing_column')]));
+            }
+        }
+
+        return $columns;
+    }
+
+    /** Colonne désignée par un en-tête normalisé ; null si elle est inconnue. */
+    protected function headerColumn(string $name): ?string
+    {
+        return in_array($name, $this->columns(), true) ? $name : null;
+    }
+
+    /** En-tête inconnu : ignoré (§8.3, colonnes d'information comprises). */
+    protected function unknownHeader(string $name, AnalysisResult $result): void {}
 
     /** Colonne qui porte la clé, citée par l'erreur de doublon. */
     abstract public function keyColumn(): string;
@@ -84,16 +187,52 @@ abstract class ImportDefinition
      */
     abstract public function checkWithoutKey(RowContext $row): void;
 
+    /**
+     * Fin de l'analyse, toutes les lignes contrôlées : changements qui ne
+     * viennent d'aucune ligne (produits absents d'un import de quotas en mode
+     * Remplacer) et erreurs de niveau fichier.
+     */
+    public function finish(AnalysisResult $result): void {}
+
     /** Enregistre une ligne créée ou modifiée (dans la transaction de l'import). */
     abstract public function apply(RowPlan $plan): void;
 
     /**
-     * Lignes du gabarit pré-rempli, alignées sur columns() puis
-     * informationColumns() : texte, nombre, date ou null.
+     * Enregistre toutes les lignes à créer ou modifier, dans la transaction
+     * de l'import.
+     *
+     * @param  list<RowPlan>  $plans
+     */
+    public function applyAll(array $plans): void
+    {
+        foreach ($plans as $plan) {
+            $this->apply($plan);
+        }
+    }
+
+    /**
+     * Propriétés ajoutées à l'entrée imports / applied du journal.
+     *
+     * @return array<string, mixed>
+     */
+    public function auditProperties(): array
+    {
+        return [];
+    }
+
+    /**
+     * Lignes du gabarit pré-rempli, alignées sur templateColumns() : texte,
+     * nombre, date ou null.
      *
      * @return iterable<list<string|int|float|CarbonInterface|null>>
      */
     abstract public function templateRows(): iterable;
+
+    /** En-tête d'une colonne d'information du gabarit, ex. « designation (information) ». */
+    protected static function informationHeader(string $column): string
+    {
+        return __('imports.template.information', ['column' => $column]);
+    }
 
     /** Code ERP obligatoire, mis en majuscules. */
     protected function code(RowContext $row, string $column): ?string
@@ -133,7 +272,11 @@ abstract class ImportDefinition
         return $text;
     }
 
-    protected function integer(RowContext $row, string $column, int $min, int $max): ?int
+    /**
+     * @param  string|null  $invalid  message d'une valeur qui n'est pas un entier ≥ $min
+     *                                (par défaut : entier positif, ou positif ou nul)
+     */
+    protected function integer(RowContext $row, string $column, int $min, int $max, ?string $invalid = null): ?int
     {
         if (! $row->filled($column)) {
             return null;
@@ -148,7 +291,7 @@ abstract class ImportDefinition
         };
 
         if ($value === null || $value < $min) {
-            $row->fail($column, __($min > 0 ? 'imports.errors.positive_integer' : 'imports.errors.natural_integer', ['value' => $cell->display()]));
+            $row->fail($column, __($invalid ?? ($min > 0 ? 'imports.errors.positive_integer' : 'imports.errors.natural_integer'), ['value' => $cell->display()]));
 
             return null;
         }

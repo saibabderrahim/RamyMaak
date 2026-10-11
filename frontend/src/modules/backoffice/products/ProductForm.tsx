@@ -1,13 +1,16 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useId } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 import type { Product } from '../../../shared/api/types'
+import { formatDate } from '../../../shared/format'
 import { applyServerErrors } from '../../../shared/forms'
 import { Button, Checkbox, ErrorAlert, Field, Input, Select, Spinner } from '../../../shared/ui'
 import { type ProductInput, useFamilies } from './api'
 import { familyOptionLabel, orderFamilies } from './families'
 import { numericInput as numeric } from './numbers'
+import { shownActive } from './status'
 
 type FormValues = {
   sku: string
@@ -111,7 +114,8 @@ function defaults(product?: Product): FormValues {
     // Taux normal de TVA proposé à la création.
     vat_rate: product ? String(product.vat_rate) : '19',
     sort_order: product ? String(product.sort_order) : '0',
-    is_active: product?.is_active ?? true,
+    // Désactivation programmée (RG-Q07) : case décochée, la cocher l'annule.
+    is_active: product ? shownActive(product) : true,
     is_new: product?.is_new ?? false,
     is_featured: product?.is_featured ?? false,
   }
@@ -132,6 +136,7 @@ export function ProductForm({ product, submitting, error, onSubmit }: Props) {
   const { t } = useTranslation()
   const families = useFamilies()
   const schema = useProductSchema(!product)
+  const pendingHintId = useId()
   const {
     register,
     handleSubmit,
@@ -209,7 +214,16 @@ export function ProductForm({ product, submitting, error, onSubmit }: Props) {
 
       <fieldset className="flex flex-col">
         <legend className="text-sm font-medium text-slate-800">{t('backoffice.products.fields.status')}</legend>
-        <Checkbox label={t('backoffice.products.fields.isActive')} {...register('is_active')} />
+        <Checkbox
+          label={t('backoffice.products.fields.isActive')}
+          {...register('is_active')}
+          aria-describedby={product?.pending_deactivation_on ? pendingHintId : undefined}
+        />
+        {product?.pending_deactivation_on && (
+          <p id={pendingHintId} className="-mt-1 mb-1 text-xs text-amber-800">
+            {t('backoffice.products.pendingDeactivation.checkboxHint', { date: formatDate(product.pending_deactivation_on) })}
+          </p>
+        )}
         <Checkbox label={t('backoffice.products.fields.isNew')} {...register('is_new')} />
         <Checkbox label={t('backoffice.products.fields.isFeatured')} {...register('is_featured')} />
       </fieldset>

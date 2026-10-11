@@ -1,14 +1,16 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
-import { useForm, useWatch } from 'react-hook-form'
+import { type FieldErrors, type Resolver, type UseFormRegister, useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { z } from 'zod'
-import { IMPORT_TYPES, type ImportStatus, type ImportType } from '../../../shared/api/types'
-import { formatDateTime } from '../../../shared/format'
+import { IMPORT_MODES, IMPORT_TYPES, type ImportMode, type ImportStatus, type ImportType } from '../../../shared/api/types'
+import { formatDate, formatDateTime } from '../../../shared/format'
 import { applyServerErrors } from '../../../shared/forms'
 import { Alert, Button, Card, ErrorAlert, Field, Input, PageHeader, Select, Spinner } from '../../../shared/ui'
 import { Pagination } from '../../admin/components'
+import { useOpenDays } from '../days/api'
+import { DAY_PATTERN, formatDayLong, isDay } from '../days/dates'
 import { useBackoffice } from '../shared/access'
 import { IMPORT_PERMISSIONS, IMPORT_STATUSES, type ImportFilters, type ImportUpload, templateUrl, useImports, useUploadImport } from './api'
 import { ImportStatusBadge } from './components'
@@ -18,15 +20,23 @@ import { formatCount } from './values'
 const MAX_BYTES = 5 * 1024 * 1024
 const XLSX_ACCEPT = '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
+/** Ordre de présentation : les quotas d'abord (import quotidien de l'ADV). */
+const TYPE_ORDER: readonly ImportType[] = ['QUOTAS', 'CLIENTS', 'PRODUCTS', 'PRICES']
+
+const TEMPLATE_LINK =
+  'inline-flex min-h-11 items-center self-start rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-brand-700 hover:bg-slate-50'
+
 /**
- * Imports Excel des référentiels (§8.3) : gabarits pré-remplis, dépôt du
- * fichier (analysé en tâche de fond, sans rien modifier), historique.
- * Seuls les types autorisés par les droits de l'utilisateur sont proposés.
+ * Imports Excel des quotas (§8.1) et des référentiels (§8.3) : gabarits
+ * pré-remplis, dépôt du fichier (analysé en tâche de fond, sans rien
+ * modifier), historique. Seuls les types autorisés par les droits de
+ * l'utilisateur sont proposés. Quotas : journée ouverte et mode, présélectionnés
+ * depuis la matrice (`?type=QUOTAS&day=AAAA-MM-JJ`).
  */
 export default function ImportsPage() {
   const { t } = useTranslation()
   const { can } = useBackoffice()
-  const allowed = IMPORT_TYPES.filter((type) => can(IMPORT_PERMISSIONS[type]))
+  const allowed = TYPE_ORDER.filter((type) => can(IMPORT_PERMISSIONS[type]))
 
   return (
     <>
@@ -39,27 +49,40 @@ export default function ImportsPage() {
   )
 }
 
-type FormValues = { type: ImportType; file: FileList | undefined }
+type FormValues = { type: ImportType; file: FileList | undefined; business_day: string; mode: ImportMode | '' }
 
-const FIELDS = ['type', 'file'] as const
+const FIELDS = ['type', 'file', 'business_day', 'mode'] as const
 
 function UploadCard({ types }: { types: ImportType[] }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { base } = useBackoffice()
   const upload = useUploadImport()
+  const [params] = useSearchParams()
 
-  const schema = z.object({
-    type: z.enum(IMPORT_TYPES),
-    file: z
-      .custom<FileList | undefined>()
-      .transform((list) => list?.[0])
-      .pipe(
-        z
-          .custom<File>((value) => value instanceof File, t('backoffice.imports.fileRequired'))
-          .refine((file) => /\.xlsx$/i.test(file.name) && file.size <= MAX_BYTES, t('backoffice.imports.fileFormat')),
-      ),
-  })
+  // Présélection depuis la matrice des quotas (« Importer »).
+  const requestedType = params.get('type')
+  const requestedDay = params.get('day')
+  const initialType = types.find((type) => type === requestedType) ?? types[0]
+  const initialDay = isDay(requestedDay) ? requestedDay : ''
+
+  const file = z
+    .custom<FileList | undefined>()
+    .transform((list) => list?.[0])
+    .pipe(
+      z
+        .custom<File>((value) => value instanceof File, t('backoffice.imports.fileRequired'))
+        .refine((value) => /\.xlsx$/i.test(value.name) && value.size <= MAX_BYTES, t('backoffice.imports.fileFormat')),
+    )
+  const schema = z.discriminatedUnion('type', [
+    z.object({
+      type: z.literal('QUOTAS'),
+      file,
+      business_day: z.string().regex(DAY_PATTERN, t('backoffice.imports.quotas.dayRequired')),
+      mode: z.enum(IMPORT_MODES, t('backoffice.imports.quotas.modeRequired')),
+    }),
+    z.object({ type: z.enum(['CLIENTS', 'PRODUCTS', 'PRICES']), file }),
+  ])
 
   const {
     register,
@@ -68,10 +91,12 @@ function UploadCard({ types }: { types: ImportType[] }) {
     control,
     formState: { errors },
   } = useForm<FormValues, unknown, ImportUpload>({
-    resolver: zodResolver(schema),
-    defaultValues: { type: types[0], file: undefined },
+    // Formulaire à plat, schéma discriminé par le type : même données, typages différents.
+    resolver: zodResolver(schema) as unknown as Resolver<FormValues, unknown, ImportUpload>,
+    defaultValues: { type: initialType, file: undefined, business_day: initialDay, mode: '' },
   })
   const type = useWatch({ control, name: 'type' })
+  const businessDay = useWatch({ control, name: 'business_day' })
 
   const submit = handleSubmit(async (values) => {
     try {
@@ -83,6 +108,8 @@ function UploadCard({ types }: { types: ImportType[] }) {
   })
 
   const hasFieldErrors = Object.keys(errors).length > 0
+  const quotas = type === 'QUOTAS'
+  const typeLabel = t(`backoffice.imports.types.${type}`)
 
   return (
     <Card title={t('backoffice.imports.newImport')}>
@@ -92,7 +119,7 @@ function UploadCard({ types }: { types: ImportType[] }) {
 
         <fieldset className="flex flex-col gap-1">
           <legend className="mb-1 text-sm font-medium text-slate-800">{t('backoffice.imports.type')}</legend>
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className={`grid gap-2 ${types.length > 3 ? 'sm:grid-cols-2 xl:grid-cols-4' : 'sm:grid-cols-3'}`}>
             {types.map((option) => (
               <label
                 key={option}
@@ -113,15 +140,25 @@ function UploadCard({ types }: { types: ImportType[] }) {
           )}
         </fieldset>
 
+        {quotas && <QuotaFields register={register} errors={errors} initialDay={initialDay} />}
+
         <div className="flex flex-col gap-1">
-          <a
-            href={templateUrl(type)}
-            download
-            className="inline-flex min-h-11 items-center self-start rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-brand-700 hover:bg-slate-50"
-          >
-            {t('backoffice.imports.template', { type: t(`backoffice.imports.types.${type}`) })}
-          </a>
-          <p className="text-xs text-slate-500">{t('backoffice.imports.templateHint')}</p>
+          {quotas && !isDay(businessDay) ? (
+            <Button variant="secondary" disabled className="self-start">
+              {t('backoffice.imports.template', { type: typeLabel })}
+            </Button>
+          ) : (
+            <a href={templateUrl(type, businessDay)} download className={TEMPLATE_LINK}>
+              {t('backoffice.imports.template', { type: typeLabel })}
+            </a>
+          )}
+          <p className="text-xs text-slate-500">
+            {quotas
+              ? isDay(businessDay)
+                ? t('backoffice.imports.quotas.templateHint')
+                : t('backoffice.imports.quotas.templateDisabled')
+              : t('backoffice.imports.templateHint')}
+          </p>
         </div>
 
         <Field label={t('backoffice.imports.file')} hint={t('backoffice.imports.fileHint')} error={errors.file?.message}>
@@ -133,6 +170,89 @@ function UploadCard({ types }: { types: ImportType[] }) {
         </Button>
       </form>
     </Card>
+  )
+}
+
+type QuotaFieldsProps = {
+  register: UseFormRegister<FormValues>
+  errors: FieldErrors<FormValues>
+  initialDay: string
+}
+
+/**
+ * Journée (ouverte, d'aujourd'hui à J+30) et mode d'un import de quotas
+ * (§8.1). La liste n'est affichée qu'une fois les journées connues : la
+ * journée présélectionnée y reste choisie.
+ */
+function QuotaFields({ register, errors, initialDay }: QuotaFieldsProps) {
+  const { t } = useTranslation()
+  const { base } = useBackoffice()
+  const openDays = useOpenDays()
+  const days = (openDays.data ?? []).map((day) => day.day)
+  // Journée demandée par l'adresse mais absente de la liste : gardée, le serveur dira pourquoi.
+  if (initialDay && !days.includes(initialDay)) days.unshift(initialDay)
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <div className="flex flex-col gap-2">
+        <ErrorAlert error={openDays.error} />
+        {openDays.isPending ? (
+          <Spinner />
+        ) : (
+          <>
+            {days.length === 0 && (
+              <Alert tone="warning">
+                {t('backoffice.imports.quotas.noOpenDay')}{' '}
+                <Link to={`${base}/journees`} className="font-semibold underline">
+                  {t('backoffice.imports.quotas.calendarLink')}
+                </Link>
+              </Alert>
+            )}
+            <Field label={t('backoffice.imports.quotas.day')} hint={t('backoffice.imports.quotas.dayHint')} error={errors.business_day?.message}>
+              {(props) => (
+                <Select {...props} {...register('business_day')}>
+                  <option value="">{t('backoffice.imports.quotas.dayPlaceholder')}</option>
+                  {days.map((day) => (
+                    <option key={day} value={day}>
+                      {formatDayLong(day)}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+          </>
+        )}
+      </div>
+
+      <fieldset className="flex flex-col gap-1">
+        <legend className="mb-1 text-sm font-medium text-slate-800">{t('backoffice.imports.quotas.mode')}</legend>
+        <div className="grid gap-2">
+          {IMPORT_MODES.map((mode) => (
+            <label
+              key={mode}
+              className="flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50"
+            >
+              <input
+                type="radio"
+                value={mode}
+                {...register('mode')}
+                aria-invalid={Boolean(errors.mode)}
+                className="mt-0.5 size-5 shrink-0 accent-brand-600"
+              />
+              <span>
+                <span className="block font-semibold text-slate-900">{t(`backoffice.imports.quotas.modes.${mode}`)}</span>
+                <span className="block text-xs text-slate-600">{t(`backoffice.imports.quotas.modeHints.${mode}`)}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+        {errors.mode?.message && (
+          <p role="alert" className="text-sm text-red-700">
+            {errors.mode.message}
+          </p>
+        )}
+      </fieldset>
+    </div>
   )
 }
 
@@ -194,7 +314,17 @@ function HistoryCard() {
                 {imports.data.data.map((item) => (
                   <tr key={item.id} className="hover:bg-slate-50">
                     <td className="py-2 pe-4 whitespace-nowrap text-slate-600">{formatDateTime(item.created_at)}</td>
-                    <td className="py-2 pe-4">{item.type_label}</td>
+                    <td className="py-2 pe-4">
+                      {item.type_label}
+                      {item.business_day && (
+                        <span className="block text-xs text-slate-500">
+                          {t('backoffice.imports.quotas.historyDetail', {
+                            day: formatDate(item.business_day),
+                            mode: item.mode ? t(`backoffice.imports.quotas.modes.${item.mode}`) : t('common.none'),
+                          })}
+                        </span>
+                      )}
+                    </td>
                     <td className="py-2 pe-4">
                       <Link to={`${base}/imports/${item.id}`} className="font-medium text-brand-700 hover:underline">
                         {item.original_name}

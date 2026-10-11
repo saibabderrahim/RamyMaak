@@ -6,7 +6,9 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * Ce que l'application d'une ligne valide fera : création, mise à jour ou
- * rien, avec les valeurs avant / après de l'aperçu (§8.1, étape 3).
+ * rien, avec les valeurs avant / après de l'aperçu (§8.1, étape 3). Une
+ * ligne sans numéro vient d'un objet absent du fichier (produit remis à 0
+ * par un import de quotas en mode Remplacer).
  */
 final class RowPlan
 {
@@ -21,7 +23,7 @@ final class RowPlan
      * @param  array<string, mixed>  $attributes  valeurs à enregistrer
      */
     public function __construct(
-        public readonly int $line,
+        public readonly ?int $line,
         public readonly string $key,
         public readonly string $label,
         public readonly string $action,
@@ -54,7 +56,7 @@ final class RowPlan
      * Forme stockée : `changes` est une liste, car MySQL réordonne les clés
      * d'un objet JSON ; ImportResource restitue l'objet dans l'ordre du fichier.
      *
-     * @return array{row: int, key: string, action: string, changes: list<array{field: string, old: mixed, new: mixed}>}
+     * @return array{row: ?int, key: string, action: string, changes: list<array{field: string, old: mixed, new: mixed}>}
      */
     public function preview(): array
     {

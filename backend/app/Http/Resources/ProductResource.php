@@ -21,6 +21,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * unitaire indicatif (prix de l'UV ÷ unités par UV), arrondis à 2 décimales
  * (RG-P04) ; montants indicatifs, la facture de l'ERP fait foi (RG-P05).
  *
+ * `pending_deactivation_on` : date d'effet d'une désactivation différée
+ * parce que le produit a un quota publié sur la journée en cours (RG-Q07).
+ *
  * @mixin Product
  */
 class ProductResource extends JsonResource
@@ -86,6 +89,8 @@ class ProductResource extends JsonResource
             'ean' => $this->ean,
             'vat_rate' => (float) $this->vat_rate,
             'is_active' => (bool) $this->is_active,
+            // RG-Q07 : désactivation programmée à cette date (quota publié sur la journée de la demande).
+            'pending_deactivation_on' => $this->is_active ? $this->deactivate_on?->format('Y-m-d') : null,
             'is_new' => (bool) $this->is_new,
             'is_featured' => (bool) $this->is_featured,
             'sort_order' => (int) $this->sort_order,

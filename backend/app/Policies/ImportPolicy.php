@@ -9,11 +9,12 @@ use App\Models\User;
 use Illuminate\Auth\Access\Response;
 
 /**
- * Droits sur les imports Excel des référentiels (§3.2, §8.3) : déposer,
- * appliquer et télécharger un gabarit exigent le droit du type (CLIENTS →
- * client.manage, PRODUCTS et PRICES → product.manage) ; un import se lit par
- * son auteur ou par l'Admin (user.manage). L'import d'un autre répond 404 :
- * on ne révèle pas son existence.
+ * Droits sur les imports Excel (§3.2, §8.1, §8.3) : déposer, appliquer et
+ * télécharger un gabarit exigent le droit du type (CLIENTS → client.manage,
+ * PRODUCTS et PRICES → product.manage, QUOTAS → quota.edit, donc l'ADV par
+ * défaut) ; un import se lit par son auteur ou par l'Admin (user.manage).
+ * L'import d'un autre répond 404 : on ne révèle pas son existence. Le
+ * périmètre de l'auteur (RG-S05) s'applique ligne à ligne, à l'analyse.
  */
 class ImportPolicy
 {
