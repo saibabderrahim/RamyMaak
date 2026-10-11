@@ -400,9 +400,9 @@ final class QuotasDefinition extends ImportDefinition
     }
 
     /**
-     * Régions où l'auteur peut écrire des quotas : actives (RG-Q02), dans son
-     * périmètre ce jour-là (comme la matrice) et aujourd'hui (QuotaBook), par
-     * code.
+     * Régions où l'auteur peut écrire des quotas : actives (RG-Q02) et dans
+     * son périmètre à la date de la journée (comme la matrice et QuotaBook),
+     * par code.
      *
      * @return array<string, Region> en-tête normalisé → région
      */
@@ -412,13 +412,7 @@ final class QuotasDefinition extends ImportDefinition
             return $this->regions;
         }
 
-        $onDay = $this->perimeter->regionIds($this->actor, $this->day->day);
-        $today = $this->perimeter->regionIds($this->actor);
-        $allowed = match (true) {
-            $onDay === null => $today,
-            $today === null => $onDay,
-            default => array_values(array_intersect($onDay, $today)),
-        };
+        $allowed = $this->perimeter->regionIds($this->actor, $this->day->day);
 
         $this->regions = [];
         Region::query()

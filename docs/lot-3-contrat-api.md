@@ -276,3 +276,43 @@ La fondation fournit les éléments communs ; un besoin de modification s'y sign
 | E1 — Écrans journées et imports | `frontend/src/modules/backoffice/days/**`, `frontend/src/modules/backoffice/imports/**`, `frontend/src/modules/backoffice/i18n/days.ts`, `frontend/src/modules/backoffice/i18n/imports.ts` |
 | E2 — Matrice des quotas | `frontend/src/modules/backoffice/quotas/**`, `frontend/src/modules/backoffice/i18n/quotas.ts` |
 | F — Notifications, quotas du régional | `frontend/src/shared/notifications/**`, `frontend/src/modules/notifications/**`, `frontend/src/modules/regional/quotas/**`, `frontend/src/shared/layout/AppShell.tsx` (cloche), `frontend/src/shared/i18n/fr/notifications.ts`, `frontend/src/shared/i18n/fr/field.ts` |
+
+## 9. Précisions (implémentation)
+
+Décisions prises pendant l'implémentation, qui complètent le contrat.
+
+**Journées**
+- `GET /adv/days` avec une seule borne : l'autre borne garde la largeur de 21 jours de l'intervalle par défaut.
+- Ouvrir une journée, la modifier ou prolonger une heure limite exige, en plus de la permission, le rôle ADV ou Admin (§3.2).
+- Une prolongation porte sur une heure à venir (422 sinon).
+- Une journée non ouverte répond 404 avant tout contrôle de droits (liaison de la route).
+
+**Quotas**
+- Le périmètre d'un ADV restreint est jugé **à la date de la journée**, pour la matrice, la saisie, la copie, la publication et l'import : une journée se prépare la veille.
+- Publication sans `region_ids` ni `all`, ou avec les deux : 422 sur `region_ids`.
+- Saisie, copie et publication exigent le rôle ADV ou Admin en plus de la permission.
+- La copie vers une journée clôturée répond 409 `DAY_NOT_OPEN`, même sans cellule à copier.
+- Les quotas du régional comprennent un produit désactivé depuis la publication tant que son quota publié est > 0 (comme les lignes en lecture seule de la matrice).
+- RG-Q07 s'applique aussi à l'import Excel des produits (`statut` = `INACTIF`), par le service `App\Domain\Quotas\ProductDeactivation`. « ACTIF » réimporté sur un produit encore actif ne change rien : le gabarit réimporté tel quel n'annule pas une désactivation programmée (l'annulation se fait depuis la fiche produit).
+
+**Import des quotas**
+- Messages d'en-tête distincts : « Colonne EST2 : code région inconnu », « Colonne SUD : région inactive », « Colonne CENTRE : région hors de votre périmètre ».
+- Mode Remplacer :
+  - un produit actif absent du fichier apparaît dans l'aperçu avec `"row": null` et compte dans `summary.update` ;
+  - s'il a déjà des quantités validées, l'erreur porte sur la colonne : « Colonne CENTRE : produit P0057 absent du fichier (0 en mode Remplacer) : inférieur aux 100 déjà validés ».
+- Journée clôturée entre l'analyse et l'application : l'import passe `INVALID` et l'application répond 409 `DAY_NOT_OPEN`.
+- Colonnes ignorées : « designation », « designation (information) » et la colonne « erreurs » du fichier annoté, qui peut ainsi être redéposé après correction.
+- `business_day` et `mode` envoyés avec un autre type d'import sont ignorés.
+- Gabarit : feuille `QUOTAS`, fichier `gabarit-quotas-AAAAMMJJ.xlsx`.
+
+**Notifications et temps réel**
+- La notification diffusée sur `user.{id}` est une `Notification` complète (avec `read_at` et `created_at`).
+- `filter[unread]=0` renvoie les notifications lues.
+- La notification de prolongation reprend l'heure limite en vigueur au moment de l'envoi : deux prolongations rapprochées produisent une seule notification, avec la dernière heure.
+- Une panne de la diffusion temps réel est journalisée sans faire échouer la publication, la saisie ou la clôture : le rafraîchissement toutes les 30 s prend le relais.
+- Un identifiant non numérique dans un nom de canal répond 403.
+
+**Écrans**
+- Le calendrier écoute `adv.{J}` et `adv.{J+1}`. Ses boutons « Aujourd'hui (J) » et « Demain (J+1) » ouvrent la fiche de la journée, qui propose de l'ouvrir si besoin et mène à la matrice.
+- Le calendrier se parcourt par périodes (« Période précédente », « Période suivante »).
+- Fiche produit avec une désactivation programmée : la case « Produit actif » apparaît décochée, avec la date d'effet. La cocher annule la désactivation.
