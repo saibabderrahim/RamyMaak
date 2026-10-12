@@ -22,7 +22,8 @@ const LINK_BUTTON =
  * (d'aujourd'hui − 7 à + 14 par défaut), ouvertes ou non ; statut et
  * pastilles par région ; accès direct à J et J+1 ; ouverture d'une journée
  * (day.manage), avec confirmation pour un jour non ouvré. Tenu à jour par
- * les canaux `adv.{J}` et `adv.{J+1}`, sinon toutes les 30 s (§9.6).
+ * les canaux `adv.{J}` et `adv.{J+1}` (quotas, envoi des répartitions),
+ * sinon toutes les 30 s (§9.6).
  */
 export default function DaysPage() {
   const { t } = useTranslation()

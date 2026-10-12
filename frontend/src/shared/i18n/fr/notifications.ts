@@ -1,5 +1,8 @@
 // Libellés du centre de notifications (EF-NOT-01), de la cloche de l'en-tête
-// et des « Quotas du jour » du régional (lot 3). Fichier du lot de travail F.
+// et des « Quotas du jour » du régional (lot 3, lot de travail F), avec
+// l'état de la répartition de chaque région (lot 4, lot de travail D). Les
+// notifications N-01 à N-04 arrivent avec leur titre et leur corps rédigés
+// par le serveur : aucun libellé par type ici.
 const notifications = {
   title: 'Notifications',
   bell: {
@@ -52,6 +55,16 @@ const notifications = {
     validated: 'Validé : {{quantity}}\u00a0UV',
     products_one: '{{count}} produit',
     products_other: '{{count}} produits',
+    // Répartition aux clients (§6.1, EF-REG-02), une fois les quotas publiés.
+    distributionState: {
+      toDistribute: 'À répartir avant {{time}}',
+      draft: 'Répartition en cours — pas encore envoyée',
+      sent: 'Répartition envoyée aux clients (v{{version}})',
+      notSent: 'Répartition non envoyée aux clients',
+      distribute: 'Répartir',
+      view: 'Voir la répartition',
+      linkLabel: '{{action}} — {{name}}',
+    },
   },
 }
 

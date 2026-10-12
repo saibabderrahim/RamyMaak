@@ -48,7 +48,7 @@ final class BroadcastDistributionActivity
             return;
         }
 
-        $this->relay(fn () => LimitDraftsUpdated::dispatch($regionDay->region_id, $regionDay->businessDay->dayKey()));
+        $this->relay(fn () => LimitDraftsUpdated::dispatch($regionDay->region_id, $regionDay->businessDay->dayKey(), $event->statusChanged));
     }
 
     private function relay(Closure $dispatch): void

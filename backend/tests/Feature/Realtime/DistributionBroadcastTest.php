@@ -133,16 +133,19 @@ it('broadcasts LimitsUpdated to the channel of each notified client, with the da
     Event::assertDispatchedTimes(RealtimeDistributionPublished::class, 3);
 });
 
-it('broadcasts LimitDraftsUpdated to the region day only, when a draft changes or « Reprendre J-1 » fills the grid', function () {
+it('broadcasts LimitDraftsUpdated to the region day, and to the ADV only on the first draft, when a draft changes or « Reprendre J-1 » fills the grid', function () {
     Event::fake($this->realtime);
 
     expect(($this->draft)($this->a, 300))->toBe(1);
     // Aucune cellule changée : rien n'est diffusé.
     expect(($this->draft)($this->a, 300))->toBe(0);
+    expect(($this->draft)($this->a, 250))->toBe(1);
 
-    Event::assertDispatchedTimes(LimitDraftsUpdated::class, 1);
-    $event = Event::dispatched(LimitDraftsUpdated::class)->first()[0];
-    expect(($this->channels)($event))->toBe(["private-region-day.{$this->centre->id}.2026-10-08"])
+    Event::assertDispatchedTimes(LimitDraftsUpdated::class, 2);
+    [$first, $event] = Event::dispatched(LimitDraftsUpdated::class)->map(fn (array $args) => $args[0])->all();
+    // Premier brouillon : la région passe « Répartition en cours », visible de l'ADV (§6.1).
+    expect(($this->channels)($first))->toBe(["private-region-day.{$this->centre->id}.2026-10-08", 'private-adv.2026-10-08'])
+        ->and(($this->channels)($event))->toBe(["private-region-day.{$this->centre->id}.2026-10-08"])
         ->and($event->broadcastAs())->toBe('LimitDraftsUpdated')
         ->and($event->broadcastWith())->toBe(['region_id' => $this->centre->id, 'day' => '2026-10-08']);
     // L'enregistrement d'un brouillon ne touche pas les clients.
@@ -154,7 +157,7 @@ it('broadcasts LimitDraftsUpdated to the region day only, when a draft changes o
     $tomorrow = ($this->open)('2026-10-09');
     expect($this->book->copyPrevious($tomorrow, true, $this->regional)['changed'])->toBe(1);
     $event = Event::dispatched(LimitDraftsUpdated::class)->last()[0];
-    expect(($this->channels)($event))->toBe(["private-region-day.{$this->centre->id}.2026-10-09"])
+    expect(($this->channels)($event))->toBe(["private-region-day.{$this->centre->id}.2026-10-09", 'private-adv.2026-10-09'])
         ->and($event->broadcastWith())->toBe(['region_id' => $this->centre->id, 'day' => '2026-10-09']);
 });
 
@@ -181,7 +184,7 @@ it('delivers the events and the N-03 notification to the broadcaster with identi
 
     $sent = collect($recorder->sent);
     expect($sent->firstWhere('event', 'LimitDraftsUpdated'))->toBe([
-        'channels' => ["private-region-day.{$this->centre->id}.2026-10-08"],
+        'channels' => ["private-region-day.{$this->centre->id}.2026-10-08", 'private-adv.2026-10-08'],
         'event' => 'LimitDraftsUpdated',
         'payload' => ['region_id' => $this->centre->id, 'day' => '2026-10-08'],
     ])->and($sent->firstWhere('event', 'DistributionPublished'))->toBe([

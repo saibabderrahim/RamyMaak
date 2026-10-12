@@ -317,6 +317,103 @@ describe('regional quotas of the day', () => {
   })
 })
 
+describe('distribution of the regions (lot 4)', () => {
+  const ouest: RegionalQuotaRegion = {
+    ...centre,
+    region: { id: 5, code: 'OUEST', name: 'Ouest' },
+    status: 'DISTRIBUTION_PUBLISHED',
+    distribution_version: 2,
+    cutoffs: { distribution: '10:00', ordering: '13:00' },
+  }
+  const sud: RegionalQuotaRegion = { ...centre, region: { id: 6, code: 'SUD', name: 'Sud' }, status: 'DISTRIBUTION_DRAFT' }
+
+  const distribution = (name: string) => within(regionCard(name)).getByTestId('region-distribution')
+
+  it('offers to distribute a region whose quotas are published, before its distribution cutoff', async () => {
+    const user = userEvent.setup()
+    quotasApi(makeUser('regional'), (day) => json(opened(day)))
+    renderApp('/regional/quotas')
+
+    await screen.findByRole('region', { name: 'Centre' }, slow)
+    // Heure limite de répartition de la région, prolongation comprise.
+    expect(distribution('Centre')).toHaveTextContent('À répartir avant 11:15')
+    const link = within(regionCard('Centre')).getByRole('link', { name: 'Répartir — Centre' })
+    expect(link).toHaveAttribute('href', `/regional/repartition?day=${today}&region=3`)
+    expect(link).toHaveTextContent(/^Répartir$/)
+
+    // Quotas non publiés : rien à répartir.
+    expect(within(regionCard('Est')).queryByTestId('region-distribution')).not.toBeInTheDocument()
+    expect(within(regionCard('Est')).queryByRole('link')).not.toBeInTheDocument()
+
+    await user.click(link)
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/regional/repartition'))
+  })
+
+  it('shows a distribution in progress, then sent to the clients', async () => {
+    quotasApi(makeUser('regional'), (day) => json(opened(day, [centre, ouest, sud])))
+    renderApp(`/regional/quotas?day=${tomorrow}`)
+
+    await screen.findByRole('region', { name: 'Ouest' }, slow)
+    expect(within(regionCard('Sud')).getByText('Répartition en cours')).toBeInTheDocument()
+    expect(distribution('Sud')).toHaveTextContent('Répartition en cours — pas encore envoyée')
+    expect(within(regionCard('Sud')).getByRole('link', { name: 'Répartir — Sud' })).toHaveAttribute(
+      'href',
+      `/regional/repartition?day=${tomorrow}&region=6`,
+    )
+
+    expect(within(regionCard('Ouest')).getByText('Répartition publiée')).toBeInTheDocument()
+    expect(distribution('Ouest')).toHaveTextContent('Répartition envoyée aux clients (v2)')
+    expect(within(regionCard('Ouest')).queryByRole('link', { name: /^Répartir/ })).not.toBeInTheDocument()
+    expect(within(regionCard('Ouest')).getByRole('link', { name: 'Voir la répartition — Ouest' })).toHaveAttribute(
+      'href',
+      `/regional/repartition?day=${tomorrow}&region=5`,
+    )
+  })
+
+  it('only offers to view the distribution of a closed day', async () => {
+    quotasApi(makeUser('regional'), (day) =>
+      json({
+        ...opened(day, [
+          { ...centre, status: 'CLOSED' },
+          { ...ouest, status: 'CLOSED' },
+        ]),
+        status: 'CLOSED',
+      } satisfies RegionalQuotas),
+    )
+    renderApp('/regional/quotas')
+
+    await screen.findByRole('region', { name: 'Centre' }, slow)
+    expect(distribution('Centre')).toHaveTextContent('Répartition non envoyée aux clients')
+    expect(within(regionCard('Centre')).getByRole('link', { name: 'Voir la répartition — Centre' })).toBeInTheDocument()
+    expect(distribution('Ouest')).toHaveTextContent('Répartition envoyée aux clients (v2)')
+    expect(screen.queryByRole('link', { name: /^Répartir/ })).not.toBeInTheDocument()
+  })
+
+  it('reloads the quotas when a distribution is started or sent on the channel of a region', async () => {
+    let region: RegionalQuotaRegion = centre
+    const user = makeUser('regional', { id: 7, realtime: { key: 'app-key' } })
+    const { requestedDays } = quotasApi(user, (day) => json(opened(day, [region])))
+    renderApp('/regional/quotas')
+
+    await screen.findByRole('region', { name: 'Centre' }, slow)
+    await waitFor(() => expect(fake.listeners.get(`region-day.3.${today}:.DistributionPublished`)?.size).toBe(1))
+    expect(fake.listeners.get(`region-day.3.${today}:.LimitDraftsUpdated`)?.size).toBe(1)
+    act(() => fake.stateChange?.({ current: 'connected' }))
+
+    // Premier brouillon d'un autre régional de la région.
+    region = { ...centre, status: 'DISTRIBUTION_DRAFT' }
+    broadcast(`region-day.3.${today}:.LimitDraftsUpdated`, { region_id: 3, day: today })
+    await waitFor(() => expect(distribution('Centre')).toHaveTextContent('Répartition en cours — pas encore envoyée'))
+
+    // Envoi aux clients.
+    region = { ...centre, status: 'DISTRIBUTION_PUBLISHED', distribution_version: 1 }
+    broadcast(`region-day.3.${today}:.DistributionPublished`, { region_id: 3, day: today, version: 1, first: true })
+    await waitFor(() => expect(distribution('Centre')).toHaveTextContent('Répartition envoyée aux clients (v1)'))
+    expect(within(regionCard('Centre')).getByRole('link', { name: 'Voir la répartition — Centre' })).toBeInTheDocument()
+    expect(requestedDays()).toEqual([today, today, today])
+  })
+})
+
 describe('regional quotas formats', () => {
   it('validates the day of the address', () => {
     expect(isDayKey('2026-10-08')).toBe(true)

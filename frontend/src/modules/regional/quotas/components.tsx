@@ -1,26 +1,32 @@
 import { useEffect, useId, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router'
 import type { DayCutoffs, RegionalQuota, RegionalQuotaRegion, RegionDayStatus } from '../../../shared/api/types'
 import { useLiveRefresh } from '../../../shared/realtime'
 import { Badge } from '../../../shared/ui'
 import { regionalQuotasKey } from './api'
-import { formatDayMonth, formatQuantity, formatTime, groupByFamily } from './format'
+import { distributionPath, formatDayMonth, formatQuantity, formatTime, groupByFamily } from './format'
 
+// Répartition en cours : pas encore envoyée aux clients, d'où l'ambre.
 const STATUS_TONES: Record<RegionDayStatus, 'neutral' | 'success' | 'warning' | 'brand'> = {
   QUOTA_DRAFT: 'warning',
   QUOTA_PUBLISHED: 'brand',
-  DISTRIBUTION_DRAFT: 'brand',
+  DISTRIBUTION_DRAFT: 'warning',
   DISTRIBUTION_PUBLISHED: 'success',
   CLOSED: 'neutral',
 }
 
-// Publication (N-01) et modification (N-02) des quotas d'une région (§9.6).
-const LIVE_EVENTS = ['QuotaPublished'] as const
+/**
+ * Événements du canal de la région (§9.6) : publication (N-01) et
+ * modification (N-02) des quotas ; envoi de la répartition aux clients et
+ * premier brouillon de répartition (statut « Répartition en cours »), lot 4.
+ */
+const LIVE_EVENTS = ['QuotaPublished', 'DistributionPublished', 'LimitDraftsUpdated'] as const
 
 /**
- * Abonnement au canal `region-day.{regionId}.{day}` : une publication relit
- * les quotas. Signale l'intervalle de rafraîchissement de secours (30 s
- * hors connexion temps réel) ; `null` au démontage.
+ * Abonnement au canal `region-day.{regionId}.{day}` : une publication ou un
+ * envoi relit les quotas. Signale l'intervalle de rafraîchissement de
+ * secours (30 s hors connexion temps réel) ; `null` au démontage.
  */
 export function RegionLiveUpdates({
   regionId,
@@ -41,9 +47,18 @@ export function RegionLiveUpdates({
 
 /**
  * Carte d'une région : statut, heures limites applicables (prolongation
- * comprise, RG-A05) et quotas publiés groupés par famille (§7.6).
+ * comprise, RG-A05), état de la répartition avec l'accès à sa grille
+ * (lot 4) et quotas publiés groupés par famille (§7.6).
  */
-export function RegionQuotasCard({ region, dayCutoffs }: { region: RegionalQuotaRegion; dayCutoffs: DayCutoffs | null }) {
+export function RegionQuotasCard({
+  region,
+  day,
+  dayCutoffs,
+}: {
+  region: RegionalQuotaRegion
+  day: string
+  dayCutoffs: DayCutoffs | null
+}) {
   const { t } = useTranslation()
   const headingId = useId()
   const groups = useMemo(() => groupByFamily(region.quotas), [region.quotas])
@@ -72,6 +87,8 @@ export function RegionQuotasCard({ region, dayCutoffs }: { region: RegionalQuota
       )}
 
       <Cutoffs region={region} dayCutoffs={dayCutoffs} />
+
+      {published && <Distribution region={region} day={day} />}
 
       {!published ? (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -110,6 +127,47 @@ function Cutoffs({ region, dayCutoffs }: { region: RegionalQuotaRegion; dayCutof
         </span>
       ))}
     </p>
+  )
+}
+
+const LINK_CLASSES =
+  'inline-flex min-h-11 w-full shrink-0 items-center justify-center rounded-lg px-4 text-sm font-semibold transition-colors sm:w-auto ' +
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
+const PRIMARY_LINK = 'bg-brand-600 text-white hover:bg-brand-700'
+const SECONDARY_LINK = 'border border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
+
+/**
+ * État de la répartition aux clients (§6.1, EF-REG-02) et accès à la grille,
+ * une fois les quotas publiés : « Répartir » tant que rien n'est envoyé,
+ * « Voir la répartition » après l'envoi (une nouvelle version reste
+ * possible depuis la grille) ou sur une journée clôturée.
+ */
+function Distribution({ region, day }: { region: RegionalQuotaRegion; day: string }) {
+  const { t } = useTranslation()
+  const sent = region.distribution_version > 0
+  const closed = region.status === 'CLOSED'
+  const state = sent ? 'sent' : closed ? 'notSent' : region.status === 'DISTRIBUTION_DRAFT' ? 'draft' : 'toDistribute'
+  const action = t(`notifications.regionalQuotas.distributionState.${sent || closed ? 'view' : 'distribute'}`)
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg bg-slate-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+      <p
+        data-testid="region-distribution"
+        className={`text-sm font-medium ${sent ? 'text-emerald-800' : closed ? 'text-slate-700' : 'text-amber-900'}`}
+      >
+        {t(`notifications.regionalQuotas.distributionState.${state}`, {
+          version: region.distribution_version,
+          time: region.cutoffs.distribution,
+        })}
+      </p>
+      <Link
+        to={distributionPath(day, region.region.id)}
+        aria-label={t('notifications.regionalQuotas.distributionState.linkLabel', { action, name: region.region.name })}
+        className={`${LINK_CLASSES} ${sent || closed ? SECONDARY_LINK : PRIMARY_LINK}`}
+      >
+        {action}
+      </Link>
+    </div>
   )
 }
 

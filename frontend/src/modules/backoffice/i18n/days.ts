@@ -1,10 +1,10 @@
 // Libellés back-office « journées » (lot 3) : calendrier (EF-ADV-01),
-// heures limites (§4.3), prolongation (RG-A05), clôture (§4.4). Fichier du
-// lot de travail E1.
+// heures limites (§4.3), prolongation (RG-A05), clôture (§4.4) ; état de la
+// répartition des régions (lot 4, lot de travail D).
 const days = {
   title: 'Journées',
   intro:
-    'Chaque journée s’ouvre avant la saisie des quotas. Les pastilles donnent l’état de chaque région ; un chiffre signale des quotas en brouillon non publiés.',
+    'Chaque journée s’ouvre avant la saisie des quotas. Les pastilles donnent l’état de chaque région, des quotas jusqu’à la répartition envoyée aux clients ; un chiffre signale des quotas en brouillon non publiés.',
   quick: {
     label: 'Accès direct',
     today: 'Aujourd’hui (J)',
@@ -47,6 +47,7 @@ const days = {
   legend: 'Légende',
   draftsMarker: 'Chiffre : quotas en brouillon non publiés',
   pill: '{{code}} — {{name}} : {{status}}',
+  pillSent: '{{code}} — {{name}} : {{status}} (v{{version}})',
   drafts_one: '{{count}} brouillon non publié',
   drafts_other: '{{count}} brouillons non publiés',
   links: {
@@ -54,6 +55,19 @@ const days = {
     viewQuotas: 'Voir les quotas',
     quotasLabel: '{{action}} du {{day}}',
     calendar: 'Calendrier',
+    distribution: 'Répartition',
+    distributionLabel: 'Répartition de la région {{name}}',
+  },
+  // Répartition aux clients d'une région (§6.1, lot 4).
+  distribution: {
+    sent: 'Répartition envoyée (v{{version}})',
+    sentAt: 'le {{date}} à {{time}}',
+    firstSentAt: 'premier envoi le {{date}} à {{time}}',
+    draft: 'Répartition en cours',
+    notSentYet: 'pas encore envoyée aux clients',
+    toDistribute: 'À répartir',
+    notSent: 'Non envoyée',
+    waitingQuotas: 'Quotas non publiés',
   },
   open: {
     action: 'Ouvrir la journée',
@@ -108,8 +122,9 @@ const days = {
       status: 'Statut',
       version: 'Version des quotas',
       lastPublication: 'Dernière publication',
-      distribution: 'Répartition',
-      ordering: 'Commande',
+      distributionState: 'Répartition aux clients',
+      distribution: 'Limite de répartition',
+      ordering: 'Limite de commande',
       drafts: 'Brouillons',
       actions: 'Actions',
     },

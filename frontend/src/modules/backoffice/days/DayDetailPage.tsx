@@ -9,7 +9,16 @@ import { Alert, Badge, Button, Card, ErrorAlert, PageHeader, Spinner } from '../
 import { useBackoffice } from '../shared/access'
 import { DataTable, DetailList, EmptyState, TableHead, Th } from '../shared/ui'
 import { DAY_EVENTS, daysKey, useDay, useDays, useUpdateDay } from './api'
-import { CutoffTime, DayStatusBadge, OpenDayButton, OpenDayConfirm, QuotasLink, RegionDayStatusBadge } from './components'
+import {
+  CutoffTime,
+  DayStatusBadge,
+  DistributionLink,
+  DistributionState,
+  OpenDayButton,
+  OpenDayConfirm,
+  QuotasLink,
+  RegionDayStatusBadge,
+} from './components'
 import { formatDayLong, isDay, OPEN_DAYS_AHEAD, openWindow, weekdayOf } from './dates'
 import { ExtendCutoffDialog } from './ExtendCutoffDialog'
 import { ScheduleForm } from './ScheduleForm'
@@ -18,10 +27,11 @@ import { useOpenDayFlow } from './useOpenDayFlow'
 /**
  * Page d'une journée (EF-ADV-01, §4.3) : statut, date de livraison, heures
  * limites (modifiables avec day.manage tant que la journée est ouverte),
- * régions (statut, version et dernière publication des quotas, heures
- * limites applicables, brouillons), « Prolonger » (day.extend-cutoff,
- * RG-A05), lien vers la matrice. Journée non ouverte : proposition de
- * l'ouvrir. Tenue à jour par le canal `adv.{day}` (§9.6).
+ * régions (statut, version et dernière publication des quotas, état de la
+ * répartition aux clients et lien vers sa grille, heures limites
+ * applicables, brouillons), « Prolonger » (day.extend-cutoff, RG-A05), lien
+ * vers la matrice. Journée non ouverte : proposition de l'ouvrir. Tenue à
+ * jour par le canal `adv.{day}` (§9.6), envoi des répartitions compris.
  */
 export default function DayDetailPage() {
   const { day = '' } = useParams()
@@ -195,7 +205,7 @@ function ScheduleCard({ day }: { day: Day }) {
   )
 }
 
-/** Régions du périmètre : statut, quotas, heures limites applicables, prolongation. */
+/** Régions du périmètre : statut, quotas, répartition, heures limites applicables, prolongation. */
 function RegionsCard({ day }: { day: Day }) {
   const { t } = useTranslation()
   const { can } = useBackoffice()
@@ -224,12 +234,13 @@ function RegionsCard({ day }: { day: Day }) {
       {day.regions.length === 0 ? (
         <EmptyState>{t('backoffice.days.regions.empty')}</EmptyState>
       ) : (
-        <DataTable label={t('backoffice.days.regions.title')} className="min-w-[960px]">
+        <DataTable label={t('backoffice.days.regions.title')} className="min-w-[1120px]">
           <TableHead>
             <Th>{t('backoffice.days.regions.columns.region')}</Th>
             <Th>{t('backoffice.days.regions.columns.status')}</Th>
             <Th className="text-end">{t('backoffice.days.regions.columns.version')}</Th>
             <Th>{t('backoffice.days.regions.columns.lastPublication')}</Th>
+            <Th>{t('backoffice.days.regions.columns.distributionState')}</Th>
             <Th>{t('backoffice.days.regions.columns.distribution')}</Th>
             <Th>{t('backoffice.days.regions.columns.ordering')}</Th>
             <Th className="text-end">{t('backoffice.days.regions.columns.drafts')}</Th>
@@ -262,6 +273,12 @@ function RegionsCard({ day }: { day: Day }) {
                   ) : (
                     <span className="text-slate-500">{t('backoffice.days.regions.notPublished')}</span>
                   )}
+                </td>
+                <td className="py-2 pe-4">
+                  <span className="flex flex-col items-start gap-0.5">
+                    <DistributionState regionDay={item} />
+                    <DistributionLink day={day.day} regionDay={item} />
+                  </span>
                 </td>
                 <td className="py-2 pe-4">
                   <CutoffTime time={item.cutoffs.distribution} extended={item.extended.distribution} />

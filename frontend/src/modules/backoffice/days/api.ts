@@ -13,8 +13,12 @@ const dayKey = (day: string) => [...daysKey, 'detail', day] as const
 /** Matrice des quotas (lot de travail E2) : son en-tête reprend la journée. */
 const quotasKey = ['backoffice', 'quotas'] as const
 
-/** Événements du canal `adv.{day}` qui changent l'état des journées (§9.6). */
-export const DAY_EVENTS = ['QuotaPublished', 'DraftsUpdated', 'DayClosed'] as const
+/**
+ * Événements du canal `adv.{day}` qui changent l'état des journées (§9.6) :
+ * quotas (lot 3), répartition d'une région (lot 4). LimitDraftsUpdated n'y
+ * arrive qu'au premier brouillon de bornes (« Répartition en cours »).
+ */
+export const DAY_EVENTS = ['QuotaPublished', 'DraftsUpdated', 'DayClosed', 'DistributionPublished', 'LimitDraftsUpdated'] as const
 
 export type DaysList = {
   data: Day[]

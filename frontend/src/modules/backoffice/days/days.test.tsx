@@ -38,8 +38,29 @@ vi.mock('laravel-echo', () => ({
 // Premier rendu : le module du rôle est chargé à la demande.
 const slow = { timeout: 5000 }
 
-const ADV_PERMISSIONS = ['region.view', 'client.view', 'product.view', 'quota.view', 'quota.edit', 'quota.publish', 'day.manage', 'day.extend-cutoff']
-const ADMIN_PERMISSIONS = ['user.manage', 'region.view', 'region.manage', 'client.view', 'client.manage', 'product.view', 'product.manage', 'quota.view', 'day.extend-cutoff']
+const ADV_PERMISSIONS = [
+  'region.view',
+  'client.view',
+  'product.view',
+  'quota.view',
+  'quota.edit',
+  'quota.publish',
+  'limit.view',
+  'day.manage',
+  'day.extend-cutoff',
+]
+const ADMIN_PERMISSIONS = [
+  'user.manage',
+  'region.view',
+  'region.manage',
+  'client.view',
+  'client.manage',
+  'product.view',
+  'product.manage',
+  'quota.view',
+  'limit.view',
+  'day.extend-cutoff',
+]
 const adv = (overrides: Partial<CurrentUser> = {}) => makeUser('adv', { permissions: ADV_PERMISSIONS, ...overrides })
 const admin = () => makeUser('admin', { permissions: ADMIN_PERMISSIONS })
 
@@ -523,5 +544,181 @@ describe('ADV — business day page', () => {
     renderApp('/adv/journees/demain')
 
     expect(await screen.findByText('Date de journée invalide : format attendu AAAA-MM-JJ.', undefined, slow)).toBeInTheDocument()
+  })
+})
+
+describe('ADV and Admin — distribution state of the regions (lot 4)', () => {
+  // Répartition envoyée deux fois : premier envoi à 09:40 (Alger).
+  const ouest: RegionDay = {
+    ...centre,
+    region: { id: 5, code: 'OUEST', name: 'Ouest' },
+    status: 'DISTRIBUTION_PUBLISHED',
+    status_label: 'Répartition publiée',
+    pending_drafts: 0,
+    distribution_version: 2,
+    distribution_published_at: '2026-10-08T08:40:00+00:00',
+  }
+  const nord: RegionDay = { ...ouest, region: { id: 6, code: 'NORD', name: 'Nord' }, distribution_version: 1 }
+  const sud: RegionDay = {
+    ...centre,
+    region: { id: 7, code: 'SUD', name: 'Sud' },
+    status: 'DISTRIBUTION_DRAFT',
+    status_label: 'Répartition en cours',
+    quota_version: 1,
+    pending_drafts: 0,
+  }
+  const distributionDay: Day = { ...openDay, regions: [centre, est, nord, ouest, sud] }
+
+  function regionRow(code: string): HTMLElement {
+    const row = document.querySelector<HTMLElement>(`tr[data-region="${code}"]`)
+    if (!row) throw new Error(`Région absente : ${code}`)
+    return row
+  }
+
+  const state = (code: string) => within(regionRow(code)).getByTestId('distribution-state')
+
+  function distributionApi(user: CurrentUser, day: () => Day = () => distributionDay) {
+    return mockApi({
+      ...baseRoutes(user),
+      'GET /api/v1/adv/days/2026-10-08': () => json(day()),
+    })
+  }
+
+  it('shows the distribution state of each region and links the ADV to its read-only grid', async () => {
+    distributionApi(adv())
+
+    renderApp('/adv/journees/2026-10-08')
+
+    const table = await screen.findByRole('table', { name: 'Régions' }, slow)
+    expect(within(table).getByRole('columnheader', { name: 'Répartition aux clients' })).toBeInTheDocument()
+
+    // Envoyée : version et heure du premier envoi, dans le fuseau d'Alger.
+    expect(state('NORD')).toHaveTextContent('Répartition envoyée (v1) le 08/10 à 09:40')
+    expect(state('OUEST')).toHaveTextContent('Répartition envoyée (v2) premier envoi le 08/10 à 09:40')
+    expect(within(regionRow('OUEST')).getByText('Répartition publiée')).toBeInTheDocument()
+    expect(within(regionRow('OUEST')).getByRole('link', { name: 'Répartition de la région Ouest' })).toHaveAttribute(
+      'href',
+      '/adv/journees/2026-10-08/repartition/5',
+    )
+
+    // Brouillon du régional, pas encore envoyé.
+    expect(state('SUD')).toHaveTextContent('Répartition en cours pas encore envoyée aux clients')
+    expect(within(regionRow('SUD')).getByRole('link', { name: 'Répartition de la région Sud' })).toHaveAttribute(
+      'href',
+      '/adv/journees/2026-10-08/repartition/7',
+    )
+
+    // Quotas publiés, répartition pas commencée.
+    expect(state('CENTRE')).toHaveTextContent('À répartir')
+    expect(within(regionRow('CENTRE')).getByRole('link', { name: 'Répartition de la région Centre' })).toHaveAttribute(
+      'href',
+      '/adv/journees/2026-10-08/repartition/3',
+    )
+
+    // Quotas non publiés : ni état ni lien.
+    expect(state('EST')).toHaveTextContent('—')
+    expect(within(state('EST')).getByText('Quotas non publiés')).toHaveClass('sr-only')
+    expect(within(regionRow('EST')).queryByRole('link')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: /^Répartition de la région/ })).toHaveLength(4)
+  })
+
+  it('links the Admin to the read-only grid as well', async () => {
+    distributionApi(admin())
+
+    renderApp('/admin/journees/2026-10-08')
+
+    await screen.findByRole('table', { name: 'Régions' }, slow)
+    const link = (name: string) => screen.getByRole('link', { name: `Répartition de la région ${name}` })
+    expect(link('Ouest')).toHaveAttribute('href', '/admin/journees/2026-10-08/repartition/5')
+    expect(link('Centre')).toHaveAttribute('href', '/admin/journees/2026-10-08/repartition/3')
+    expect(within(regionRow('EST')).queryByRole('link')).not.toBeInTheDocument()
+  })
+
+  it('offers no grid link without limit.view', async () => {
+    distributionApi(adv({ permissions: ADV_PERMISSIONS.filter((permission) => permission !== 'limit.view') }))
+
+    renderApp('/adv/journees/2026-10-08')
+
+    await screen.findByRole('table', { name: 'Régions' }, slow)
+    expect(state('OUEST')).toHaveTextContent('Répartition envoyée (v2)')
+    expect(screen.queryByRole('link', { name: /^Répartition de la région/ })).not.toBeInTheDocument()
+  })
+
+  it('shows a region of a closed day whose distribution was never sent', async () => {
+    distributionApi(adv(), () => ({ ...closedDay, day: '2026-10-08', regions: [{ ...centre, status: 'CLOSED', status_label: 'Clôturée' }] }))
+
+    renderApp('/adv/journees/2026-10-08')
+
+    await screen.findByRole('table', { name: 'Régions' }, slow)
+    expect(state('CENTRE')).toHaveTextContent('Non envoyée')
+    expect(screen.getByRole('link', { name: 'Répartition de la région Centre' })).toHaveAttribute(
+      'href',
+      '/adv/journees/2026-10-08/repartition/3',
+    )
+  })
+
+  it('refreshes the day when a distribution is sent', async () => {
+    let current: Day = { ...openDay, regions: [sud] }
+    const { calls } = distributionApi(adv({ realtime: { key: 'app-key' } }), () => current)
+
+    renderApp('/adv/journees/2026-10-08')
+    await screen.findByRole('table', { name: 'Régions' }, slow)
+    expect(state('SUD')).toHaveTextContent('Répartition en cours')
+    await waitFor(() => expect(fake.listeners.get('adv.2026-10-08:.DistributionPublished')?.size).toBe(1))
+
+    const reads = () => calls.filter((call) => call.path === '/api/v1/adv/days/2026-10-08').length
+    const before = reads()
+    const sent: RegionDay = {
+      ...sud,
+      status: 'DISTRIBUTION_PUBLISHED',
+      status_label: 'Répartition publiée',
+      distribution_version: 1,
+      distribution_published_at: '2026-10-08T08:55:00+00:00',
+    }
+    current = { ...openDay, regions: [sent] }
+    const payload = { region_id: 7, day: '2026-10-08', version: 1, first: true }
+    act(() => fake.listeners.get('adv.2026-10-08:.DistributionPublished')?.forEach((listener) => listener(payload)))
+
+    await waitFor(() => expect(state('SUD')).toHaveTextContent('Répartition envoyée (v1) le 08/10 à 09:55'))
+    expect(reads()).toBe(before + 1)
+  })
+
+  it('colours the distribution statuses in the calendar, with a label and a legend', async () => {
+    const day: Day = { ...openDay, regions: [centre, ouest, sud] }
+    let reads = 0
+    calendarApi(adv({ realtime: { key: 'app-key' } }), {
+      'GET /api/v1/adv/days': () => {
+        reads++
+        return json({ data: [day], meta })
+      },
+    })
+
+    renderApp('/adv/journees')
+
+    await screen.findByRole('table', { name: 'Calendrier des journées' }, slow)
+    const pills = within(within(rowOf('2026-10-08')).getByRole('list', { name: 'Régions' })).getAllByRole('listitem')
+    const [published, sent, draft] = pills as [HTMLElement, HTMLElement, HTMLElement]
+    expect(sent).toHaveAttribute('data-status', 'DISTRIBUTION_PUBLISHED')
+    expect(sent).toHaveTextContent('OUEST — Ouest : Répartition publiée (v2)')
+    expect(sent).toHaveAttribute('title', 'OUEST — Ouest : Répartition publiée (v2)')
+    expect(sent).toHaveClass('bg-emerald-50', 'text-emerald-900')
+    expect(draft).toHaveAttribute('data-status', 'DISTRIBUTION_DRAFT')
+    expect(draft).toHaveTextContent('SUD — Sud : Répartition en cours')
+    expect(draft).toHaveClass('bg-violet-50', 'text-violet-900')
+    // Une teinte par statut.
+    expect(new Set([published, sent, draft].map((pill) => pill.className)).size).toBe(3)
+
+    const legend = within(screen.getByRole('list', { name: 'Légende' }))
+    expect(legend.getByText('Répartition en cours')).toBeInTheDocument()
+    expect(legend.getByText('Répartition publiée')).toBeInTheDocument()
+
+    // Envoi d'une répartition : le calendrier est relu.
+    const channel = `adv.${businessToday()}`
+    await waitFor(() => expect(fake.listeners.get(`${channel}:.DistributionPublished`)?.size).toBe(1))
+    expect(fake.listeners.get(`adv.${addDays(businessToday(), 1)}:.DistributionPublished`)?.size).toBe(1)
+    const before = reads
+    const payload = { region_id: 5, day: businessToday(), version: 3, first: false }
+    act(() => fake.listeners.get(`${channel}:.DistributionPublished`)?.forEach((listener) => listener(payload)))
+    await waitFor(() => expect(reads).toBe(before + 1))
   })
 })

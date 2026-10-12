@@ -29,7 +29,8 @@ function refreshInterval(intervals: Intervals): number | false {
 
 /**
  * « Quotas du jour » du régional (§7.6, EF-REG-01) : pour chaque région de
- * son périmètre, statut, heures limites et quotas publiés par famille ;
+ * son périmètre, statut, heures limites, quotas publiés par famille et,
+ * une fois ceux-ci publiés, état de la répartition et accès à sa grille ;
  * bascule aujourd'hui / demain (`?day=AAAA-MM-JJ`, lien des notifications
  * N-01 et N-02) ; mise à jour en temps réel, sinon toutes les 30 s (§9.6).
  * Écran pensé pour le téléphone.
@@ -140,7 +141,7 @@ export default function RegionalQuotasPage() {
                   {data.regions.map((region) => (
                     <div key={`${data.day}-${region.region.id}`}>
                       <RegionLiveUpdates regionId={region.region.id} day={data.day} onInterval={reportInterval} />
-                      <RegionQuotasCard region={region} dayCutoffs={data.cutoffs} />
+                      <RegionQuotasCard region={region} day={data.day} dayCutoffs={data.cutoffs} />
                     </div>
                   ))}
                 </div>

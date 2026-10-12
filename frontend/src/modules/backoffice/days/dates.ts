@@ -1,4 +1,4 @@
-import { formatDate } from '../../../shared/format'
+import { BUSINESS_TIME_ZONE, formatDate } from '../../../shared/format'
 import { addDays } from '../shared/dates'
 
 /**
@@ -33,6 +33,15 @@ export function weekdayOf(day: string): number {
 /** « jeudi 08/10/2026 ». */
 export function formatDayLong(day: string): string {
   return `${weekdayFormat.format(utc(day))} ${formatDate(day)}`
+}
+
+const dayMonthFormat = new Intl.DateTimeFormat('fr-FR', { timeZone: BUSINESS_TIME_ZONE, day: '2-digit', month: '2-digit' })
+const timeFormat = new Intl.DateTimeFormat('fr-FR', { timeZone: BUSINESS_TIME_ZONE, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+
+/** Instant ISO 8601 → `{ date: '08/10', time: '09:40' }` dans le fuseau métier (ENF-13). */
+export function instantParts(iso: string): { date: string; time: string } {
+  const instant = new Date(iso)
+  return { date: dayMonthFormat.format(instant), time: timeFormat.format(instant) }
 }
 
 /** Toutes les dates de `from` à `to` incluses (au plus quelques dizaines). */

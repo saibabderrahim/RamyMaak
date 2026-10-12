@@ -177,7 +177,7 @@ Canaux temps réel :
 | Canal privé | Accès | Nouveaux événements (nom diffusé) |
 |---|---|---|
 | `region-day.{regionId}.{day}` | inchangé (lot 3) | `DistributionPublished` `{ region_id, day, version, first }` ; `LimitDraftsUpdated` `{ region_id, day }` (sur `LimitDraftsSaved` : un autre régional de la région a modifié la grille) |
-| `adv.{day}` | inchangé | `DistributionPublished` (même contenu) |
+| `adv.{day}` | inchangé | `DistributionPublished` (même contenu) ; `LimitDraftsUpdated` au **premier** brouillon d'une région seulement (passage à « Répartition en cours ») |
 | `client.{clientId}` | compte client rattaché à ce client (`routes/channels.php`) | `LimitsUpdated` `{ day, version }`, pour chaque client notifié ; les écrans client arrivent au lot 5 |
 
 Une panne de la diffusion est journalisée sans faire échouer l'enregistrement ni l'envoi (comme au lot 3).

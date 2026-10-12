@@ -162,11 +162,12 @@ final class LimitBook
             }
 
             if ($changed > 0) {
-                if ($regionDay->status === RegionDayStatus::QuotaPublished) {
+                $statusChanged = $regionDay->status === RegionDayStatus::QuotaPublished;
+                if ($statusChanged) {
                     $regionDay->status = RegionDayStatus::DistributionDraft;
                     $regionDay->save();
                 }
-                event(new LimitDraftsSaved($regionDay->id, $by->id));
+                event(new LimitDraftsSaved($regionDay->id, $by->id, $statusChanged));
             }
 
             return $changed;

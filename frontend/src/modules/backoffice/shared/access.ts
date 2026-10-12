@@ -12,6 +12,7 @@ export type BackofficePermission =
   | 'quota.publish'
   | 'day.manage'
   | 'day.extend-cutoff'
+  | 'limit.view'
 
 /**
  * Contexte des écrans back-office partagés entre l'Admin et l'ADV : chemin

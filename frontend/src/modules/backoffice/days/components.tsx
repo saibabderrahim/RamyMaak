@@ -4,13 +4,14 @@ import { REGION_DAY_STATUSES, type Day, type RegionDay, type RegionDayStatus } f
 import { Badge, Button } from '../../../shared/ui'
 import { useBackoffice } from '../shared/access'
 import { ConfirmDialog } from '../shared/ui'
-import { formatDayLong } from './dates'
+import { formatDayLong, instantParts } from './dates'
 import type { OpenDayFlow } from './useOpenDayFlow'
 
 /**
  * Éléments communs du calendrier et de la page d'une journée : statuts
  * (§6.1) en couleur et en texte (la couleur n'est jamais le seul repère),
- * ouverture d'une journée, lien vers la matrice des quotas.
+ * ouverture d'une journée, liens vers la matrice des quotas et vers la
+ * grille de répartition (lot 4).
  */
 
 function cx(...classes: Array<string | false | null | undefined>): string {
@@ -18,6 +19,8 @@ function cx(...classes: Array<string | false | null | undefined>): string {
 }
 
 // Contraste AA : texte foncé sur fond clair, liseré de la teinte du statut.
+// Une teinte par statut : ambre, ciel, violet (répartition en cours),
+// émeraude (répartition publiée), gris.
 const STATUS_STYLES = {
   QUOTA_DRAFT: { chip: 'bg-amber-50 text-amber-900 ring-amber-300', dot: 'bg-amber-500' },
   QUOTA_PUBLISHED: { chip: 'bg-sky-50 text-sky-900 ring-sky-300', dot: 'bg-sky-600' },
@@ -45,8 +48,9 @@ export function DayStatusBadge({ day }: { day: Pick<Day, 'status' | 'status_labe
 
 /**
  * Pastilles des régions (EF-ADV-01) : code coloré selon le statut, chiffre
- * des brouillons non publiés ; statut et brouillons lus en toutes lettres
- * par les lecteurs d'écran et dans l'info-bulle.
+ * des brouillons non publiés ; statut (avec la version de la répartition
+ * envoyée) et brouillons lus en toutes lettres par les lecteurs d'écran et
+ * dans l'info-bulle.
  */
 export function RegionPills({ regions }: { regions: RegionDay[] }) {
   const { t } = useTranslation()
@@ -55,7 +59,12 @@ export function RegionPills({ regions }: { regions: RegionDay[] }) {
   return (
     <ul className="flex flex-wrap gap-1.5" aria-label={t('backoffice.days.columns.regions')}>
       {regions.map((item) => {
-        const label = t('backoffice.days.pill', { code: item.region.code, name: item.region.name, status: item.status_label })
+        const label = t(item.distribution_version > 0 ? 'backoffice.days.pillSent' : 'backoffice.days.pill', {
+          code: item.region.code,
+          name: item.region.name,
+          status: item.status_label,
+          version: item.distribution_version,
+        })
         const drafts = item.pending_drafts > 0 ? t('backoffice.days.drafts', { count: item.pending_drafts }) : null
         return (
           <li
@@ -140,6 +149,77 @@ export function QuotasLink({ day, variant = 'link' }: { day: Pick<Day, 'day' | '
       }
     >
       {action}
+    </Link>
+  )
+}
+
+/**
+ * État de la répartition aux clients d'une région (§6.1, lot 4) :
+ * « Répartition envoyée (v2) » avec l'heure du premier envoi
+ * (`distribution_published_at`), « Répartition en cours » (brouillon du
+ * régional), « À répartir » une fois les quotas publiés, « Non envoyée »
+ * sur une journée clôturée, « — » avant la publication des quotas.
+ */
+export function DistributionState({ regionDay }: { regionDay: RegionDay }) {
+  const { t } = useTranslation()
+  const version = regionDay.distribution_version
+
+  if (version > 0) {
+    const sentAt = regionDay.distribution_published_at ? instantParts(regionDay.distribution_published_at) : null
+    return (
+      <span className="flex flex-col" data-testid="distribution-state">
+        <span className="font-medium text-emerald-800">{t('backoffice.days.distribution.sent', { version })}</span>{' '}
+        {sentAt && (
+          <span className="text-xs text-slate-600 tabular-nums">
+            {t(version > 1 ? 'backoffice.days.distribution.firstSentAt' : 'backoffice.days.distribution.sentAt', sentAt)}
+          </span>
+        )}
+      </span>
+    )
+  }
+  if (regionDay.status === 'DISTRIBUTION_DRAFT') {
+    return (
+      <span className="flex flex-col" data-testid="distribution-state">
+        <span className="font-medium text-violet-800">{t('backoffice.days.distribution.draft')}</span>{' '}
+        <span className="text-xs text-slate-600">{t('backoffice.days.distribution.notSentYet')}</span>
+      </span>
+    )
+  }
+  if (regionDay.quota_version > 0) {
+    return (
+      <span className="text-slate-700" data-testid="distribution-state">
+        {regionDay.status === 'CLOSED' ? t('backoffice.days.distribution.notSent') : t('backoffice.days.distribution.toDistribute')}
+      </span>
+    )
+  }
+  return (
+    <span className="text-slate-500" data-testid="distribution-state">
+      <span aria-hidden="true">{t('common.none')}</span>
+      <span className="sr-only">{t('backoffice.days.distribution.waitingQuotas')}</span>
+    </span>
+  )
+}
+
+const TEXT_LINK =
+  'inline-flex min-h-11 items-center font-medium text-brand-700 hover:underline ' +
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
+
+/**
+ * Lien « Répartition » vers la grille en lecture seule de la région
+ * (limit.view, ADV et Admin) : dès que ses quotas sont publiés (§5 du
+ * contrat du lot 4) ; aucun lien avant, la grille serait vide.
+ */
+export function DistributionLink({ day, regionDay }: { day: string; regionDay: RegionDay }) {
+  const { t } = useTranslation()
+  const { base, can } = useBackoffice()
+  if (regionDay.quota_version === 0 || !can('limit.view')) return null
+  return (
+    <Link
+      to={`${base}/journees/${day}/repartition/${regionDay.region.id}`}
+      aria-label={t('backoffice.days.links.distributionLabel', { name: regionDay.region.name })}
+      className={TEXT_LINK}
+    >
+      {t('backoffice.days.links.distribution')}
     </Link>
   )
 }

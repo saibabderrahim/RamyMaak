@@ -15,6 +15,11 @@ export function nextDay(day: string): string {
   return date.toISOString().slice(0, 10)
 }
 
+/** Grille de répartition d'une région pour une journée (EF-REG-02) : `/regional/repartition?day=…&region=…`. */
+export function distributionPath(day: string, regionId: number): string {
+  return `/regional/repartition?${new URLSearchParams({ day, region: String(regionId) })}`
+}
+
 const weekdayFormat = new Intl.DateTimeFormat('fr-FR', { timeZone: 'UTC', weekday: 'long' })
 
 /** « jeudi » pour « 2026-10-08 ». */
