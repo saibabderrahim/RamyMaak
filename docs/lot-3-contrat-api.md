@@ -285,6 +285,7 @@ Décisions prises pendant l'implémentation, qui complètent le contrat.
 - `GET /adv/days` avec une seule borne : l'autre borne garde la largeur de 21 jours de l'intervalle par défaut.
 - Ouvrir une journée, la modifier ou prolonger une heure limite exige, en plus de la permission, le rôle ADV ou Admin (§3.2).
 - Une prolongation porte sur une heure à venir (422 sinon).
+- L'heure limite d'une région est la plus tardive entre sa prolongation et l'heure de la journée (`extended` : prolongation plus tardive). Une prolongation dépassée par une nouvelle heure de la journée est effacée.
 - Une journée non ouverte répond 404 avant tout contrôle de droits (liaison de la route).
 
 **Quotas**
@@ -293,10 +294,12 @@ Décisions prises pendant l'implémentation, qui complètent le contrat.
 - Saisie, copie et publication exigent le rôle ADV ou Admin en plus de la permission.
 - La copie vers une journée clôturée répond 409 `DAY_NOT_OPEN`, même sans cellule à copier.
 - Les quotas du régional comprennent un produit désactivé depuis la publication tant que son quota publié est > 0 (comme les lignes en lecture seule de la matrice).
+- Un produit dont la désactivation est programmée est **inactif pour les quotas dès sa date d'effet** (`deactivate_on`) : ligne en lecture seule (`is_active: false`) ou absente de la matrice, refusé en saisie, en copie et à l'import, et ses brouillons de ces journées sont effacés dès la désactivation. Les quotas déjà publiés restent.
+- `pending_drafts` ne compte que les brouillons publiables (produit actif ce jour-là) ; la publication efface les autres, même pour une région qui n'a rien d'autre à publier.
 - RG-Q07 s'applique aussi à l'import Excel des produits (`statut` = `INACTIF`), par le service `App\Domain\Quotas\ProductDeactivation`. « ACTIF » réimporté sur un produit encore actif ne change rien : le gabarit réimporté tel quel n'annule pas une désactivation programmée (l'annulation se fait depuis la fiche produit).
 
 **Import des quotas**
-- Messages d'en-tête distincts : « Colonne EST2 : code région inconnu », « Colonne SUD : région inactive », « Colonne CENTRE : région hors de votre périmètre ».
+- Messages d'en-tête distincts : « Colonne EST2 : code région inconnu », « Colonne SUD : région inactive », « Colonne CENTRE : région hors de votre périmètre », « Colonne SUD_EST : code région ambigu (SUD-EST, SUD_EST) ». Une région dont le code ne diffère d'une autre que par « - » ou « _ » est refusée à la création.
 - Mode Remplacer :
   - un produit actif absent du fichier apparaît dans l'aperçu avec `"row": null` et compte dans `summary.update` ;
   - s'il a déjà des quantités validées, l'erreur porte sur la colonne : « Colonne CENTRE : produit P0057 absent du fichier (0 en mode Remplacer) : inférieur aux 100 déjà validés ».
@@ -311,6 +314,9 @@ Décisions prises pendant l'implémentation, qui complètent le contrat.
 - La notification de prolongation reprend l'heure limite en vigueur au moment de l'envoi : deux prolongations rapprochées produisent une seule notification, avec la dernière heure.
 - Une panne de la diffusion temps réel est journalisée sans faire échouer la publication, la saisie ou la clôture : le rafraîchissement toutes les 30 s prend le relais.
 - Un identifiant non numérique dans un nom de canal répond 403.
+- `POST /broadcasting/auth` applique les contrôles de l'API : session expirée (401), mot de passe à changer (403 `PASSWORD_CHANGE_REQUIRED`), débit.
+- Destinataires des notifications : comptes actifs ayant **le rôle régional** et une affectation titulaire ou suppléant active ce jour-là.
+- Après toute reconnexion du temps réel, les écrans relisent leurs données (événements manqués pendant la coupure).
 
 **Écrans**
 - Le calendrier écoute `adv.{J}` et `adv.{J+1}`. Ses boutons « Aujourd'hui (J) » et « Demain (J+1) » ouvrent la fiche de la journée, qui propose de l'ouvrir si besoin et mène à la matrice.

@@ -129,7 +129,7 @@ git tag v0.2.0 && git push origin v0.2.0
 cd /opt/ramymaak && scripts/deploy.sh v0.2.0
 ```
 
-Chaque note de livraison précise ce qui change et les actions éventuelles, par exemple [lot 2 — mise à jour depuis la v0.1.0](lot-2-referentiels.md#mettre-à-jour-la-production-v010--v020).
+Chaque note de livraison précise ce qui change et les actions éventuelles : [lot 2 — mise à jour depuis la v0.1.0](lot-2-referentiels.md#mettre-à-jour-la-production-v010--v020), [lot 3 — mise à jour depuis la v0.2.0](lot-3-quotas-adv.md#mettre-à-jour-la-production-v020--v030).
 
 **Retour arrière** : `scripts/deploy.sh <étiquette précédente>`. Les migrations restent compatibles avec la version précédente.
 

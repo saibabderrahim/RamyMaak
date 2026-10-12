@@ -5,7 +5,7 @@ Plateforme B2B de prise de commandes sous quotas — Ramy (GROUP-SAFA).
 Chaîne quotidienne : **ADV** (quota région × produit) → **Régional** (bornes par client) → **Client** (commande) → validation par le régional → préparation et expédition par l'ADV.
 
 - Spécification : [docs/specification-technique-v1.0.md](docs/specification-technique-v1.0.md)
-- Notes de livraison : [lot 1 — socle](docs/lot-1-socle.md), [lot 2 — référentiels](docs/lot-2-referentiels.md) ; contrat d'API du lot 2 : [docs/lot-2-contrat-api.md](docs/lot-2-contrat-api.md)
+- Notes de livraison : [lot 1 — socle](docs/lot-1-socle.md), [lot 2 — référentiels](docs/lot-2-referentiels.md), [lot 3 — quotas ADV](docs/lot-3-quotas-adv.md) ; contrats d'API : [lot 2](docs/lot-2-contrat-api.md), [lot 3](docs/lot-3-contrat-api.md)
 - Déploiement : [docs/deploiement.md](docs/deploiement.md)
 
 ## Organisation du dépôt (§9.3)
