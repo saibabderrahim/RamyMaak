@@ -266,3 +266,32 @@ La fondation fournit les éléments suivants ; un besoin de modification s'y sig
 | D — Statuts et accès (PWA) | `frontend/src/modules/backoffice/days/**`, `frontend/src/modules/backoffice/i18n/days.ts`, `frontend/src/modules/regional/quotas/**`, `frontend/src/shared/i18n/fr/notifications.ts` (libellés de « Quotas du jour » et des notifications), `frontend/src/shared/notifications/**` |
 
 Reporté : import Excel des bornes (EF-REG-06, priorité S, §8.2).
+
+## 7. Précisions (implémentation)
+
+Décisions prises pendant l'implémentation, qui complètent le contrat.
+
+**Droits et erreurs**
+- Ordre des contrôles :
+  1. 403 si le rôle ou la permission manque ;
+  2. 404 si la région désignée est inconnue, inactive ou hors du périmètre ce jour-là ;
+  3. 422 pour les autres champs.
+
+  Un régional d'une autre région qui envoie des cellules invalides reçoit donc 404.
+- `region_id` des écritures est un entier JSON strict (`"3"` → 422) ; le paramètre `?region=` de la lecture accepte un entier écrit en texte.
+- Une écriture sur une journée clôturée répond 409 `DAY_NOT_OPEN` sans créer de journée régionale. La lecture passe par `DayCalendar::regionDayFor`.
+- Grille back-office : une région inconnue dans le chemin répond 404 avant le contrôle des droits (liaison de route), comme la prolongation du lot 3.
+
+**Grille**
+- `cells` ne contient pas une ligne qui n'a ni borne publiée ni brouillon (brouillon annulé vers « pas de borne », borne retirée par un envoi précédent), sauf si le client a des quantités en attente ou validées.
+- `products[].pending` additionne S(c,p) pour tous les clients que renvoie `ClientUsage` : c'est un total de la région. `sum_limits` ne compte que les clients listés.
+- Quotas non publiés : les clients restent listés ; seuls `products` et `cells` sont vides.
+- Le nombre de requêtes de la grille ne dépend pas du volume (26 requêtes pour 30 clients × 10 produits comme pour une petite grille).
+
+**Notifications et temps réel**
+- N-03 et N-04 ont leur propre classe de base, `ClientDayNotification` (adresse `/client`, sans nom de région), distincte de `RegionDayNotification` (régionaux).
+- L'heure de N-03 est l'heure limite de commande de la région au moment de l'envoi, prolongation comprise.
+- Destinataires : les comptes actifs de rôle client rattachés aux clients notifiés, lus par paquets de 100. Un client bloqué n'est jamais notifié.
+- Un compte resté rattaché au client mais passé à un autre rôle n'est ni notifié ni autorisé sur `client.{id}`.
+- `LimitDraftsUpdated` parvient aussi à l'écran de l'auteur de la saisie : la PWA ne laisse jamais une relecture écraser une saisie en cours.
+- Comme au lot 3, une notification enregistrée dont la diffusion a échoué reste dans le centre de notifications, mais n'est pas rediffusée.
