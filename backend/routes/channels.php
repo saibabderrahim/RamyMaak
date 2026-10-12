@@ -28,6 +28,11 @@ Broadcast::channel('region-day.{regionId}.{day}', function (User $user, string $
         && app(Perimeter::class)->canAccessRegion($user, (int) $regionId, $date);
 });
 
+// Un client : ses bornes et, à partir du lot 5, ses commandes (comptes de ce client).
+Broadcast::channel('client.{clientId}', fn (User $user, string $clientId) => ctype_digit($clientId)
+    && $user->hasAppRole(Role::Client)
+    && $user->client_id === (int) $clientId);
+
 // Suivi de la journée côté ADV (et Admin, en lecture).
 Broadcast::channel('adv.{day}', fn (User $user, string $day) => BusinessClock::parseDay($day) !== null
     && ($user->hasAppRole(Role::Adv) || $user->hasAppRole(Role::Admin)));

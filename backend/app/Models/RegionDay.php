@@ -77,6 +77,18 @@ class RegionDay extends Model
         return $this->hasMany(RegionQuota::class);
     }
 
+    /** @return HasMany<ClientLimit, $this> */
+    public function limits(): HasMany
+    {
+        return $this->hasMany(ClientLimit::class);
+    }
+
+    /** Répartition envoyée au moins une fois (RG-B06). */
+    public function isDistributionPublished(): bool
+    {
+        return $this->distribution_version > 0;
+    }
+
     /** Quotas publiés au moins une fois (RG-Q03). */
     public function isQuotaPublished(): bool
     {

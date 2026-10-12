@@ -17,6 +17,8 @@ use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\ProductFamilyController;
 use App\Http\Controllers\Api\V1\ProductMediaController;
 use App\Http\Controllers\Api\V1\ProductPriceController;
+use App\Http\Controllers\Api\V1\Regional\DistributionGridController;
+use App\Http\Controllers\Api\V1\Regional\LimitController;
 use App\Http\Controllers\Api\V1\RegionalQuotaController;
 use App\Http\Controllers\Api\V1\RegionController;
 use App\Http\Middleware\EnforceSessionPolicy;
@@ -90,6 +92,17 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
                 Route::post('days/{businessDay}/quotas/copy', [QuotaController::class, 'copy'])->name('quotas.copy');
             });
             Route::get('regional/quotas', [RegionalQuotaController::class, 'index'])->name('regional.quotas.index');
+
+            // Répartition (lot 4) — contrat : docs/lot-4-contrat-api.md
+            Route::prefix('regional/days/{businessDay}')->name('regional.')->group(function () {
+                Route::get('grid', [DistributionGridController::class, 'show'])->name('grid.show');
+                Route::put('limits', [LimitController::class, 'update'])->name('limits.update');
+                Route::post('limits/copy-previous', [LimitController::class, 'copyPrevious'])->name('limits.copy-previous');
+                Route::post('distribution/publish', [LimitController::class, 'publish'])->name('distribution.publish');
+            });
+            // Répartition en lecture pour l'ADV et l'Admin.
+            Route::get('adv/days/{businessDay}/regions/{region}/grid', [DistributionGridController::class, 'showForBackOffice'])
+                ->name('adv.grid.show');
 
             // Centre de notifications (EF-NOT-01).
             Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
