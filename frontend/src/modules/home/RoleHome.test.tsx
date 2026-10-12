@@ -50,15 +50,13 @@ describe('role home', () => {
     expect(screen.queryByText(/matrice des quotas/)).not.toBeInTheDocument()
   })
 
-  it('opens the regional « Quotas du jour », no longer announced as upcoming', () => {
+  it('opens the regional « Quotas du jour » and « Répartition », no longer announced as upcoming', () => {
     renderHome('regional')
 
-    expect(within(card('Mes quotas')).getByRole('link', { name: 'Quotas du jour' })).toHaveAttribute('href', '/regional/quotas')
-    expect(upcomingItems()).toEqual([
-      'Ma journée : clients sans commande',
-      'Grille produit × client et répartition des bornes',
-      'Validation des commandes une par une',
-    ])
+    const shortcuts = within(card('Quotas et répartition'))
+    expect(shortcuts.getByRole('link', { name: 'Quotas du jour' })).toHaveAttribute('href', '/regional/quotas')
+    expect(shortcuts.getByRole('link', { name: 'Répartition' })).toHaveAttribute('href', '/regional/repartition')
+    expect(upcomingItems()).toEqual(['Ma journée : clients sans commande', 'Validation des commandes une par une'])
     expect(screen.queryByText(/quotas reçus/)).not.toBeInTheDocument()
   })
 

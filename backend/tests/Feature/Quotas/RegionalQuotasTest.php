@@ -123,6 +123,7 @@ it('returns the published quotas of the regions of the perimeter, never the draf
                 'status' => 'QUOTA_PUBLISHED',
                 'quota_version' => 2,
                 'quota_last_published_at' => '2026-10-08T07:10:00+00:00',
+                'distribution_version' => 0,
                 'cutoffs' => ['distribution' => '11:15', 'ordering' => '13:00'],
                 // Famille (ordre, puis code), puis ordre et code article, comme la matrice.
                 'quotas' => [
@@ -136,6 +137,7 @@ it('returns the published quotas of the regions of the perimeter, never the draf
                 'status' => 'QUOTA_DRAFT',
                 'quota_version' => 0,
                 'quota_last_published_at' => null,
+                'distribution_version' => 0,
                 'cutoffs' => ['distribution' => '10:00', 'ordering' => '13:00'],
                 'quotas' => [],
             ],

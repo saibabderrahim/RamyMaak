@@ -36,7 +36,13 @@ export function RoleHome({ role }: { role: RoleWithHome }) {
           ],
         }
       : role === 'regional'
-        ? { title: t('home.regional.shortcuts'), links: [{ to: '/regional/quotas', label: t('home.regional.todayQuotas'), primary: true }] }
+        ? {
+            title: t('home.regional.shortcuts'),
+            links: [
+              { to: '/regional/quotas', label: t('home.regional.todayQuotas'), primary: true },
+              { to: '/regional/repartition', label: t('home.regional.distribution') },
+            ],
+          }
         : null
 
   return (

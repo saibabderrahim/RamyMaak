@@ -4,6 +4,7 @@ import ClientDetailPage from '../backoffice/clients/ClientDetailPage'
 import ClientsPage from '../backoffice/clients/ClientsPage'
 import DayDetailPage from '../backoffice/days/DayDetailPage'
 import DaysPage from '../backoffice/days/DaysPage'
+import BackOfficeDistributionPage from '../distribution/BackOfficeDistributionPage'
 import ImportDetailPage from '../backoffice/imports/ImportDetailPage'
 import ImportsPage from '../backoffice/imports/ImportsPage'
 import ProductCreatePage from '../backoffice/products/ProductCreatePage'
@@ -27,6 +28,7 @@ export default function AdvModule() {
       <Route path="journees" element={<DaysPage />} />
       <Route path="journees/:day" element={<DayDetailPage />} />
       <Route path="journees/:day/quotas" element={<QuotaMatrixPage />} />
+      <Route path="journees/:day/repartition/:regionId" element={<BackOfficeDistributionPage />} />
       <Route path="regions" element={<RegionsPage />} />
       <Route path="regions/:id" element={<RegionDetailPage />} />
       <Route path="clients" element={<ClientsPage />} />

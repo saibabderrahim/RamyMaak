@@ -148,6 +148,34 @@ it('sends a distribution without any limit, and notifies only clients with a lim
     expect($this->book->publish($next, $this->regional)->notifiedClientIds)->toBe([$this->b->id]);
 });
 
+it('previews the sending exactly as publish() will do it (EF-REG-02)', function () {
+    $this->book->saveDrafts($this->regionDay, [($this->cell)($this->a, $this->orange, 300), ($this->cell)($this->b, $this->orange, 250)], $this->regional);
+
+    expect($this->book->previewPublication($this->regionDay))->toBe([
+        'first' => true,
+        'drafts' => 2,
+        'notified_clients' => 2,
+        'overallocated' => [['product_id' => $this->orange->id, 'sku' => 'P0042', 'quota' => 500, 'sum_limits' => 550]],
+    ]);
+    $this->book->publish($this->regionDay, $this->regional);
+
+    // Modifications : seuls les clients impactés ; brouillon 0 sur un client.
+    $this->book->saveDrafts($this->regionDay, [($this->cell)($this->b, $this->orange, 0), ($this->cell)($this->b, $this->pomme, 10)], $this->regional);
+    expect($this->book->previewPublication($this->regionDay))->toBe([
+        'first' => false,
+        'drafts' => 2,
+        'notified_clients' => 1,
+        'overallocated' => [],
+    ]);
+
+    // Politique OBLIGATOIRE : seuls les clients avec une borne > 0 affichée.
+    app(Settings::class)->update(['limits' => ['no_limit_policy' => 'REQUIRED']], null);
+    $next = ($this->open)('2026-10-09', [[$this->orange, 100]]);
+    $this->book->saveDrafts($next, [($this->cell)($this->a, $this->orange, 0), ($this->cell)($this->b, $this->orange, 10)], $this->regional);
+    expect($this->book->previewPublication($next)['notified_clients'])->toBe(1)
+        ->and($this->book->publish($next, $this->regional)->notifiedClientIds)->toBe([$this->b->id]);
+});
+
 it('notifies only the impacted clients when modified limits are sent, and refuses an empty sending (RG-B07)', function () {
     $this->book->saveDrafts($this->regionDay, [($this->cell)($this->a, $this->orange, 300), ($this->cell)($this->b, $this->orange, 100)], $this->regional);
     $this->book->publish($this->regionDay, $this->regional);

@@ -42,6 +42,7 @@ function useNavItems(role: Role, permissions: readonly string[]): NavItem[] {
       return [
         { to: '/regional', label: t('nav.home'), end: true },
         { to: '/regional/quotas', label: t('nav.quotas') },
+        { to: '/regional/repartition', label: t('nav.distribution') },
         { to: '/regional/clients', label: t('nav.myClients') },
         profile,
       ]

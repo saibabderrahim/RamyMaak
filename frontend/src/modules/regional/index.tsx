@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router'
+import RegionalDistributionPage from '../distribution/RegionalDistributionPage'
 import { RoleHome } from '../home/RoleHome'
 import MyClientPage from './clients/MyClientPage'
 import MyClientsPage from './clients/MyClientsPage'
@@ -11,6 +12,7 @@ export default function RegionalModule() {
     <Routes>
       <Route index element={<RoleHome role="regional" />} />
       <Route path="quotas" element={<RegionalQuotasPage />} />
+      <Route path="repartition" element={<RegionalDistributionPage />} />
       <Route path="clients" element={<MyClientsPage />} />
       <Route path="clients/:id" element={<MyClientPage />} />
       <Route path="*" element={<NotFound />} />

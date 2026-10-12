@@ -125,6 +125,7 @@ class RegionalQuotasResource extends JsonResource
             'status' => $regionDay->status->value,
             'quota_version' => $regionDay->quota_version,
             'quota_last_published_at' => $regionDay->quota_last_published_at?->toIso8601String(),
+            'distribution_version' => $regionDay->distribution_version,
             'cutoffs' => $cutoffs,
             'quotas' => $this->quotas->get($regionDay->id, collect())->map(fn (object $row) => [
                 'product' => [

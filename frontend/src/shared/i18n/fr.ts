@@ -1,3 +1,4 @@
+import distribution from './fr/distribution'
 import field from './fr/field'
 import notifications from './fr/notifications'
 
@@ -80,6 +81,7 @@ const fr = {
     myClients: 'Mes clients',
     days: 'Journées',
     quotas: 'Quotas',
+    distribution: 'Répartition',
     notifications: 'Notifications',
     menu: 'Menu principal',
   },
@@ -105,15 +107,12 @@ const fr = {
         'Notifications de validation et d’expédition',
       ],
     },
-    // Écrans livrés (lot 3) : liens de la page d'accueil, plus dans « Prochainement ».
+    // Écrans livrés (lots 3 et 4) : liens de la page d'accueil, plus dans « Prochainement ».
     regional: {
-      shortcuts: 'Mes quotas',
+      shortcuts: 'Quotas et répartition',
       todayQuotas: 'Quotas du jour',
-      items: [
-        'Ma journée : clients sans commande',
-        'Grille produit × client et répartition des bornes',
-        'Validation des commandes une par une',
-      ],
+      distribution: 'Répartition',
+      items: ['Ma journée : clients sans commande', 'Validation des commandes une par une'],
     },
     adv: {
       shortcuts: 'Journées et quotas',
@@ -242,6 +241,7 @@ const fr = {
   },
   field,
   notifications,
+  distribution,
 } as const
 
 export default fr

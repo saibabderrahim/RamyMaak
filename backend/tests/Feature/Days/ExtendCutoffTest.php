@@ -47,6 +47,8 @@ it('extends the distribution cutoff of one region and returns its region day', f
             'quota_version' => 0,
             'quota_published_at' => null,
             'quota_last_published_at' => null,
+            'distribution_version' => 0,
+            'distribution_published_at' => null,
             'pending_drafts' => 1,
             'cutoffs' => ['distribution' => '11:15', 'ordering' => '13:00'],
             'extended' => ['distribution' => true, 'ordering' => false],

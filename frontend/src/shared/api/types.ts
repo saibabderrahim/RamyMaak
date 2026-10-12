@@ -292,6 +292,10 @@ export type RegionDay = {
   quota_version: number
   quota_published_at: string | null
   quota_last_published_at: string | null
+  /** 0 tant que la répartition n'a pas été envoyée aux clients (lot 4). */
+  distribution_version: number
+  distribution_published_at: string | null
+  /** Brouillons de quotas de l'ADV non publiés. */
   pending_drafts: number
   cutoffs: RegionCutoffs
   extended: { distribution: boolean; ordering: boolean }
@@ -383,6 +387,7 @@ export type RegionalQuotaRegion = {
   status: RegionDayStatus
   quota_version: number
   quota_last_published_at: string | null
+  distribution_version: number
   cutoffs: RegionCutoffs
   quotas: RegionalQuota[]
 }
@@ -395,7 +400,13 @@ export type RegionalQuotas = {
   regions: RegionalQuotaRegion[]
 }
 
-export const NOTIFICATION_TYPES = ['QUOTAS_PUBLISHED', 'QUOTAS_UPDATED', 'CUTOFF_EXTENDED'] as const
+export const NOTIFICATION_TYPES = [
+  'QUOTAS_PUBLISHED',
+  'QUOTAS_UPDATED',
+  'CUTOFF_EXTENDED',
+  'DISTRIBUTION_PUBLISHED',
+  'LIMITS_UPDATED',
+] as const
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number]
 
 export type AppNotification = {
@@ -413,4 +424,103 @@ export type AppNotification = {
 
 export type NotificationsPage = Paginated<AppNotification> & {
   meta: Paginated<AppNotification>['meta'] & { unread_count: number }
+}
+
+/* ---------- Répartition (lot 4) — contrat : docs/lot-4-contrat-api.md ---------- */
+
+/** RG-B04 : sans borne, le client commande dans la limite du reste région (FREE) ou pas du tout (REQUIRED). */
+export const NO_LIMIT_POLICIES = ['FREE', 'REQUIRED'] as const
+export type NoLimitPolicy = (typeof NO_LIMIT_POLICIES)[number]
+
+export type DistributionGridRegion = RegionRef & {
+  status: RegionDayStatus
+  status_label: string
+  quota_version: number
+  distribution_version: number
+  distribution_published_at: string | null
+  cutoffs: RegionCutoffs
+  extended: { distribution: boolean; ordering: boolean }
+}
+
+/** Colonne de la grille : quota Q, Σ bornes affichées, en attente S, validé V(r,p), reste R = Q − V. */
+export type DistributionGridProduct = {
+  id: number
+  sku: string
+  name: string
+  short_name: string
+  family: { id: number; code: string; name: string }
+  sales_unit_label: string
+  quota: number
+  sum_limits: number
+  pending: number
+  validated: number
+  remaining: number
+}
+
+export type DistributionGridClient = {
+  id: number
+  code: string
+  name: string
+  status: Extract<ClientStatus, 'ACTIVE' | 'BLOCKED'>
+  category: { id: number; code: string; name: string } | null
+}
+
+/**
+ * limit : borne publiée (null = pas de borne) ; draft : null = rien à envoyer,
+ * { value } = brouillon (value null = suppression de la borne) ; pending / validated : S et V du client.
+ */
+export type LimitCell = {
+  limit: number | null
+  draft: { value: number | null } | null
+  pending: number
+  validated: number
+}
+
+export type Overallocation = { product_id: number; sku: string; quota: number; sum_limits: number }
+
+export type PublicationPreview = {
+  first: boolean
+  drafts: number
+  notified_clients: number
+  overallocated: Overallocation[]
+}
+
+export type DistributionGrid = {
+  day: { day: string; status: DayStatus; delivery_date: string; cutoffs: DayCutoffs }
+  region: DistributionGridRegion
+  policy: NoLimitPolicy
+  can_edit: boolean
+  can_publish: boolean
+  products: DistributionGridProduct[]
+  clients: DistributionGridClient[]
+  /** cells[clientId][productId] ; seules les cellules renseignées. */
+  cells: Record<string, Record<string, LimitCell>>
+  publication: PublicationPreview
+}
+
+export type LimitCellInput = { client_id: number; product_id: number; limit: number | null }
+
+export type SavedLimitCell = LimitCell & { client_id: number; product_id: number }
+
+export type SaveLimitsResult = { changed: number; status: RegionDayStatus; cells: SavedLimitCell[] }
+
+export type CopyPreviousResult = { changed: number; source_day: string }
+
+export type DistributionResult = {
+  version: number
+  first: boolean
+  changes: number
+  notified_clients: number
+  overallocated: Overallocation[]
+}
+
+/** Refus d'un envoi (VALIDATION_FAILED au-dessus du quota, QUOTA_BELOW_VALIDATED sous le validé). */
+export type LimitViolation = {
+  client_id: number
+  client: string
+  product_id: number
+  sku: string
+  requested: number | null
+  quota?: number
+  validated?: number
 }

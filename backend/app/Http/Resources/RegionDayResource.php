@@ -12,7 +12,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * Une région pour une journée (§6.1) : statut, version des quotas, heures
  * limites applicables, prolongation comprise (RG-A05). `pending_drafts` :
  * cellules en brouillon non publié (attribut `pending_drafts_count`, chargé
- * par DayResource::visibleRegionDays).
+ * par DayResource::visibleRegionDays). `distribution_version` : 0 tant que
+ * la répartition n'a pas été envoyée aux clients (lot 4).
  *
  * @mixin RegionDay
  */
@@ -42,6 +43,8 @@ class RegionDayResource extends JsonResource
             'quota_version' => $this->quota_version,
             'quota_published_at' => $this->quota_published_at?->toIso8601String(),
             'quota_last_published_at' => $this->quota_last_published_at?->toIso8601String(),
+            'distribution_version' => $this->distribution_version,
+            'distribution_published_at' => $this->distribution_published_at?->toIso8601String(),
             'pending_drafts' => (int) ($this->pending_drafts_count ?? $this->quotas()->pendingOn($this->businessDay->day)->count()),
             'cutoffs' => $cutoffs,
             'extended' => $extended,

@@ -5,6 +5,7 @@ import ClientDetailPage from '../backoffice/clients/ClientDetailPage'
 import ClientsPage from '../backoffice/clients/ClientsPage'
 import DayDetailPage from '../backoffice/days/DayDetailPage'
 import DaysPage from '../backoffice/days/DaysPage'
+import BackOfficeDistributionPage from '../distribution/BackOfficeDistributionPage'
 import ImportDetailPage from '../backoffice/imports/ImportDetailPage'
 import ImportsPage from '../backoffice/imports/ImportsPage'
 import ProductCreatePage from '../backoffice/products/ProductCreatePage'
@@ -43,6 +44,7 @@ export default function AdminModule() {
       <Route path="journees" element={<DaysPage />} />
       <Route path="journees/:day" element={<DayDetailPage />} />
       <Route path="journees/:day/quotas" element={<QuotaMatrixPage />} />
+      <Route path="journees/:day/repartition/:regionId" element={<BackOfficeDistributionPage />} />
       <Route path="imports" element={<ImportsPage />} />
       <Route path="imports/:id" element={<ImportDetailPage />} />
       <Route path="journal" element={<AuditLogPage />} />

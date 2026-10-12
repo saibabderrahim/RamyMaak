@@ -391,22 +391,63 @@ final class LimitBook
     /**
      * Clients notifiés à la première publication (RG-B06) : tous les clients
      * actifs de la région ; en politique OBLIGATOIRE (RG-B04), seulement ceux
-     * qui ont au moins une borne > 0.
+     * qui ont au moins une borne > 0. `$drafts` : sur les valeurs affichées
+     * (brouillons compris), pour le récapitulatif avant l'envoi.
      *
      * @return list<int>
      */
-    public function openingRecipients(RegionDay $regionDay): array
+    public function openingRecipients(RegionDay $regionDay, bool $drafts = false): array
     {
         $query = $this->clientsQuery($regionDay)->where('status', ClientStatus::Active->value);
         if ($this->settings->get('limits.no_limit_policy') === 'REQUIRED') {
-            $query->whereIn('id', ClientLimit::query()
+            $limits = ClientLimit::query()
                 ->select('client_id')
                 ->where('region_day_id', $regionDay->id)
-                ->where('max_qty', '>', 0)
-                ->whereIn('product_id', array_keys($this->availableQuotas($regionDay))));
+                ->whereIn('product_id', array_keys($this->availableQuotas($regionDay)));
+            if ($drafts) {
+                $limits->where(fn (Builder $q) => $q
+                    ->where(fn (Builder $q) => $q->where('has_draft', true)->where('draft_max_qty', '>', 0))
+                    ->orWhere(fn (Builder $q) => $q->where('has_draft', false)->where('max_qty', '>', 0)));
+            } else {
+                $limits->where('max_qty', '>', 0);
+            }
+            $query->whereIn('id', $limits);
         }
 
         return $query->pluck('id')->map(fn ($id) => (int) $id)->all();
+    }
+
+    /**
+     * Récapitulatif avant « Valider et envoyer aux clients » (EF-REG-02) :
+     * première publication ou modifications, brouillons à envoyer, clients
+     * qui seront notifiés (N-03 ou N-04), produits en surallocation (RG-B05).
+     * Mêmes règles que publish(), sans rien écrire.
+     *
+     * @return array{first: bool, drafts: int, notified_clients: int, overallocated: list<array{product_id: int, sku: string, quota: int, sum_limits: int}>}
+     */
+    public function previewPublication(RegionDay $regionDay): array
+    {
+        $regionDay = RegionDay::query()->with(['businessDay', 'region'])->findOrFail($regionDay->id);
+        $first = ! $regionDay->isDistributionPublished();
+        $quotas = $this->availableQuotas($regionDay);
+        $clientIds = $this->clientsQuery($regionDay)->pluck('id')->flip();
+
+        $applicable = ClientLimit::query()
+            ->where('region_day_id', $regionDay->id)
+            ->where('has_draft', true)
+            ->get(['client_id', 'product_id'])
+            ->filter(fn (ClientLimit $limit) => $clientIds->has($limit->client_id) && isset($quotas[$limit->product_id]));
+
+        $notified = $first
+            ? $this->openingRecipients($regionDay, drafts: true)
+            : $this->activeAmong($applicable->pluck('client_id')->unique()->values()->all());
+
+        return [
+            'first' => $first,
+            'drafts' => $applicable->count(),
+            'notified_clients' => count($notified),
+            'overallocated' => $this->overallocated($regionDay, drafts: true),
+        ];
     }
 
     /**

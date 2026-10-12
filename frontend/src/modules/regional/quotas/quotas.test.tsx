@@ -55,6 +55,7 @@ const centre: RegionalQuotaRegion = {
   status: 'QUOTA_PUBLISHED',
   quota_version: 2,
   quota_last_published_at: '2026-10-08T07:10:00+00:00',
+  distribution_version: 0,
   // Répartition prolongée pour la région (RG-A05).
   cutoffs: { distribution: '11:15', ordering: '13:00' },
   quotas: [
@@ -81,6 +82,7 @@ const est: RegionalQuotaRegion = {
   status: 'QUOTA_DRAFT',
   quota_version: 0,
   quota_last_published_at: null,
+  distribution_version: 0,
   cutoffs: { distribution: '10:00', ordering: '13:00' },
   quotas: [],
 }
