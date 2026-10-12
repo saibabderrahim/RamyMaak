@@ -21,4 +21,14 @@ return [
             'ORDERING' => 'Commande jusqu\'à :time.',
         ],
     ],
+    // N-03 (clients)
+    'distribution_published' => [
+        'title' => 'Quotas du :day disponibles',
+        'body' => 'Vos quotas du :day sont disponibles. Commandez avant :time.',
+    ],
+    // N-04 (clients impactés)
+    'limits_updated' => [
+        'title' => 'Quotas du :day mis à jour',
+        'body' => 'Vos quotas du jour ont été mis à jour.',
+    ],
 ];

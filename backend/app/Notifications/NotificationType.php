@@ -12,6 +12,8 @@ enum NotificationType: string
     case QuotasPublished = 'QUOTAS_PUBLISHED';
     case QuotasUpdated = 'QUOTAS_UPDATED';
     case CutoffExtended = 'CUTOFF_EXTENDED';
+    case DistributionPublished = 'DISTRIBUTION_PUBLISHED';
+    case LimitsUpdated = 'LIMITS_UPDATED';
 
     /** Code de la spécification (§7.8), null pour une notification sans code. */
     public function code(): ?string
@@ -21,6 +23,8 @@ enum NotificationType: string
             self::QuotasUpdated => 'N-02',
             // RG-A05 : « les acteurs concernés sont notifiés », sans code N-xx.
             self::CutoffExtended => null,
+            self::DistributionPublished => 'N-03',
+            self::LimitsUpdated => 'N-04',
         };
     }
 }

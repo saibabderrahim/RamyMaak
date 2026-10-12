@@ -15,4 +15,18 @@ return [
         'published' => 'Répartition envoyée aux clients',
         'updated' => 'Bornes modifiées envoyées aux clients',
     ],
+    // Points d'accès de la grille (contrat du lot 4, §3).
+    'attributes' => [
+        'region' => 'région',
+        'region_id' => 'région',
+        'cells' => 'cellules',
+        'cells.*' => 'cellule',
+        'cells.*.client_id' => 'client',
+        'cells.*.product_id' => 'produit',
+        'cells.*.limit' => 'borne',
+        'mode' => 'mode',
+    ],
+    'limit_format' => 'La borne doit être un nombre entier de 0 à :max, ou vide pour « pas de borne ».',
+    'duplicate_cell' => 'Ce client et ce produit figurent déjà dans la requête (élément :index).',
+    'copy_mode' => 'Mode attendu : REPLACE (écraser) ou FILL (compléter les cases vides).',
 ];
