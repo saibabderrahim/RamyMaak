@@ -30,6 +30,8 @@ main() {
   echo "==> Récupération de ${tag}"
   git fetch --tags --quiet
   git checkout --quiet "refs/tags/${tag}"
+  # Commit réellement livré : une étiquette posée sur un ancien commit se voit ici.
+  echo "    $(git log -1 --format='%h %ad %s' --date=format:'%d/%m/%Y %H:%M')"
 
   # La version déployée est inscrite dans .env : les commandes lancées
   # ensuite à la main (docker compose run…) utilisent les mêmes images.

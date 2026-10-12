@@ -122,11 +122,26 @@ sudo certbot renew --dry-run                # vérifie le renouvellement automat
 ## Livraisons suivantes
 
 ```bash
-# poste de développement : étiqueter la nouvelle version
-git tag v0.2.0 && git push origin v0.2.0
+# poste de développement : étiqueter le dernier commit publié de la branche livrée
+git fetch origin
+git tag v0.3.0 origin/<branche livrée>
+git show --no-patch --oneline v0.3.0     # vérifier : le commit attendu, pas un ancien
+git push origin v0.3.0
 
 # serveur, en production entre 20:00 et 06:00 (heure d'Alger)
-cd /opt/ramymaak && scripts/deploy.sh v0.2.0
+cd /opt/ramymaak && scripts/deploy.sh v0.3.0
+```
+
+Toujours étiqueter `origin/<branche>` après un `git fetch`, et non la copie locale : une copie locale en retard ferait livrer l'ancienne version sous le nouveau numéro.
+
+**Étiquette posée sur le mauvais commit** : la supprimer partout, puis la recréer.
+
+```bash
+# poste de développement
+git push origin :refs/tags/v0.3.0 && git tag -d v0.3.0
+git fetch origin && git tag v0.3.0 origin/<branche livrée> && git push origin v0.3.0
+# serveur : sans cela, git fetch refuse de remplacer l'ancienne étiquette
+cd /opt/ramymaak && git tag -d v0.3.0 && scripts/deploy.sh v0.3.0
 ```
 
 Chaque note de livraison précise ce qui change et les actions éventuelles : [lot 2 — mise à jour depuis la v0.1.0](lot-2-referentiels.md#mettre-à-jour-la-production-v010--v020), [lot 3 — mise à jour depuis la v0.2.0](lot-3-quotas-adv.md#mettre-à-jour-la-production-v020--v030).
