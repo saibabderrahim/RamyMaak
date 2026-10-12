@@ -157,6 +157,7 @@ Chaque note de livraison précise ce qui change et les actions éventuelles : [l
 | État des services | `docker compose ps` |
 | Journaux | `docker compose logs -f --tail=100 app worker` |
 | Compte Admin supplémentaire | `docker compose run --rm --no-deps app php artisan ramymaak:create-admin <identifiant>` |
+| Mot de passe perdu (Admin compris) : mot de passe temporaire, compte déverrouillé, sessions fermées | `docker compose run --rm --no-deps app php artisan ramymaak:reset-password <identifiant>` |
 | Redémarrer | `docker compose restart` |
 
 ## Sauvegardes : à mettre en place avant toute donnée réelle
