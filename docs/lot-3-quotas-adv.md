@@ -50,13 +50,12 @@ Valeurs par défaut de la spécification retenues : quotas en UV (Q-01), pas de 
 Procédure habituelle ([deploiement.md](deploiement.md), « Livraisons suivantes »), entre 20:00 et 06:00 (heure d'Alger), **hors du créneau 22:55 – 23:05** (clôture des journées) :
 
 ```bash
-# poste de développement : étiqueter le dernier commit publié du lot 3
+cd /opt/ramymaak
 git fetch origin
 git tag v0.3.0 origin/claude/new-session-lhmuq1
 git show --no-patch --oneline v0.3.0     # doit afficher un commit du lot 3, pas 168a898 (v0.2.0)
-git push origin v0.3.0
-# serveur
-cd /opt/ramymaak && scripts/deploy.sh v0.3.0
+git push origin v0.3.0                   # facultatif
+scripts/deploy.sh v0.3.0
 ```
 
 Contrôle après déploiement : **ADV → Journées** apparaît dans le menu (après « Recharger » sur le bandeau « Nouvelle version disponible », ou un rechargement forcé de la page).

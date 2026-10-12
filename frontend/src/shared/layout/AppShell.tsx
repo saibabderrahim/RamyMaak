@@ -67,7 +67,7 @@ export function AppShell() {
   const items = useNavItems(user.role, user.permissions)
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `flex min-h-11 items-center rounded-lg px-3 text-sm font-medium ${
+    `flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-lg px-3 text-sm font-medium ${
       isActive ? 'bg-brand-50 text-brand-800' : 'text-slate-700 hover:bg-slate-100'
     }`
 
@@ -81,18 +81,22 @@ export function AppShell() {
       <OfflineBanner />
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-2">
-          <NavLink to={homePath(user.role)} className="flex items-center gap-2 font-bold text-brand-700">
+          <NavLink to={homePath(user.role)} className="flex shrink-0 items-center gap-2 font-bold text-brand-700">
             <img src="/icons/icon-192.png" alt="" className="size-8 rounded-lg" />
             {t('app.name')}
           </NavLink>
-          <nav aria-label={t('nav.menu')} className="hidden flex-1 gap-1 lg:flex">
-            {items.map((item) => (
-              <NavLink key={item.to} to={item.to} end={item.end} className={linkClass}>
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
-          <div className="ms-auto flex items-center gap-3">
+          {/* Rôles de terrain (peu d'entrées) : menu dans l'en-tête sur grand écran.
+              Le back-office, au menu plus long, a sa propre ligne sous l'en-tête. */}
+          {hasTabBar(user.role) && (
+            <nav aria-label={t('nav.menu')} className="hidden min-w-0 flex-1 gap-1 lg:flex">
+              {items.map((item) => (
+                <NavLink key={item.to} to={item.to} end={item.end} className={linkClass}>
+                  {item.label}
+                </NavLink>
+              ))}
+            </nav>
+          )}
+          <div className="ms-auto flex shrink-0 items-center gap-3">
             {/* Cloche des notifications, pour tous les rôles et sur téléphone (EF-NOT-01). */}
             <NotificationBell />
             <div className="hidden text-end text-sm leading-tight sm:block">
@@ -112,12 +116,14 @@ export function AppShell() {
       </header>
 
       {!hasTabBar(user.role) && (
-        <nav aria-label={t('nav.menu')} className="flex gap-1 overflow-x-auto border-b border-slate-200 bg-white px-2 py-1 lg:hidden">
-          {items.map((item) => (
-            <NavLink key={item.to} to={item.to} end={item.end} className={(state) => `${linkClass(state)} shrink-0`}>
-              {item.label}
-            </NavLink>
-          ))}
+        <nav aria-label={t('nav.menu')} className="border-b border-slate-200 bg-white">
+          <div className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-2 py-1 sm:px-4">
+            {items.map((item) => (
+              <NavLink key={item.to} to={item.to} end={item.end} className={linkClass}>
+                {item.label}
+              </NavLink>
+            ))}
+          </div>
         </nav>
       )}
 
