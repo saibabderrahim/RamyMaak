@@ -8,6 +8,7 @@ use App\Events\CutoffExtended;
 use App\Events\DayClosed;
 use App\Events\QuotaDraftsSaved;
 use App\Models\AuditLog;
+use App\Models\BusinessDay;
 use App\Models\Product;
 use App\Models\Region;
 use App\Models\RegionDay;
@@ -163,4 +164,43 @@ it('refuses to extend on a closed day (409 DAY_NOT_OPEN) without creating a regi
     expect($this->day->regionDays()->where('region_id', $sud->id)->exists())->toBeFalse()
         ->and(AuditLog::query()->where('event', 'cutoff.extended')->exists())->toBeFalse();
     Event::assertNotDispatched(CutoffExtended::class);
+});
+
+it('never lets an extension shorten the delay when the day cutoff is moved later (RG-A05)', function () {
+    ($this->extend)($this->centre, ['kind' => 'DISTRIBUTION', 'until' => '11:15'])->assertOk();
+
+    $this->patchJson('/api/v1/adv/days/2026-10-08', ['cutoffs' => ['distribution' => '12:00']])->assertOk()
+        ->assertJsonPath('regions.0.region.code', 'CENTRE')
+        ->assertJsonPath('regions.0.cutoffs.distribution', '12:00')
+        ->assertJsonPath('regions.0.extended.distribution', false);
+    // Prolongation dépassée : effacée.
+    expect(($this->regionDay)($this->centre)->distribution_cutoff_override_at)->toBeNull();
+
+    // Une nouvelle prolongation se compare à la nouvelle heure de la journée.
+    ($this->extend)($this->centre, ['kind' => 'DISTRIBUTION', 'until' => '11:30'])
+        ->assertUnprocessable()->assertJsonValidationErrors(['until']);
+    ($this->extend)($this->centre, ['kind' => 'DISTRIBUTION', 'until' => '12:30'])->assertOk()
+        ->assertJsonPath('cutoffs.distribution', '12:30')
+        ->assertJsonPath('extended.distribution', true);
+});
+
+it('keeps an extension that stays later than the new day cutoff', function () {
+    ($this->extend)($this->centre, ['kind' => 'ORDERING', 'until' => '14:00'])->assertOk();
+
+    $this->patchJson('/api/v1/adv/days/2026-10-08', ['cutoffs' => ['ordering' => '13:30']])->assertOk()
+        ->assertJsonPath('regions.0.cutoffs.ordering', '14:00')
+        ->assertJsonPath('regions.0.extended.ordering', true)
+        ->assertJsonPath('regions.1.cutoffs.ordering', '13:30');
+});
+
+it('reads back a region day created at the same time by another request instead of failing', function () {
+    $sud = Region::factory()->create(['code' => 'SUD']);
+    // Une autre requête a créé la même journée régionale entre notre lecture et notre écriture.
+    $other = RegionDay::query()->create(['business_day_id' => $this->day->id, 'region_id' => $sud->id]);
+
+    $created = (fn (BusinessDay $day, Region $region) => $this->createRegionDay($day, $region))
+        ->call($this->calendar, $this->day, $sud);
+
+    expect($created->id)->toBe($other->id)
+        ->and(RegionDay::query()->where('region_id', $sud->id)->count())->toBe(1);
 });

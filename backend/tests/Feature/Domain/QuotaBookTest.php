@@ -203,3 +203,17 @@ it('refuses any change once the day is closed', function () {
         ->and(fn () => $this->book->publish(BusinessDay::find($this->day->id), null, $this->adv))
         ->toThrow(fn (ApiException $e) => expect($e->errorCode->value)->toBe('DAY_NOT_OPEN'));
 });
+
+it('erases drafts on products inactive that day even when the region has nothing else to publish (RG-Q02)', function () {
+    $this->book->saveDrafts($this->day, [($this->cell)($this->centre, $this->orange, 500)], $this->adv);
+    $this->book->publish($this->day, [$this->centre->id], $this->adv);
+    $this->book->saveDrafts($this->day, [($this->cell)($this->centre, $this->pomme, 80)], $this->adv);
+    // Désactivé directement en base (ex. import ancien) : le brouillon reste en attente.
+    $this->pomme->update(['is_active' => false]);
+
+    $result = $this->book->publish($this->day, null, $this->adv);
+
+    expect($result->skipped)->toContain(['region_id' => $this->centre->id, 'code' => 'CENTRE', 'reason' => 'NO_CHANGES'])
+        ->and(($this->quota)($this->centre, $this->pomme)->draft_quantity)->toBeNull()
+        ->and(($this->regionDay)($this->centre)->quota_version)->toBe(1);
+});

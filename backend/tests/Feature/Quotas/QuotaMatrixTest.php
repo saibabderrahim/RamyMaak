@@ -105,8 +105,9 @@ it('returns the day, the region columns, the product rows and the existing cells
     $response->assertJsonPath('day.day', '2026-10-08')
         ->assertJsonPath('day.status', 'OPEN')
         ->assertJsonPath('day.regions.*.region.code', ['CENTRE', 'EST'])
+        // Le brouillon de la fraise, désactivée depuis, ne sera jamais publié : il ne compte pas (RG-Q02).
         ->assertJsonPath('regions', [
-            ['id' => $this->centre->id, 'code' => 'CENTRE', 'name' => 'Centre', 'status' => 'QUOTA_PUBLISHED', 'quota_version' => 1, 'pending_drafts' => 2],
+            ['id' => $this->centre->id, 'code' => 'CENTRE', 'name' => 'Centre', 'status' => 'QUOTA_PUBLISHED', 'quota_version' => 1, 'pending_drafts' => 1],
             ['id' => $this->est->id, 'code' => 'EST', 'name' => 'Est', 'status' => 'QUOTA_DRAFT', 'quota_version' => 0, 'pending_drafts' => 1],
         ])
         // Famille (ordre, puis code), puis ordre et code article du produit.

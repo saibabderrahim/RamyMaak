@@ -246,6 +246,16 @@ describe('listing', function () {
 });
 
 describe('creation and update', function () {
+    it('refuses a code that only differs from an existing one by « - » or « _ » (quota import columns)', function () {
+        $this->actingAs($this->admin);
+        Region::factory()->create(['code' => 'SUD-EST', 'name' => 'Sud-Est']);
+
+        $this->postJson('/api/v1/admin/regions', ['code' => 'sud_est', 'name' => 'Sud Est'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['code' => 'Code trop proche de la région SUD-EST : les imports Excel ne distinguent pas « - » et « _ ».']);
+        $this->postJson('/api/v1/admin/regions', ['code' => 'SUD-OUEST', 'name' => 'Sud-Ouest'])->assertCreated();
+    });
+
     it('creates a region with an upper-case code and journals it', function () {
         $this->actingAs($this->admin);
 

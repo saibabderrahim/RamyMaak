@@ -102,9 +102,11 @@ class DayController extends Controller
     /** Journée régionale relue, avec le nombre de brouillons en attente. */
     private function refreshed(RegionDay $regionDay): RegionDay
     {
+        $day = $regionDay->businessDay->day;
+
         return RegionDay::query()
             ->with(['region', 'businessDay'])
-            ->withCount(['quotas as pending_drafts_count' => fn ($query) => $query->whereNotNull('draft_quantity')])
+            ->withCount(['quotas as pending_drafts_count' => fn ($query) => $query->pendingOn($day)])
             ->findOrFail($regionDay->id);
     }
 }

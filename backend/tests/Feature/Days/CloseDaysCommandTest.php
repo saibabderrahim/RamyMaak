@@ -108,7 +108,9 @@ it('is scheduled every minute, without overlapping', function () {
 
     expect($events)->toHaveCount(1)
         ->and($events->first()->expression)->toBe('* * * * *')
-        ->and($events->first()->withoutOverlapping)->toBeTrue();
+        ->and($events->first()->withoutOverlapping)->toBeTrue()
+        // Verrou court : un arrêt brutal du planificateur ne bloque pas la clôture 24 h.
+        ->and($events->first()->expiresAt)->toBe(5);
 });
 
 it('records the opening, schedule, extension and closing in the days log', function () {

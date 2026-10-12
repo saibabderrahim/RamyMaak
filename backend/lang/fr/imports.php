@@ -108,6 +108,7 @@ return [
         'unknown_region_column' => 'code région inconnu',
         'inactive_region_column' => 'région inactive',
         'region_column_out_of_perimeter' => 'région hors de votre périmètre',
+        'ambiguous_region_column' => 'code région ambigu (:codes)',
         'region_day_closed' => 'la journée de cette région est clôturée',
         'no_region_column' => 'Aucune colonne de région : ajoutez une colonne par code région (ex. CENTRE), comme dans le gabarit.',
         'unknown_or_inactive_product' => 'code produit :value inconnu ou inactif',

@@ -85,6 +85,27 @@ class Product extends Model implements HasMedia
     }
 
     /**
+     * Produits actifs le jour donné (RG-Q02) : actifs, sans désactivation
+     * programmée à cette date ou avant (RG-Q07).
+     *
+     * @param  Builder<Product>  $query
+     */
+    public function scopeActiveOn(Builder $query, CarbonInterface $day): void
+    {
+        $query->where('products.is_active', true)
+            ->where(fn (Builder $query) => $query
+                ->whereNull('products.deactivate_on')
+                ->orWhere('products.deactivate_on', '>', $day->format('Y-m-d')));
+    }
+
+    /** Actif le jour donné (RG-Q02, RG-Q07) : voir scopeActiveOn. */
+    public function isActiveOn(CarbonInterface $day): bool
+    {
+        return $this->is_active
+            && ($this->deactivate_on === null || $this->deactivate_on->format('Y-m-d') > $day->format('Y-m-d'));
+    }
+
+    /**
      * Ajoute à la requête le prix HT en vigueur le jour donné
      * (`current_price_ht`, NULL si aucun prix).
      *

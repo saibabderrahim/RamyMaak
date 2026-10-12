@@ -7,6 +7,8 @@ use App\Models\Product;
 use App\Models\RegionQuota;
 use App\Models\User;
 use App\Support\BusinessClock;
+use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
  * RG-Q07 : un produit doté d'un quota publié > 0 sur la journée ouverte
@@ -26,6 +28,26 @@ final class ProductDeactivation
         $deferred = ! $active && $product->is_active && $this->hasPublishedQuotaToday($product);
         $product->is_active = $active || $deferred;
         $product->deactivate_on = $deferred ? BusinessClock::today()->addDay() : null;
+
+        if (! $active) {
+            $this->discardDrafts($product, $product->deactivate_on ?? BusinessClock::today());
+        }
+    }
+
+    /**
+     * Efface les brouillons du produit sur les journées ouvertes à partir du
+     * jour donné : inactif ces jours-là, il ne peut plus y être publié
+     * (RG-Q02). Les quotas déjà publiés restent.
+     */
+    public function discardDrafts(Product $product, CarbonInterface $from): int
+    {
+        return RegionQuota::query()
+            ->where('product_id', $product->id)
+            ->whereNotNull('draft_quantity')
+            ->whereHas('regionDay.businessDay', fn (Builder $day) => $day
+                ->where('status', BusinessDayStatus::Open->value)
+                ->where('day', '>=', $from->format('Y-m-d')))
+            ->update(['draft_quantity' => null]);
     }
 
     /**

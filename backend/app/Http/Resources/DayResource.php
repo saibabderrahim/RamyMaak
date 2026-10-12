@@ -38,7 +38,7 @@ class DayResource extends JsonResource
 
         return $day->regionDays()
             ->with(['region', 'businessDay'])
-            ->withCount(['quotas as pending_drafts_count' => fn ($query) => $query->whereNotNull('draft_quantity')])
+            ->withCount(['quotas as pending_drafts_count' => fn ($query) => $query->pendingOn($day->day)])
             ->whereHas('region', fn ($query) => $query
                 ->where('is_active', true)
                 ->when($regionIds !== null, fn ($query) => $query->whereKey($regionIds)))

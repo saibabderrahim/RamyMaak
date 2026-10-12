@@ -99,10 +99,7 @@ final class DayCalendar
     /** Journée régionale d'une région (créée au besoin, région active seulement). */
     public function regionDayFor(BusinessDay $day, Region $region): RegionDay
     {
-        return RegionDay::query()
-            ->where('business_day_id', $day->id)
-            ->where('region_id', $region->id)
-            ->first() ?? $this->createRegionDay($day, $region);
+        return $this->findRegionDay($day, $region) ?? $this->createRegionDay($day, $region);
     }
 
     /**
@@ -151,6 +148,12 @@ final class DayCalendar
                 $day->delivery_date = $deliveryDate;
             }
             $day->save();
+            // Prolongation dépassée par la nouvelle heure de la journée : sans objet.
+            foreach ([CutoffKind::Distribution, CutoffKind::Ordering] as $kind) {
+                $day->regionDays()
+                    ->where($kind->overrideColumn(), '<=', $moments[$kind->value])
+                    ->update([$kind->overrideColumn() => null, 'updated_at' => now()]);
+            }
 
             $after = $this->localSchedule($day);
             if ($after !== $before) {
@@ -280,13 +283,33 @@ final class DayCalendar
         return $schedule;
     }
 
+    /**
+     * Crée la journée régionale si elle n'existe pas encore. Idempotent : deux
+     * écrans qui se rafraîchissent en même temps ne se gênent pas (pas d'erreur
+     * de clé en double), et chacun relit la même ligne.
+     */
     private function createRegionDay(BusinessDay $day, Region $region): RegionDay
     {
-        $regionDay = RegionDay::create(['business_day_id' => $day->id, 'region_id' => $region->id]);
-        if (! $day->isOpen()) {
-            $regionDay->forceFill(['status' => RegionDayStatus::Closed])->save();
-        }
+        // Statut relu en base : la journée a pu être clôturée depuis sa lecture.
+        $open = BusinessDay::query()->whereKey($day->id)->value('status') === BusinessDayStatus::Open;
+        RegionDay::query()->insertOrIgnore([
+            'business_day_id' => $day->id,
+            'region_id' => $region->id,
+            'status' => ($open ? RegionDayStatus::QuotaDraft : RegionDayStatus::Closed)->value,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
-        return $regionDay;
+        return $this->findRegionDay($day, $region, lock: true) ?? throw new \LogicException('Journée régionale introuvable.');
+    }
+
+    /** Lecture verrouillante : voit une ligne validée par une autre transaction (MySQL, REPEATABLE READ). */
+    private function findRegionDay(BusinessDay $day, Region $region, bool $lock = false): ?RegionDay
+    {
+        return RegionDay::query()
+            ->where('business_day_id', $day->id)
+            ->where('region_id', $region->id)
+            ->when($lock, fn ($query) => $query->lockForUpdate())
+            ->first();
     }
 }

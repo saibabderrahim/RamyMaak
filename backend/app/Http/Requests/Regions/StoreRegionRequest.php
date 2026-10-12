@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Regions;
 
+use App\Domain\Imports\ImportSheet;
 use App\Models\Depot;
 use App\Models\Region;
 use Illuminate\Foundation\Http\FormRequest;
@@ -46,6 +47,16 @@ class StoreRegionRequest extends FormRequest
     {
         return [
             function (Validator $validator): void {
+                // Les colonnes des imports de quotas sont lues sans distinguer « - » et « _ » :
+                // SUD-EST et SUD_EST désigneraient la même colonne (§8.1).
+                $code = $this->input('code');
+                if (is_string($code) && ! $validator->errors()->has('code')) {
+                    $twin = Region::query()->pluck('code')
+                        ->first(fn (string $other) => ImportSheet::normalizeHeader($other) === ImportSheet::normalizeHeader($code));
+                    if ($twin !== null) {
+                        $validator->errors()->add('code', __('regions.code_ambiguous', ['code' => $twin]));
+                    }
+                }
                 if ($this->filled('depot_id') && ! $validator->errors()->has('depot_id')
                     && ! Depot::query()->whereKey($this->integer('depot_id'))->value('is_active')) {
                     $validator->errors()->add('depot_id', __('regions.depot_inactive'));

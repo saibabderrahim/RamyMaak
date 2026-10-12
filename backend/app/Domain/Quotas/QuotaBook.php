@@ -56,9 +56,10 @@ final class QuotaBook
             $this->calendar->assertOpen($day);
 
             $regions = $this->usableRegions($day, $by, array_column($cells, 'region_id'));
+            // RG-Q02, RG-Q07 : produit actif le jour de la journée (désactivation programmée comprise).
             $products = Product::query()
                 ->whereKey(array_unique(array_column($cells, 'product_id')))
-                ->where('is_active', true)
+                ->activeOn($day->day)
                 ->pluck('id')
                 ->flip();
 
@@ -147,7 +148,7 @@ final class QuotaBook
         if ($regionIds !== null) {
             $this->assertRegions($target, $by, $regionIds, $regions);
         }
-        $productIds = Product::query()->where('is_active', true)->pluck('id')->all();
+        $productIds = Product::query()->activeOn($target->day)->pluck('id')->all();
 
         $sourceValues = $this->publishedValues($source, $regions->keys()->all());
         $targetValues = $replace ? [] : $this->currentValues($target, $regions->keys()->all());
@@ -211,17 +212,23 @@ final class QuotaBook
                 }
 
                 $quotas = RegionQuota::query()
-                    ->with('product:id,sku,is_active')
+                    ->with('product:id,sku,is_active,deactivate_on')
                     ->where('region_day_id', $regionDay->id)
                     ->orderBy('product_id')
                     ->lockForUpdate()
                     ->get();
+                $active = fn (RegionQuota $q): bool => $q->product->isActiveOn($day->day);
 
-                // RG-Q02 : un brouillon sur un produit désactivé depuis n'est pas publié.
-                $drafts = $quotas->filter(fn (RegionQuota $q) => $q->hasDraft() && $q->product->is_active);
+                // RG-Q02 : un brouillon sur un produit inactif ce jour-là n'est pas
+                // publié ; il est effacé, même si la région n'a rien d'autre à publier.
+                $discarded = $quotas->filter(fn (RegionQuota $q) => $q->hasDraft() && ! $active($q));
+                if ($discarded->isNotEmpty()) {
+                    RegionQuota::query()->whereKey($discarded->modelKeys())->update(['draft_quantity' => null]);
+                }
+                $drafts = $quotas->filter(fn (RegionQuota $q) => $q->hasDraft() && $active($q));
                 $first = ! $regionDay->isQuotaPublished();
 
-                if ($first && ! $quotas->contains(fn (RegionQuota $q) => ($q->product->is_active ? ($q->draft_quantity ?? $q->quantity) : 0) > 0)) {
+                if ($first && ! $quotas->contains(fn (RegionQuota $q) => ($active($q) ? ($q->draft_quantity ?? $q->quantity) : 0) > 0)) {
                     if ($explicit) {
                         $empty[] = $code;
                     } else {
@@ -258,12 +265,6 @@ final class QuotaBook
                     }
                     $changes[] = ['product_id' => $quota->product_id, 'sku' => $quota->product->sku, 'old' => $quota->quantity, 'new' => $quota->draft_quantity];
                 }
-                RegionQuota::query()
-                    ->where('region_day_id', $regionDay->id)
-                    ->whereNotNull('draft_quantity')
-                    ->whereIn('product_id', $quotas->reject(fn (RegionQuota $q) => $q->product->is_active)->pluck('product_id'))
-                    ->update(['draft_quantity' => null]);
-
                 $regionDay->quota_version++;
                 if ($first) {
                     $regionDay->quota_published_at = now();

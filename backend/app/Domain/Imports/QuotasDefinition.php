@@ -38,6 +38,9 @@ final class QuotasDefinition extends ImportDefinition
     /** @var array<string, Region>|null en-tête normalisé → région où l'auteur peut écrire, par code */
     private ?array $regions = null;
 
+    /** @var array<string, string> en-tête normalisé → codes des régions qui s'y confondent */
+    private array $ambiguous = [];
+
     /** @var array<string, Region> code → région, colonnes du fichier dans leur ordre */
     private array $fileRegions = [];
 
@@ -165,6 +168,15 @@ final class QuotasDefinition extends ImportDefinition
     protected function unknownHeader(string $name, AnalysisResult $result): void
     {
         if (in_array($name, $this->ignoredHeaders(), true)) {
+            return;
+        }
+        $this->regions();
+        if (isset($this->ambiguous[$name])) {
+            $result->fileError(mb_strtoupper($name), __('imports.errors.header', [
+                'column' => mb_strtoupper($name),
+                'message' => __('imports.errors.ambiguous_region_column', ['codes' => $this->ambiguous[$name]]),
+            ]));
+
             return;
         }
 
@@ -421,8 +433,16 @@ final class QuotasDefinition extends ImportDefinition
             ->orderBy('code')
             ->get(['id', 'code', 'name'])
             ->each(function (Region $region): void {
-                $this->regions[ImportSheet::normalizeHeader($region->code)] ??= $region;
+                $this->regions[ImportSheet::normalizeHeader($region->code)][] = $region;
             });
+        // Deux codes que seuls « - » et « _ » distinguent (SUD-EST, SUD_EST) désignent la
+        // même colonne : aucune des deux n'est lue, plutôt que d'écrire dans la mauvaise région.
+        $this->ambiguous = array_map(
+            // Codes triés en PHP : l'ordre de la base dépend de sa collation.
+            fn (array $regions) => collect($regions)->map(fn (Region $region) => $region->code)->sort()->implode(', '),
+            array_filter($this->regions, fn (array $regions) => count($regions) > 1),
+        );
+        $this->regions = array_map(fn (array $regions) => $regions[0], array_diff_key($this->regions, $this->ambiguous));
 
         return $this->regions;
     }
@@ -438,7 +458,8 @@ final class QuotasDefinition extends ImportDefinition
         return Product::query()
             ->select('products.*')
             ->join('product_families', 'product_families.id', '=', 'products.family_id')
-            ->where('products.is_active', true)
+            // RG-Q02, RG-Q07 : actifs le jour de la journée (désactivation programmée comprise).
+            ->activeOn($this->day->day)
             ->orderBy('product_families.sort_order')
             ->orderBy('product_families.code')
             ->orderBy('products.sort_order')

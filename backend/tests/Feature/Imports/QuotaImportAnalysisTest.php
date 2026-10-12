@@ -37,6 +37,19 @@ describe('header', function () {
             ->preview->toBe([['row' => 2, 'key' => 'P0042', 'action' => 'update', 'changes' => ['CENTRE' => ['old' => 450, 'new' => 480]]]]);
     });
 
+    it('refuses a column whose code only differs from another region by « - » or « _ »', function () {
+        // Codes créés avant le contrôle de la création des régions.
+        Region::factory()->create(['code' => 'SUD-EST']);
+        Region::factory()->create(['code' => 'SUD_EST']);
+
+        $id = ($this->upload)([['code_produit', 'SUD_EST', 'CENTRE'], ['P0042', 77, 480]], 'COMPLETE')->assertStatus(202)->json('id');
+
+        expect(($this->report)($id)['status'])->toBe('INVALID')
+            ->and(($this->messages)($id))->toBe(['Colonne SUD_EST : code région ambigu (SUD-EST, SUD_EST)']);
+        expect(RegionDay::query()->whereHas('region', fn ($q) => $q->whereIn('code', ['SUD-EST', 'SUD_EST']))
+            ->whereHas('quotas', fn ($q) => $q->whereNotNull('draft_quantity'))->exists())->toBeFalse();
+    });
+
     it('refuses an unknown, inactive or duplicated region column', function () {
         $id = ($this->upload)([
             ['code_produit', 'designation', 'CENTRE', 'EST2', 'SUD', 'Centre', 'Remarque'],

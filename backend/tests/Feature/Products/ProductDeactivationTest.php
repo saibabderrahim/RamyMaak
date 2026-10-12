@@ -10,6 +10,7 @@ use App\Models\AuditLog;
 use App\Models\Product;
 use App\Models\ProductFamily;
 use App\Models\Region;
+use App\Models\RegionQuota;
 use App\Support\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Scheduling\Event as ScheduledEvent;
@@ -213,7 +214,8 @@ it('is scheduled at 00:01, Algiers time, without overlapping', function () {
     expect($events)->toHaveCount(1)
         ->and($events->first()->expression)->toBe('1 0 * * *')
         ->and($events->first()->timezone)->toBe('Africa/Algiers')
-        ->and($events->first()->withoutOverlapping)->toBeTrue();
+        ->and($events->first()->withoutOverlapping)->toBeTrue()
+        ->and($events->first()->expiresAt)->toBe(30);
 });
 
 it('defers a deactivation imported from Excel too, and leaves a re-imported ACTIF unchanged (RG-Q07, §8.3)', function () {
@@ -245,4 +247,44 @@ it('defers a deactivation imported from Excel too, and leaves a re-imported ACTI
     // « ACTIF » réimporté sur un produit encore actif : la désactivation programmée reste.
     $import([['P0042', 'ACTIF']]);
     expect($this->orange->fresh()->deactivate_on?->format('Y-m-d'))->toBe('2026-10-09');
+});
+
+it('treats a product as inactive on the day its scheduled deactivation takes effect (RG-Q07, RG-Q02)', function () {
+    ($this->publish)($this->today, $this->orange, 500);
+    // Veille : la journée du lendemain est ouverte, avec un brouillon déjà saisi.
+    $tomorrow = $this->calendar->open(BusinessClock::parseDay('2026-10-09'), $this->adv);
+    $this->book->saveDrafts($tomorrow, [['region_id' => $this->centre->id, 'product_id' => $this->orange->id, 'quantity' => 300]], $this->adv);
+
+    $this->actingAs($this->admin)->patchJson($this->url, ['is_active' => false])
+        ->assertOk()->assertJsonPath('pending_deactivation_on', '2026-10-09');
+
+    // Le brouillon du lendemain est effacé ; aujourd'hui, le produit reste actif.
+    $draft = fn ($day) => RegionQuota::query()->where('product_id', $this->orange->id)
+        ->whereHas('regionDay', fn ($q) => $q->where('business_day_id', $day->id))->value('draft_quantity');
+    expect($draft($tomorrow))->toBeNull();
+
+    $this->actingAs($this->adv);
+    $this->getJson('/api/v1/adv/days/2026-10-08/quotas')->assertJsonPath('products.0.is_active', true);
+    // Demain : absent de la matrice (aucun quota publié ce jour-là), refusé en saisie.
+    expect(collect($this->getJson('/api/v1/adv/days/2026-10-09/quotas')->json('products'))->pluck('sku')->all())->not->toContain('P0042');
+    $this->putJson('/api/v1/adv/days/2026-10-09/quotas', ['cells' => [['region_id' => $this->centre->id, 'product_id' => $this->orange->id, 'quantity' => 200]]])
+        ->assertUnprocessable()->assertJsonValidationErrors(['cells.0.product_id']);
+    // « Copier depuis la journée » ne le reprend pas non plus.
+    $this->postJson('/api/v1/adv/days/2026-10-09/quotas/copy', ['source_day' => '2026-10-08', 'mode' => 'REPLACE'])->assertOk();
+    expect($draft($tomorrow))->toBeNull();
+});
+
+it('erases the drafts of a product deactivated at once, so that nothing stays pending (RG-Q02)', function () {
+    ($this->publish)($this->today, $this->orange, 500);
+    $pomme = Product::factory()->create(['sku' => 'P0057', 'family_id' => $this->family->id]);
+    $this->book->saveDrafts($this->today, [['region_id' => $this->centre->id, 'product_id' => $pomme->id, 'quantity' => 80]], $this->adv);
+    $this->actingAs($this->adv)->getJson('/api/v1/adv/days/2026-10-08/quotas')->assertJsonPath('regions.0.pending_drafts', 1);
+
+    // Sans quota publié aujourd'hui : désactivation immédiate.
+    $this->actingAs($this->admin)->patchJson("/api/v1/products/{$pomme->id}", ['is_active' => false])->assertOk()->assertJsonPath('is_active', false);
+
+    $this->actingAs($this->adv);
+    $this->getJson('/api/v1/adv/days/2026-10-08/quotas')->assertJsonPath('regions.0.pending_drafts', 0);
+    $this->getJson('/api/v1/adv/days/2026-10-08')->assertJsonPath('regions.0.pending_drafts', 0);
+    expect(RegionQuota::query()->where('product_id', $pomme->id)->value('draft_quantity'))->toBeNull();
 });

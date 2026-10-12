@@ -192,3 +192,14 @@ it('ignores an event whose region day no longer exists', function () {
 
     expect(DatabaseNotification::query()->count())->toBe(0);
 });
+
+it('never notifies an account whose role is no longer regional, even if its assignment is still open (§7.8)', function () {
+    $this->titular->syncRoles([Role::Adv->value]);
+    $this->deputy->syncRoles([Role::Client->value]);
+
+    ($this->publish)($this->centre, [100]);
+    ($this->extend)(CutoffKind::Distribution, '11:00');
+
+    expect(($this->notificationsOf)($this->titular))->toHaveCount(0)
+        ->and(($this->notificationsOf)($this->deputy))->toHaveCount(0);
+});

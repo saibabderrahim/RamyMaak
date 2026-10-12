@@ -95,3 +95,10 @@ it('refuses unknown channels and guests', function () {
     ($this->denied)(admin(), 'client.1');
     expectProblem(($this->auth)(null, "user.{$this->titular->id}"), 401, 'UNAUTHENTICATED');
 });
+
+it('applies the session rules of the API to channel authorization (EF-AUTH-02, EF-AUTH-06)', function () {
+    $mustChange = userWithRole(Role::Regional, ['must_change_password' => true]);
+    RegionAssignment::factory()->create(['region_id' => $this->est->id, 'user_id' => $mustChange->id]);
+    expectProblem(($this->auth)($mustChange, "user.{$mustChange->id}"), 403, 'PASSWORD_CHANGE_REQUIRED');
+    expectProblem(($this->auth)($mustChange, "region-day.{$this->est->id}.2026-10-08"), 403, 'PASSWORD_CHANGE_REQUIRED');
+});

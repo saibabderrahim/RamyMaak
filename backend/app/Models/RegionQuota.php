@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
 use Database\Factories\RegionQuotaFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -55,6 +57,18 @@ class RegionQuota extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    /**
+     * Brouillons en attente de publication le jour donné : un brouillon sur
+     * un produit inactif ce jour-là ne sera jamais publié (RG-Q02).
+     *
+     * @param  Builder<RegionQuota>  $query
+     */
+    public function scopePendingOn(Builder $query, CarbonInterface $day): void
+    {
+        $query->whereNotNull('region_quotas.draft_quantity')
+            ->whereHas('product', fn (Builder $product) => $product->activeOn($day));
     }
 
     public function hasDraft(): bool

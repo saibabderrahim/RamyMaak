@@ -49,7 +49,7 @@ class QuotaMatrixResource extends JsonResource
         $regionDays = DayResource::visibleRegionDays($day, $user);
         $regionDayIds = $regionDays->pluck('id')->all();
 
-        $products = self::rows($regionDayIds)->get();
+        $products = self::rows($day, $regionDayIds)->get();
         $productIds = $products->pluck('id')->flip();
 
         $quotas = RegionQuota::query()
@@ -62,20 +62,21 @@ class QuotaMatrixResource extends JsonResource
     }
 
     /**
-     * Produits de la matrice, dans l'ordre d'affichage des lignes.
+     * Produits de la matrice, dans l'ordre d'affichage des lignes : actifs le
+     * jour de la journée (RG-Q02, RG-Q07), ou dotés d'un quota publié.
      *
      * @param  list<int>  $regionDayIds
      * @return Builder<Product>
      */
-    public static function rows(array $regionDayIds): Builder
+    public static function rows(BusinessDay $day, array $regionDayIds): Builder
     {
         return Product::query()
-            ->select(['products.id', 'products.sku', 'products.name', 'products.short_name', 'products.family_id', 'products.sales_unit_label', 'products.is_active'])
+            ->select(['products.id', 'products.sku', 'products.name', 'products.short_name', 'products.family_id', 'products.sales_unit_label', 'products.is_active', 'products.deactivate_on'])
             ->join('product_families', 'product_families.id', '=', 'products.family_id')
             ->with('family:id,code,name')
             ->where(fn (Builder $query) => $query
-                ->where('products.is_active', true)
-                // Désactivé depuis la publication : la ligne reste visible, en lecture seule.
+                ->activeOn($day->day)
+                // Inactif ce jour-là, mais quota déjà publié : la ligne reste visible, en lecture seule.
                 ->orWhereExists(fn ($published) => $published
                     ->selectRaw('1')
                     ->from('region_quotas')
@@ -130,7 +131,8 @@ class QuotaMatrixResource extends JsonResource
                     'name' => $product->family->name,
                 ],
                 'sales_unit_label' => $product->sales_unit_label,
-                'is_active' => (bool) $product->is_active,
+                // Inactif ce jour-là (désactivé, ou désactivation programmée à cette date) : lecture seule.
+                'is_active' => $product->isActiveOn($this->day),
             ])->values()->all(),
             // Objets JSON (et non listes), même vides : clés = identifiants.
             'cells' => (object) array_map(fn (array $byRegion) => (object) $byRegion, $cells),

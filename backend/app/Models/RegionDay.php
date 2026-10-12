@@ -85,12 +85,20 @@ class RegionDay extends Model
 
     /**
      * Heure limite applicable à cette région : prolongation accordée par
-     * l'ADV (RG-A05), sinon celle de la journée.
+     * l'ADV (RG-A05) quand elle est plus tardive, sinon celle de la journée.
+     * Une prolongation ne raccourcit jamais le délai, même si l'heure de la
+     * journée est repoussée ensuite.
      */
     public function effectiveCutoff(CutoffKind $kind): Carbon
     {
+        return $this->isExtended($kind) ? $this->getAttribute($kind->overrideColumn()) : $this->businessDay->cutoff($kind);
+    }
+
+    /** Heure limite prolongée pour cette région, au-delà de celle de la journée (RG-A05). */
+    public function isExtended(CutoffKind $kind): bool
+    {
         $override = $kind->overrideColumn() === null ? null : $this->getAttribute($kind->overrideColumn());
 
-        return $override ?? $this->businessDay->cutoff($kind);
+        return $override !== null && $override->greaterThan($this->businessDay->cutoff($kind));
     }
 }

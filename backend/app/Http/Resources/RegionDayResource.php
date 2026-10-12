@@ -28,7 +28,7 @@ class RegionDayResource extends JsonResource
         foreach ([CutoffKind::Distribution, CutoffKind::Ordering] as $kind) {
             $key = strtolower($kind->value);
             $cutoffs[$key] = BusinessClock::toLocal($this->effectiveCutoff($kind))->format('H:i');
-            $extended[$key] = $this->getAttribute($kind->overrideColumn()) !== null;
+            $extended[$key] = $this->isExtended($kind);
         }
 
         return [
@@ -42,7 +42,7 @@ class RegionDayResource extends JsonResource
             'quota_version' => $this->quota_version,
             'quota_published_at' => $this->quota_published_at?->toIso8601String(),
             'quota_last_published_at' => $this->quota_last_published_at?->toIso8601String(),
-            'pending_drafts' => (int) ($this->pending_drafts_count ?? $this->quotas()->whereNotNull('draft_quantity')->count()),
+            'pending_drafts' => (int) ($this->pending_drafts_count ?? $this->quotas()->pendingOn($this->businessDay->day)->count()),
             'cutoffs' => $cutoffs,
             'extended' => $extended,
         ];

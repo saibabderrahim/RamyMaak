@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Domain\Quotas\ProductDeactivation;
 use App\Models\Product;
 use App\Support\BusinessClock;
 use Illuminate\Console\Command;
@@ -52,6 +53,8 @@ class ApplyProductDeactivations extends Command
             // Une seule entrée, explicite, au lieu de « Produit modifié ».
             $product->disableLogging();
             $product->forceFill(['is_active' => false, 'deactivate_on' => null])->save();
+            // RG-Q02 : plus de brouillon publiable sur les journées encore ouvertes.
+            app(ProductDeactivation::class)->discardDrafts($product, BusinessClock::parseDay($due));
             if (! $wasActive) {
                 return false;
             }
