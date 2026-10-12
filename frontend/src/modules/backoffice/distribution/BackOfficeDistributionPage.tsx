@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { PageHeader } from '../../shared/ui'
+import { PageHeader } from '../../../shared/ui'
 
 /**
  * Répartition d'une région en lecture seule pour l'ADV et l'Admin :
