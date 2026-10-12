@@ -260,4 +260,36 @@ describe('quota matrix — draft queue', () => {
     queue.dispose()
     expect(send).toHaveBeenCalledTimes(1)
   })
+
+  it('sends a batch put back after a failed save when the screen is left', async () => {
+    let attempts = 0
+    const { queue, send } = setup(async (cells) => {
+      if (++attempts === 1) throw new ApiError({ status: 503, code: 'SERVICE_UNAVAILABLE', detail: 'Service indisponible.' })
+      return saved(cells)
+    })
+
+    queue.edit([valid(42, 3, 10), valid(43, 4, 5)])
+    await vi.advanceTimersByTimeAsync(600)
+    // Échec : le lot attend « Réessayer », sans délai programmé.
+    expect(queue.getSnapshot()).toMatchObject({ status: 'error', unsaved: 2 })
+
+    // Le serveur répond de nouveau ; l'écran est quitté sans réessayer.
+    queue.dispose()
+    expect(send).toHaveBeenCalledTimes(2)
+    expect(send.mock.calls[1]![0]).toEqual([
+      { product_id: 42, region_id: 3, quantity: 10 },
+      { product_id: 43, region_id: 4, quantity: 5 },
+    ])
+    await vi.advanceTimersByTimeAsync(0)
+    expect(queue.getSnapshot()).toMatchObject({ status: 'saved', unsaved: 0 })
+  })
+
+  it('sends nothing when the screen is left with nothing waiting', async () => {
+    const { queue, send } = setup(async (cells) => saved(cells))
+    queue.dispose()
+    queue.edit([valid(42, 3, 10)])
+    await vi.advanceTimersByTimeAsync(600)
+    queue.dispose()
+    expect(send).toHaveBeenCalledTimes(1)
+  })
 })

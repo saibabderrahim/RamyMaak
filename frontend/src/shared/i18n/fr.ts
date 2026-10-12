@@ -105,19 +105,21 @@ const fr = {
         'Notifications de validation et d’expédition',
       ],
     },
+    // Écrans livrés (lot 3) : liens de la page d'accueil, plus dans « Prochainement ».
     regional: {
+      shortcuts: 'Mes quotas',
+      todayQuotas: 'Quotas du jour',
       items: [
-        'Ma journée : quotas reçus, clients sans commande',
+        'Ma journée : clients sans commande',
         'Grille produit × client et répartition des bornes',
         'Validation des commandes une par une',
       ],
     },
     adv: {
-      items: [
-        'Calendrier des journées et matrice des quotas',
-        'Suivi de la journée en temps réel',
-        'Préparation, expédition, documents et exports',
-      ],
+      shortcuts: 'Journées et quotas',
+      days: 'Calendrier des journées',
+      todayQuotas: 'Quotas du jour',
+      items: ['Suivi de la journée en temps réel', 'Préparation, expédition, documents et exports'],
     },
   },
   profile: {

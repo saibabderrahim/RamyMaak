@@ -18,6 +18,7 @@ import type {
 } from '../../../shared/api/types'
 import { meQueryKey } from '../../../shared/auth/session'
 import { json, makeUser, mockApi, problem, renderApp } from '../../../test/utils'
+import { daysKey } from '../days/api'
 import { formatQuantity } from './matrix'
 import QuotaMatrixPage from './QuotaMatrixPage'
 
@@ -26,6 +27,8 @@ const MATRIX_URL = `GET /api/v1/adv/days/${DAY}/quotas`
 const SAVE_URL = `PUT /api/v1/adv/days/${DAY}/quotas`
 const PUBLISH_URL = `POST /api/v1/adv/days/${DAY}/quotas/publish`
 const COPY_URL = `POST /api/v1/adv/days/${DAY}/quotas/copy`
+const TEMPLATE_URL = 'GET /api/v1/imports/templates/quotas'
+const MATRIX_KEY = ['backoffice', 'quotas', 'matrix', DAY]
 
 const ADV_PERMISSIONS = ['quota.view', 'quota.edit', 'quota.publish', 'day.manage', 'day.extend-cutoff', 'region.view', 'client.view', 'product.view']
 const adv = () => makeUser('adv', { permissions: ADV_PERMISSIONS, perimeter: { all_regions: true, region_ids: [] } })
@@ -264,6 +267,40 @@ describe('back-office — quota matrix: display', () => {
     expect(screen.queryByRole('grid')).not.toBeInTheDocument()
   })
 
+  it('keeps the matrix on screen when a refresh fails, and reloads it on « Réessayer »', async () => {
+    let failing = false
+    const { queryClient, requests } = renderMatrix(adv(), {
+      [MATRIX_URL]: () => (failing ? problem(502, 'SERVER_ERROR', 'Serveur momentanément indisponible.') : json(makeMatrix())),
+    })
+    const user = userEvent.setup()
+    await grid()
+
+    // Saisie en cours au moment de la relecture (temps réel, secours).
+    await user.click(cellOf('Orange 1 L', 'CENTRE'))
+    await user.keyboard('7')
+
+    failing = true
+    await act(() => queryClient.refetchQueries({ queryKey: MATRIX_KEY }))
+
+    const warning = (await screen.findByText(
+      'La matrice n’a pas pu être relue : les valeurs affichées sont peut-être périmées. Serveur momentanément indisponible.',
+    )).closest<HTMLElement>('[role="status"]')!
+    expect(warning).toBeInTheDocument()
+    // Dernière matrice reçue toujours affichée, avec la barre d'actions et la saisie en cours.
+    expect(screen.getByRole('grid')).toBeInTheDocument()
+    expect(cellOf('Pomme 1 L', 'CENTRE')).toHaveTextContent(/^250$/)
+    expect(screen.getByRole('button', { name: 'Publier…' })).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(editor('Orange 1 L', 'CENTRE')).toHaveValue('7')
+    await user.keyboard('{Escape}')
+
+    failing = false
+    await user.click(within(warning).getByRole('button', { name: 'Réessayer' }))
+    await waitFor(() => expect(warning).not.toBeInTheDocument())
+    expect(requests(MATRIX_URL)).toHaveLength(3)
+    expect(screen.getByRole('grid')).toBeInTheDocument()
+  })
+
   it('is wired to the ADV route', async () => {
     mockApi({ 'GET /api/v1/auth/me': () => json(adv()), [MATRIX_URL]: () => json(makeMatrix()) })
     renderApp(`/adv/journees/${DAY}/quotas`)
@@ -479,6 +516,27 @@ describe('back-office — quota matrix: autosave', () => {
     expect(within(screen.getByRole('columnheader', { name: /CENTRE/ })).getByText('2 brouillons')).toBeInTheDocument()
   })
 
+  it('marks the day screens as stale once drafts are saved (pending drafts per region)', async () => {
+    const { queryClient } = renderMatrix(adv(), { [SAVE_URL]: ({ body }) => json(savedCells(body)) })
+    // Calendrier et détail de la journée encore en cache (visités juste avant).
+    const dayDetail = [...daysKey, 'detail', DAY]
+    const dayList = [...daysKey, 'list', { from: DAY, to: DAY }]
+    queryClient.setQueryData(dayDetail, makeDay())
+    queryClient.setQueryData(dayList, { data: [makeDay()] })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    await grid()
+
+    await user.click(cellOf('Orange 1 L', 'CENTRE'))
+    await user.keyboard('600{Enter}')
+    expect(queryClient.getQueryState(dayDetail)?.isInvalidated).toBe(false)
+
+    await act(() => vi.advanceTimersByTimeAsync(600))
+    await screen.findByText('Enregistré à 09:12')
+    // Relus au prochain affichage, sans attendre la fin du délai de fraîcheur (30 s).
+    expect(queryClient.getQueryState(dayDetail)?.isInvalidated).toBe(true)
+    expect(queryClient.getQueryState(dayList)?.isInvalidated).toBe(true)
+  })
+
   it('keeps one request in flight and keeps unsaved edits above refreshed data', async () => {
     const pending: Array<() => void> = []
     let refreshed = 0
@@ -610,6 +668,113 @@ describe('back-office — quota matrix: autosave', () => {
     await act(() => vi.advanceTimersByTimeAsync(600))
     await screen.findByText('Enregistré à 09:12')
     expect(unsavedEvent()).toBe(false)
+  })
+})
+
+describe('back-office — quota matrix: refreshed while editing', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+  })
+
+  const OUEST = { id: 2, code: 'OUEST', name: 'Ouest', status: 'QUOTA_DRAFT', quota_version: 0, pending_drafts: 0 } as const
+
+  /** Matrice relue : produits retirés, désactivés ou ajoutés en tête, régions ajoutées en tête. */
+  function changedMatrix({ without = [], inactive = [], before = [], regionsBefore = [] }: {
+    without?: number[]
+    inactive?: number[]
+    before?: QuotaMatrixProduct[]
+    regionsBefore?: QuotaMatrix['regions']
+  }): QuotaMatrix {
+    const base = makeMatrix()
+    return {
+      ...base,
+      regions: [...regionsBefore, ...base.regions],
+      products: [
+        ...before,
+        ...base.products.filter(({ id }) => !without.includes(id)).map((item) => (inactive.includes(item.id) ? { ...item, is_active: false } : item)),
+      ],
+    }
+  }
+
+  function setup() {
+    let matrix = makeMatrix()
+    const rendered = renderMatrix(adv(), {
+      [MATRIX_URL]: () => json(matrix),
+      [SAVE_URL]: ({ body }) => json(savedCells(body)),
+    })
+    const refresh = async (next: QuotaMatrix) => {
+      matrix = next
+      await act(() => rendered.queryClient.invalidateQueries({ queryKey: MATRIX_KEY }))
+    }
+    return { ...rendered, refresh, user: userEvent.setup({ advanceTimers: vi.advanceTimersByTime }) }
+  }
+
+  it('keeps the entry on its product and region when rows or columns are added or removed before it', async () => {
+    const { refresh, requests, user } = setup()
+    await grid()
+
+    await user.click(cellOf('Pomme 1 L', 'CENTRE'))
+    await user.keyboard('9')
+
+    // Ligne précédente retirée : la saisie reste sur Pomme.
+    await refresh(changedMatrix({ without: [42] }))
+    await waitFor(() => expect(screen.queryByText('Orange 1 L')).not.toBeInTheDocument())
+    expect(editor('Pomme 1 L', 'CENTRE')).toHaveValue('9')
+    expect(editor('Pomme 1 L', 'CENTRE')).toHaveFocus()
+    await user.keyboard('9')
+
+    // Produit et région ajoutés avant la cellule saisie.
+    await refresh(changedMatrix({ before: [product(41, 'Citron 1 L', JUS)], regionsBefore: [OUEST] }))
+    expect(await screen.findByText('Citron 1 L')).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: /OUEST/ })).toBeInTheDocument()
+    expect(editor('Pomme 1 L', 'CENTRE')).toHaveValue('99')
+    await user.keyboard('9{Enter}')
+
+    await act(() => vi.advanceTimersByTimeAsync(600))
+    await waitFor(() => expect(requests(SAVE_URL)).toHaveLength(1))
+    expect(requests(SAVE_URL)[0]!.body).toEqual({ cells: [{ region_id: 3, product_id: 43, quantity: 999 }] })
+    expect(cellOf('Pomme 1 L', 'CENTRE')).toHaveTextContent(/^999$/)
+    // Entrée : cellule du dessous dans la matrice relue.
+    expect(cellOf('Abricot 1 L', 'CENTRE')).toHaveFocus()
+    await user.keyboard('{ArrowLeft}')
+    expect(cellOf('Abricot 1 L', 'OUEST')).toHaveFocus()
+  })
+
+  it('drops, without saving it, an entry whose product disappeared', async () => {
+    const { refresh, requests, user } = setup()
+    await grid()
+
+    await user.click(cellOf('Pomme 1 L', 'CENTRE'))
+    await user.keyboard('7')
+
+    await refresh(changedMatrix({ without: [43] }))
+    await waitFor(() => expect(screen.queryByRole('textbox')).not.toBeInTheDocument())
+    // Repli au même rang, ramené dans la grille : Abricot a pris la place de Pomme.
+    expect(cellOf('Abricot 1 L', 'CENTRE')).toHaveFocus()
+    expect(cellOf('Abricot 1 L', 'CENTRE')).toHaveTextContent(/^100$/)
+
+    await user.keyboard('{Enter}')
+    await act(() => vi.advanceTimersByTimeAsync(600))
+    expect(requests(SAVE_URL)).toHaveLength(0)
+  })
+
+  it('drops, without saving it, an entry whose product was deactivated', async () => {
+    const { refresh, requests, user } = setup()
+    await grid()
+
+    await user.click(cellOf('Goyave 1 L', 'EST'))
+    await user.keyboard('8')
+    expect(editor('Goyave 1 L', 'EST')).toHaveValue('8')
+
+    await refresh(changedMatrix({ inactive: [52] }))
+    await waitFor(() => expect(screen.queryByRole('textbox')).not.toBeInTheDocument())
+    expect(cellOf('Goyave 1 L', 'EST')).toHaveAttribute('aria-readonly', 'true')
+    expect(cellOf('Goyave 1 L', 'EST')).toHaveFocus()
+    expect(cellOf('Goyave 1 L', 'EST')).toHaveTextContent(/^0$/)
+
+    await user.keyboard('{Enter}')
+    await act(() => vi.advanceTimersByTimeAsync(600))
+    expect(requests(SAVE_URL)).toHaveLength(0)
   })
 })
 
@@ -945,6 +1110,45 @@ describe('back-office — quota matrix: copy, import, template', () => {
       await waitFor(() => expect(downloads).toEqual(['quotas-2026-10-08.xlsx']))
       expect(days).toEqual([DAY])
       expect(await blobs[0]!.text()).toBe('xlsx')
+    })
+
+    it('saves the pending edits before downloading the template', async () => {
+      const { calls, requests } = renderMatrix(adv(), {
+        [SAVE_URL]: ({ body }) => json(savedCells(body)),
+        [TEMPLATE_URL]: () =>
+          new Response('xlsx', { status: 200, headers: { 'Content-Disposition': 'attachment; filename="quotas-2026-10-08.xlsx"' } }),
+      })
+      const user = userEvent.setup()
+      await grid()
+
+      // Saisie validée en quittant le champ, juste avant le clic : pas d'attente du délai.
+      await user.click(cellOf('Goyave 1 L', 'EST'))
+      await user.keyboard('40')
+      await user.click(screen.getByRole('button', { name: 'Télécharger le gabarit' }))
+
+      await waitFor(() => expect(downloads).toEqual(['quotas-2026-10-08.xlsx']))
+      const order = calls.map((call) => `${call.method} ${call.path}`).filter((route) => route === SAVE_URL || route === TEMPLATE_URL)
+      expect(order).toEqual([SAVE_URL, TEMPLATE_URL])
+      expect(requests(SAVE_URL)[0]!.body).toEqual({ cells: [{ region_id: 4, product_id: 52, quantity: 40 }] })
+    })
+
+    it('does not download the template when the pending edits cannot be saved', async () => {
+      const { requests } = renderMatrix(adv(), {
+        [SAVE_URL]: () => problem(500, 'SERVER_ERROR', 'Erreur interne.'),
+        [TEMPLATE_URL]: () => new Response('xlsx', { status: 200 }),
+      })
+      const user = userEvent.setup()
+      await grid()
+
+      await user.click(cellOf('Goyave 1 L', 'EST'))
+      await user.keyboard('40')
+      await user.click(screen.getByRole('button', { name: 'Télécharger le gabarit' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Erreur interne.')
+      expect(requests(SAVE_URL)).toHaveLength(1)
+      expect(requests(TEMPLATE_URL)).toHaveLength(0)
+      expect(downloads).toEqual([])
+      expect(screen.getByRole('button', { name: 'Réessayer' })).toBeInTheDocument()
     })
 
     it('shows why the template could not be downloaded', async () => {

@@ -140,9 +140,15 @@ export class DraftQueue {
     }
   }
 
-  /** Départ de l'écran : ce qui attend part tout de suite plutôt que d'être perdu. */
+  /**
+   * Départ de l'écran : ce qui attend part tout de suite plutôt que d'être
+   * perdu (RG-Q03), y compris un lot remis en file après un échec, qui
+   * n'attend plus aucun délai. flush() ne fait rien si un envoi est en
+   * cours (le reste part à sa réponse), si la file est vide ou si la
+   * journée est clôturée.
+   */
   dispose(): void {
-    if (this.timer !== null) this.flush()
+    this.flush()
   }
 
   private schedule(): void {

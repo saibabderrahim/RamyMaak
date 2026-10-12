@@ -7,6 +7,7 @@ import type { QuotaViolation } from '../../../shared/api/types'
 import { formatDate } from '../../../shared/format'
 import { useLiveRefresh } from '../../../shared/realtime'
 import { Alert, Badge, Button, Card, ErrorAlert, PageHeader, Spinner } from '../../../shared/ui'
+import { useErrorMessage } from '../../../shared/ui/useErrorMessage'
 import { useBackoffice } from '../shared/access'
 import { EmptyState } from '../shared/ui'
 import { downloadQuotaTemplate, MATRIX_EVENTS, matrixKey, useQuotaMatrix } from './api'
@@ -23,7 +24,8 @@ import { useDraftQueue } from './useDraftQueue'
  * enregistrement automatique en brouillon (RG-Q03), publication, copie
  * depuis une autre journée, import Excel (§8.1). Tenue à jour en temps réel
  * (canal `adv.{day}`, §9.6). Lecture seule sans quota.edit (Admin) ou une
- * fois la journée clôturée.
+ * fois la journée clôturée. Une relecture en échec garde la dernière
+ * matrice reçue à l'écran, avec un avertissement et « Réessayer ».
  */
 export default function QuotaMatrixPage() {
   const day = useParams().day ?? ''
@@ -64,11 +66,20 @@ function QuotaMatrixScreen({ day }: { day: string }) {
   const navigate = useNavigate()
   const { base, can } = useBackoffice()
   const helpId = useId()
+  const errorMessage = useErrorMessage()
 
   const refetchInterval = useLiveRefresh(`adv.${day}`, MATRIX_EVENTS, [matrixKey(day)])
   const matrix = useQuotaMatrix(day, refetchInterval)
   const { queue, snapshot } = useDraftQueue(day)
-  const template = useMutation({ mutationFn: () => downloadQuotaTemplate(day) })
+  const template = useMutation({
+    // Gabarit pré-rempli par le serveur avec brouillon ?? publié (§8.1) : les
+    // saisies en attente (délai, lot en échec) partent d'abord, comme avant
+    // une publication ou une copie. Un échec s'affiche sous la barre d'actions.
+    mutationFn: async () => {
+      await queue.flushAll()
+      await downloadQuotaTemplate(day)
+    },
+  })
 
   const [dialog, setDialog] = useState<'publish' | 'copy' | null>(null)
   const [highlights, setHighlights] = useState<Highlights>(NO_HIGHLIGHTS)
@@ -86,7 +97,11 @@ function QuotaMatrixScreen({ day }: { day: string }) {
 
   if (matrix.isPending) return <Spinner />
 
-  if (matrix.error) {
+  // Premier chargement en échec : rien à afficher. Une relecture en échec
+  // (temps réel, secours toutes les 30 s) garde au contraire la dernière
+  // matrice reçue, la saisie en cours et la file d'enregistrement.
+  const data = matrix.data
+  if (!data) {
     if (matrix.error instanceof ApiError && matrix.error.status === 404) {
       return (
         <>
@@ -103,7 +118,6 @@ function QuotaMatrixScreen({ day }: { day: string }) {
     return <ErrorAlert error={matrix.error} />
   }
 
-  const data = matrix.data
   const closed = data.day.status === 'CLOSED' || snapshot.closed
   const canEdit = can('quota.edit') && !closed
   const canPublish = can('quota.publish') && !closed
@@ -165,6 +179,16 @@ function QuotaMatrixScreen({ day }: { day: string }) {
         <Alert className="mb-4">{t('backoffice.quotas.readOnly.closed')}</Alert>
       ) : (
         !can('quota.edit') && <Alert className="mb-4">{t('backoffice.quotas.readOnly.permission')}</Alert>
+      )}
+      {matrix.isRefetchError && (
+        <Alert tone="warning" className="mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <p>{t('backoffice.quotas.refreshFailed', { reason: errorMessage(matrix.error) })}</p>
+            <Button variant="secondary" onClick={() => void matrix.refetch()}>
+              {t('backoffice.quotas.refreshRetry')}
+            </Button>
+          </div>
+        </Alert>
       )}
 
       <div className="mb-2 flex flex-wrap items-center justify-between gap-x-6 gap-y-2">

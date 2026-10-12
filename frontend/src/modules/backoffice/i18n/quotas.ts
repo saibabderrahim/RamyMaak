@@ -78,6 +78,8 @@ const quotas = {
     templateLoading: 'Téléchargement…',
   },
   flushFailed: 'Des saisies n’ont pas pu être enregistrées : réessayez avant de continuer.',
+  refreshFailed: 'La matrice n’a pas pu être relue : les valeurs affichées sont peut-être périmées. {{reason}}',
+  refreshRetry: 'Réessayer',
   publish: {
     title: 'Publier les quotas',
     intro: 'Les brouillons deviennent visibles des régionaux, qui sont notifiés (N-01 à la première publication, N-02 ensuite).',

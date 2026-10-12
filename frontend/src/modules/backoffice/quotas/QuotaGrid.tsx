@@ -28,10 +28,20 @@ import { RegionStatusBadge } from './components'
  * Fluidité (150 produits × 12 régions) : les lignes sont mémorisées et ne se
  * redessinent que si leurs cellules, leurs saisies ou la cellule active
  * changent ; la frappe dans une cellule ne touche que son champ.
+ *
+ * La cellule active et la saisie en cours sont repérées par leur produit et
+ * leur région, pas par leur rang : une matrice relue (temps réel, secours)
+ * qui ajoute ou retire une ligne ou une colonne ne déplace pas une saisie
+ * vers une autre cellule (RG-Q03). Rangs déduits à chaque rendu.
  */
 
+/** Rang d'une cellule dans la grille affichée (navigation, attributs data-row/data-col). */
 type Position = { row: number; col: number }
-type Editing = Position & { text: string; mode: 'replace' | 'edit' }
+/** Cellule repérée par son identité, stable quand la matrice est relue. */
+type CellId = { productId: number; regionId: number }
+/** Cellule active : identité, et dernier rang connu en repli si elle disparaît. */
+type Selection = CellId & Position
+type Editing = CellId & { text: string; mode: 'replace' | 'edit' }
 
 type Highlights = ReadonlyMap<number, ReadonlySet<number>>
 
@@ -56,6 +66,8 @@ function cx(...classes: Array<string | false | null | undefined>): string {
   return classes.filter(Boolean).join(' ')
 }
 
+const clamp = (value: number, last: number): number => Math.max(0, Math.min(value, last))
+
 /** Valeur affichée : saisie locale valide, sinon brouillon ou quota publié. */
 function displayValue(cell: QuotaCell | undefined, edit: LocalEdit | undefined): number {
   return edit?.value ?? serverValue(cell)
@@ -74,8 +86,11 @@ export function QuotaGrid({ matrix, edits, readOnly, highlights, onEdit, onRever
   const locked = useMemo(() => regions.map((region) => region.status === 'CLOSED'), [regions])
   const lastRow = products.length - 1
   const lastCol = regions.length - 1
+  const rowOf = useMemo(() => new Map(products.map((product, row) => [product.id, row])), [products])
+  const colOf = useMemo(() => new Map(regions.map((region, col) => [region.id, col])), [regions])
 
-  const [position, setPosition] = useState<Position>({ row: 0, col: 0 })
+  // La grille n'est affichée qu'avec au moins un produit et une région.
+  const [selection, setSelection] = useState<Selection>(() => ({ productId: products[0]?.id ?? 0, regionId: regions[0]?.id ?? 0, row: 0, col: 0 }))
   const [editing, setEditing] = useState<Editing | null>(null)
   const [announcement, setAnnouncement] = useState('')
   const table = useRef<HTMLTableElement>(null)
@@ -86,15 +101,36 @@ export function QuotaGrid({ matrix, edits, readOnly, highlights, onEdit, onRever
   // Ctrl+V reçu : l'événement « paste » est-il bien arrivé ?
   const pasteSeen = useRef(true)
 
-  // Matrice relue avec moins de lignes ou de colonnes : la cellule active reste dedans.
-  const active = { row: Math.max(0, Math.min(position.row, lastRow)), col: Math.max(0, Math.min(position.col, lastCol)) }
+  /** Rang actuel d'une cellule ; null si son produit ou sa région a disparu de la matrice relue. */
+  const locate = ({ productId, regionId }: CellId): Position | null => {
+    const row = rowOf.get(productId)
+    const col = colOf.get(regionId)
+    return row === undefined || col === undefined ? null : { row, col }
+  }
 
-  // Grille passée en lecture seule (journée clôturée) : la saisie en cours est abandonnée.
+  const editable = (row: number, col: number): boolean => !readOnly && products[row]?.is_active === true && locked[col] === false
+
+  // Cellule active suivie par identité ; disparue de la matrice relue : même
+  // rang qu'avant, ramené dans la grille.
+  const active: Position = {
+    row: clamp(rowOf.get(selection.productId) ?? selection.row, lastRow),
+    col: clamp(colOf.get(selection.regionId) ?? selection.col, lastCol),
+  }
+
+  // Saisie en cours, à son rang actuel ; null si sa cellule a disparu ou
+  // n'est plus modifiable (journée ou région clôturée, produit désactivé).
+  const editingAt = editing ? locate(editing) : null
+  const liveEditing = editing && editingAt && editable(editingAt.row, editingAt.col) ? editing : null
+  const editingLost = editing !== null && liveEditing === null
+
+  // Saisie devenue impossible : abandonnée sans enregistrement, le focus
+  // revient sur la cellule active.
   useEffect(() => {
-    if (!readOnly || !editingRef.current) return
+    if (!editingLost || !editingRef.current) return
     editingRef.current = null
+    focusRequested.current = true
     setEditing(null)
-  }, [readOnly])
+  }, [editingLost])
 
   useEffect(() => {
     if (!focusRequested.current || editing) return
@@ -114,11 +150,10 @@ export function QuotaGrid({ matrix, edits, readOnly, highlights, onEdit, onRever
     return { columns, grand: columns.reduce((sum, value) => sum + value, 0) }
   }, [products, regions, cells, edits])
 
-  const editable = (row: number, col: number): boolean => !readOnly && products[row]?.is_active === true && locked[col] === false
-
   const moveTo = (row: number, col: number) => {
     focusRequested.current = true
-    setPosition({ row: Math.max(0, Math.min(row, lastRow)), col: Math.max(0, Math.min(col, lastCol)) })
+    const target = { row: clamp(row, lastRow), col: clamp(col, lastCol) }
+    setSelection({ ...target, productId: products[target.row]?.id ?? 0, regionId: regions[target.col]?.id ?? 0 })
   }
 
   const startEditing = (next: Editing) => {
@@ -148,13 +183,17 @@ export function QuotaGrid({ matrix, edits, readOnly, highlights, onEdit, onRever
     if (valid.length > 0) onEdit(valid)
   }
 
-  /** Fin de la saisie en cours : la valeur part (ou s'affiche en erreur). */
-  const commit = (text: string): Editing | null => {
+  /**
+   * Fin de la saisie en cours : la valeur part (ou s'affiche en erreur) pour
+   * le produit et la région où elle a commencé, à leur rang actuel ; rien ne
+   * part si la cellule a disparu ou n'est plus modifiable.
+   */
+  const commit = (text: string): void => {
     const current = editingRef.current
-    if (!current) return null
+    if (!current) return
     stopEditing()
-    apply([change(current.row, current.col, text)])
-    return current
+    const at = locate(current)
+    if (at) apply([change(at.row, at.col, text)])
   }
 
   const editorValue = (): string => table.current?.querySelector<HTMLInputElement>('input[data-editor]')?.value ?? ''
@@ -169,7 +208,7 @@ export function QuotaGrid({ matrix, edits, readOnly, highlights, onEdit, onRever
     return from.row < lastRow ? { row: from.row + 1, col: 0 } : null
   }
 
-  const onEditorKeyDown = (event: KeyboardEvent, current: Editing) => {
+  const onEditorKeyDown = (event: KeyboardEvent, current: Position & Pick<Editing, 'mode'>) => {
     const input = event.target as HTMLInputElement
     const commitAndMove = (row: number, col: number) => {
       event.preventDefault()
@@ -210,7 +249,8 @@ export function QuotaGrid({ matrix, edits, readOnly, highlights, onEdit, onRever
     if (!(event.target as HTMLElement).closest('[data-row]')) return
     const current = editingRef.current
     if (current) {
-      onEditorKeyDown(event, current)
+      // Déplacement à partir du rang actuel de la cellule saisie.
+      onEditorKeyDown(event, { ...(locate(current) ?? active), mode: current.mode })
       return
     }
     if (event.altKey) return
@@ -270,14 +310,14 @@ export function QuotaGrid({ matrix, edits, readOnly, highlights, onEdit, onRever
 
     if (event.key === 'F2') {
       event.preventDefault()
-      startEditing({ row, col, text: editableText(cells[product.id]?.[region.id], edit), mode: 'edit' })
+      startEditing({ productId: product.id, regionId: region.id, text: editableText(cells[product.id]?.[region.id], edit), mode: 'edit' })
     } else if (event.key === 'Delete' || event.key === 'Backspace') {
       event.preventDefault()
       apply([change(row, col, '0')])
     } else if (event.key.length === 1 && event.key !== ' ') {
       // Une frappe remplace la valeur (comme dans un tableur).
       event.preventDefault()
-      startEditing({ row, col, text: event.key, mode: 'replace' })
+      startEditing({ productId: product.id, regionId: region.id, text: event.key, mode: 'replace' })
     }
   }
 
@@ -291,7 +331,7 @@ export function QuotaGrid({ matrix, edits, readOnly, highlights, onEdit, onRever
     const target = cellAt(event.target)
     if (!target) return
     const current = editingRef.current
-    if (current && current.row === target.row && current.col === target.col) return
+    if (current && current.productId === products[target.row]?.id && current.regionId === regions[target.col]?.id) return
     if (current) commit(editorValue())
     moveTo(target.row, target.col)
   }
@@ -301,7 +341,12 @@ export function QuotaGrid({ matrix, edits, readOnly, highlights, onEdit, onRever
     if (!target || editingRef.current || !editable(target.row, target.col)) return
     const product = products[target.row]!
     const region = regions[target.col]!
-    startEditing({ ...target, text: editableText(cells[product.id]?.[region.id], edits.get(product.id)?.[region.id]), mode: 'edit' })
+    startEditing({
+      productId: product.id,
+      regionId: region.id,
+      text: editableText(cells[product.id]?.[region.id], edits.get(product.id)?.[region.id]),
+      mode: 'edit',
+    })
   }
 
   // Champ quitté (clic ailleurs, bouton de la barre d'actions) : la saisie est gardée.
@@ -335,7 +380,7 @@ export function QuotaGrid({ matrix, edits, readOnly, highlights, onEdit, onRever
     // Une simple valeur collée dans le champ en cours : comportement normal du champ.
     if (current && !isBlock(text)) return
     event.preventDefault()
-    const start = current ?? active
+    const start = (current && locate(current)) ?? active
     if (current) stopEditing()
     paste(start, parseClipboard(text))
   }
@@ -421,7 +466,7 @@ export function QuotaGrid({ matrix, edits, readOnly, highlights, onEdit, onRever
                   cells={cells[product.id]}
                   edits={edits.get(product.id)}
                   activeCol={isActiveRow ? active.col : null}
-                  editing={editing && editing.row === row ? editing : null}
+                  editing={liveEditing && liveEditing.productId === product.id ? liveEditing : null}
                   readOnly={readOnly || !product.is_active}
                   locked={locked}
                   highlights={highlights.get(product.id)}
@@ -535,7 +580,7 @@ const QuotaRow = memo(function QuotaRow({ product, row, ariaRowIndex, regions, c
         <div className="truncate text-xs text-slate-500">{product.sales_unit_label}</div>
       </td>
       {regions.map((region, col) => {
-        const isEditing = editing !== null && editing.col === col
+        const isEditing = editing !== null && editing.regionId === region.id
         return (
           <QuotaCellView
             key={region.id}

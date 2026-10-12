@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { QuotaMatrix } from '../../../shared/api/types'
+import { daysKey } from '../days/api'
 import { matrixKey, mergeSavedCells, saveQuotaCells } from './api'
 import { DraftQueue } from './drafts'
 
@@ -8,8 +9,10 @@ import { DraftQueue } from './drafts'
  * File d'enregistrement des brouillons d'une journée, branchée sur le cache
  * de la matrice : chaque réponse y est reportée (`setQueryData`), et une
  * relecture lancée avant l'enregistrement est relancée pour ne pas écraser
- * les valeurs enregistrées par des valeurs périmées. Avertit avant de
- * quitter la page tant que des saisies ne sont pas enregistrées.
+ * les valeurs enregistrées par des valeurs périmées. Les écrans des
+ * journées (brouillons en attente par région, RG-Q03) sont relus au
+ * prochain affichage. Avertit avant de quitter la page tant que des
+ * saisies ne sont pas enregistrées.
  */
 export function useDraftQueue(day: string) {
   const queryClient = useQueryClient()
@@ -21,6 +24,8 @@ export function useDraftQueue(day: string) {
           const queryKey = matrixKey(day)
           queryClient.setQueryData<QuotaMatrix>(queryKey, (matrix) => matrix && mergeSavedCells(matrix, result.cells))
           if (queryClient.isFetching({ queryKey }) > 0) void queryClient.invalidateQueries({ queryKey })
+          // Calendrier et détail de la journée : nombre de brouillons périmé.
+          void queryClient.invalidateQueries({ queryKey: daysKey })
         },
         // Journée clôturée entre-temps : la matrice relue passe en lecture seule.
         onClosed: () => void queryClient.invalidateQueries({ queryKey: matrixKey(day) }),

@@ -16,6 +16,32 @@ export function useRealtimeStatus(): RealtimeStatus {
   return useSyncExternalStore(subscribeRealtimeStatus, getRealtimeStatus, getRealtimeStatus)
 }
 
+/**
+ * Rattrapage après une coupure (§9.6) : appelle `onReconnect` à chaque
+ * retour à `connected` où des événements ont pu être manqués, c'est-à-dire
+ * dès que ce composant a déjà vu la connexion établie, ou s'est replié sur
+ * le rafraîchissement de secours (`unavailable`). pusher-js repasse par
+ * `connecting` à chaque reconnexion (connected → connecting → connected
+ * après une coupure, unavailable → connecting → connected au retour du
+ * réseau) : on ne peut donc pas se fier à l'état précédent seul. Jamais à
+ * la première connexion d'un écran qui vient de charger ses données.
+ */
+export function useRealtimeReconnect(onReconnect: () => void): void {
+  const status = useRealtimeStatus()
+  const onReconnectRef = useRef(onReconnect)
+  useEffect(() => {
+    onReconnectRef.current = onReconnect
+  })
+
+  const previous = useRef<RealtimeStatus | null>(null)
+  const mayHaveMissed = useRef(false)
+  useEffect(() => {
+    if (status === 'connected' && previous.current !== 'connected' && mayHaveMissed.current) onReconnectRef.current()
+    if (status === 'connected' || status === 'unavailable') mayHaveMissed.current = true
+    previous.current = status
+  }, [status])
+}
+
 type Handlers = Record<string, (payload: unknown) => void>
 
 // Abonnés par canal : on ne quitte un canal qu'au départ de son dernier abonné.
@@ -87,11 +113,7 @@ export function useLiveRefresh(channel: string | null, events: readonly string[]
   useChannel(channel, Object.fromEntries(events.map((event) => [event, refresh])))
 
   // Retour de la connexion après une coupure : des événements ont pu être manqués.
-  const previous = useRef(status)
-  useEffect(() => {
-    if (status === 'connected' && previous.current === 'unavailable') refresh()
-    previous.current = status
-  })
+  useRealtimeReconnect(refresh)
 
   return status === 'connected' && channel !== null ? false : FALLBACK_REFRESH_MS
 }

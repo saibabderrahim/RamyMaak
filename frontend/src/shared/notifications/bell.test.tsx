@@ -145,6 +145,34 @@ describe('notification bell', () => {
     expect(screen.getByText('Nouvelle notification : Quotas du 08/10 modifiés — région Centre')).toBeInTheDocument()
   })
 
+  // pusher-js repasse par « connecting » à chaque reconnexion (§9.6) ; une fois connecté, plus rien ne relit.
+  it('catches up on notifications missed while reconnecting, but not on the first connection', async () => {
+    let unread = 1
+    const user = makeUser('regional', { id: 7, realtime: { key: 'app-key' } })
+    const { calls } = countApi(user, () => unread)
+    renderBell(user)
+    await screen.findByRole('link', { name: 'Notifications (1 non lue)' })
+    await waitFor(() => expect(fake.stateChange).not.toBeNull())
+
+    act(() => fake.stateChange?.({ current: 'connected' }))
+    await act(async () => {})
+    expect(countRequests(calls)).toBe(1)
+
+    // Socket coupé puis rétabli : connected → connecting → connected.
+    unread = 2
+    act(() => fake.stateChange?.({ current: 'connecting' }))
+    act(() => fake.stateChange?.({ current: 'connected' }))
+    expect(await screen.findByRole('link', { name: 'Notifications (2 non lues)' })).toBeInTheDocument()
+
+    // Retour du réseau : unavailable → connecting → connected.
+    unread = 3
+    act(() => fake.stateChange?.({ current: 'unavailable' }))
+    act(() => fake.stateChange?.({ current: 'connecting' }))
+    act(() => fake.stateChange?.({ current: 'connected' }))
+    expect(await screen.findByRole('link', { name: 'Notifications (3 non lues)' })).toBeInTheDocument()
+    expect(countRequests(calls)).toBe(3)
+  })
+
   it('polls every 30 s without realtime', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     const { calls } = countApi(makeUser('client'), () => 0)

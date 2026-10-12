@@ -11,7 +11,7 @@ import { useEffect, useRef } from 'react'
 import { api } from '../api/client'
 import type { AppNotification, NotificationsPage } from '../api/types'
 import { useAuthenticatedUser } from '../auth/session'
-import { FALLBACK_REFRESH_MS, NOTIFICATION_EVENT, useChannel, useRealtimeStatus } from '../realtime'
+import { FALLBACK_REFRESH_MS, NOTIFICATION_EVENT, useChannel, useRealtimeReconnect, useRealtimeStatus } from '../realtime'
 
 /**
  * Centre de notifications (EF-NOT-01) — contrat : docs/lot-3-contrat-api.md §6.
@@ -164,11 +164,7 @@ export function useLiveNotifications(onReceived?: (notification: AppNotification
   })
 
   // Retour de la connexion après une coupure : des notifications ont pu être manquées.
-  const previous = useRef(status)
-  useEffect(() => {
-    if (status === 'connected' && previous.current === 'unavailable') void queryClient.invalidateQueries({ queryKey: notificationsKey })
-    previous.current = status
-  })
+  useRealtimeReconnect(() => void queryClient.invalidateQueries({ queryKey: notificationsKey }))
 
   return status === 'connected' ? false : FALLBACK_REFRESH_MS
 }

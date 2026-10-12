@@ -106,6 +106,58 @@ describe('useLiveRefresh', () => {
     expect(fake.left).toEqual(['adv.2026-10-08'])
   })
 
+  it('does not refresh on the first connection: the data has just been loaded', async () => {
+    const { invalidate } = renderProbe({ key: 'app-key' })
+    await waitFor(() => expect(fake.stateChange).not.toBeNull())
+
+    act(() => fake.stateChange?.({ current: 'connecting' }))
+    act(() => fake.stateChange?.({ current: 'connected' }))
+    expect(screen.getByRole('status')).toHaveTextContent('false')
+    expect(invalidate).not.toHaveBeenCalled()
+  })
+
+  // pusher-js repasse par « connecting » à chaque reconnexion (§9.6).
+  it.each([
+    ['a dropped socket', ['connecting', 'connected']],
+    ['the network coming back', ['unavailable', 'connecting', 'connected']],
+  ])('catches up on missed events when reconnecting after %s', async (_, transitions) => {
+    const { invalidate } = renderProbe({ key: 'app-key' })
+    await waitFor(() => expect(fake.stateChange).not.toBeNull())
+    act(() => fake.stateChange?.({ current: 'connected' }))
+    expect(invalidate).not.toHaveBeenCalled()
+
+    transitions.forEach((state) => act(() => fake.stateChange?.({ current: state })))
+    expect(invalidate).toHaveBeenCalledTimes(1)
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['quotas'] })
+    expect(screen.getByRole('status')).toHaveTextContent('false')
+  })
+
+  it('catches up when the first attempt fell back to polling before connecting', async () => {
+    const { invalidate } = renderProbe({ key: 'app-key' })
+    await waitFor(() => expect(fake.stateChange).not.toBeNull())
+
+    // Premier essai trop long : pusher-js passe « unavailable », puis « connected » directement.
+    act(() => fake.stateChange?.({ current: 'unavailable' }))
+    expect(screen.getByRole('status')).toHaveTextContent('30000')
+    act(() => fake.stateChange?.({ current: 'connected' }))
+    expect(invalidate).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not refresh a screen opened on an established connection until it is lost and back', async () => {
+    renderProbe({ key: 'app-key' })
+    await waitFor(() => expect(fake.stateChange).not.toBeNull())
+    act(() => fake.stateChange?.({ current: 'connected' }))
+
+    // Second écran, ouvert sur la connexion déjà établie (une seule connexion par session).
+    const { invalidate } = renderProbe({ key: 'app-key' }, 'region-day.3.2026-10-08')
+    await waitFor(() => expect(fake.listeners.get('region-day.3.2026-10-08:.QuotaPublished')?.size).toBe(1))
+    expect(invalidate).not.toHaveBeenCalled()
+
+    act(() => fake.stateChange?.({ current: 'connecting' }))
+    act(() => fake.stateChange?.({ current: 'connected' }))
+    expect(invalidate).toHaveBeenCalledTimes(1)
+  })
+
   it('authorizes private channels with the session cookie and the anti-CSRF token', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       if (String(input) === '/sanctum/csrf-cookie') {
