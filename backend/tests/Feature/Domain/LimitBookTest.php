@@ -199,6 +199,25 @@ it('removes a published limit when « pas de borne » is sent', function () {
     expect(($this->limit)($this->a, $this->orange))->max_qty->toBeNull()->has_draft->toBeFalse();
 });
 
+it('cancels a draft by restoring the published limit, even above a quota lowered since (RG-Q06)', function () {
+    $this->book->saveDrafts($this->regionDay, [($this->cell)($this->a, $this->orange, 400)], $this->regional);
+    $this->book->publish($this->regionDay, $this->regional);
+    $this->book->saveDrafts($this->regionDay, [($this->cell)($this->a, $this->orange, 250), ($this->cell)($this->b, $this->pomme, 20)], $this->regional);
+    // L'ADV baisse le quota sous la borne publiée (permis, RG-Q06).
+    $day = $this->regionDay->businessDay;
+    $this->quotas->saveDrafts($day, [['region_id' => $this->centre->id, 'product_id' => $this->orange->id, 'quantity' => 300]], $this->adv);
+    $this->quotas->publish($day, [$this->centre->id], $this->adv);
+
+    // « Annuler les modifications » renvoie la borne publiée : le brouillon disparaît.
+    expect($this->book->saveDrafts($this->regionDay, [($this->cell)($this->a, $this->orange, 400)], $this->regional))->toBe(1)
+        ->and(($this->limit)($this->a, $this->orange))->has_draft->toBeFalse()->max_qty->toBe(400);
+    // Une nouvelle valeur au-dessus du quota reste refusée.
+    expect(fn () => $this->book->saveDrafts($this->regionDay, [($this->cell)($this->a, $this->orange, 350)], $this->regional))
+        ->toThrow(ValidationException::class);
+    // L'envoi suivant n'est plus bloqué par le brouillon annulé.
+    expect($this->book->publish($this->regionDay, $this->regional)->notifiedClientIds)->toBe([$this->b->id]);
+});
+
 it('refuses the whole sending when a limit exceeds a quota decreased since (RG-B03, RG-Q06)', function () {
     $this->book->saveDrafts($this->regionDay, [($this->cell)($this->a, $this->orange, 400), ($this->cell)($this->b, $this->pomme, 50)], $this->regional);
     $this->quotas->saveDrafts($this->regionDay->businessDay, [['region_id' => $this->centre->id, 'product_id' => $this->orange->id, 'quantity' => 350]], $this->adv);

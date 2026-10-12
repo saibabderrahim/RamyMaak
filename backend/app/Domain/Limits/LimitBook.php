@@ -36,6 +36,9 @@ final class LimitBook
     /** Entrées « changes » gardées dans le journal d'une publication. */
     private const AUDIT_CHANGES = 200;
 
+    /** Tentatives d'une transaction interrompue par un interblocage (MySQL). */
+    private const ATTEMPTS = 3;
+
     public function __construct(
         private readonly DayCalendar $calendar,
         private readonly Perimeter $perimeter,
@@ -101,6 +104,15 @@ final class LimitBook
                 ->pluck('id')
                 ->flip();
             $usage = $regionDay->isDistributionPublished() ? $this->usage->forRegionDay($regionDay) : [];
+            // Lecture sans verrou : le verrou de la journée régionale sérialise
+            // déjà ses écritures ; un FOR UPDATE poserait des verrous d'intervalle
+            // qui interbloquent les insertions de deux régions voisines (MySQL).
+            $existing = ClientLimit::query()
+                ->where('region_day_id', $regionDay->id)
+                ->whereIn('client_id', array_unique(array_column($cells, 'client_id')))
+                ->whereIn('product_id', array_unique(array_column($cells, 'product_id')))
+                ->get()
+                ->keyBy(fn (ClientLimit $limit) => $limit->client_id.'|'.$limit->product_id);
 
             $errors = [];
             foreach ($cells as $index => $cell) {
@@ -114,6 +126,12 @@ final class LimitBook
                     continue;
                 }
                 $limit = $cell['limit'];
+                // Reprendre la borne publiée annule le brouillon, même si l'ADV a
+                // depuis baissé le quota sous cette borne (RG-Q06) : elle n'est
+                // pas une nouvelle valeur.
+                if ($limit === $existing->get($cell['client_id'].'|'.$cell['product_id'])?->max_qty) {
+                    continue;
+                }
                 if ($limit !== null && $limit > $quota) {
                     $errors["cells.{$index}.limit"] = [__('limits.above_quota', ['quota' => $quota])];
                 }
@@ -125,14 +143,6 @@ final class LimitBook
             if ($errors !== []) {
                 throw ValidationException::withMessages($errors);
             }
-
-            $existing = ClientLimit::query()
-                ->where('region_day_id', $regionDay->id)
-                ->whereIn('client_id', array_unique(array_column($cells, 'client_id')))
-                ->whereIn('product_id', array_unique(array_column($cells, 'product_id')))
-                ->lockForUpdate()
-                ->get()
-                ->keyBy(fn (ClientLimit $limit) => $limit->client_id.'|'.$limit->product_id);
 
             $changed = 0;
             foreach ($cells as $cell) {
@@ -171,7 +181,7 @@ final class LimitBook
             }
 
             return $changed;
-        });
+        }, self::ATTEMPTS);
     }
 
     /**
@@ -257,7 +267,6 @@ final class LimitBook
                 ->with(['client:id,code', 'product:id,sku'])
                 ->where('region_day_id', $regionDay->id)
                 ->where('has_draft', true)
-                ->lockForUpdate()
                 ->get();
 
             // Brouillons devenus sans objet (client sorti de la région, produit
@@ -353,7 +362,7 @@ final class LimitBook
                 $notified,
                 $this->overallocated($regionDay),
             );
-        });
+        }, self::ATTEMPTS);
     }
 
     /**

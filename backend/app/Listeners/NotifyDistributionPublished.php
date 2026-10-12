@@ -3,6 +3,7 @@
 namespace App\Listeners;
 
 use App\Domain\Access\Role;
+use App\Domain\Referentials\ClientStatus;
 use App\Events\DistributionPublished;
 use App\Models\RegionDay;
 use App\Models\User;
@@ -50,6 +51,8 @@ final class NotifyDistributionPublished implements ShouldQueue
                 ->whereIn('client_id', $event->notifiedClientIds)
                 // Un compte passé à un autre rôle garde son client : il n'est plus destinataire.
                 ->whereHas('roles', fn (Builder $q) => $q->where('name', Role::Client->value))
+                // Client bloqué depuis l'envoi : jamais notifié (statut relu à l'exécution).
+                ->whereHas('client', fn (Builder $q) => $q->where('status', ClientStatus::Active->value))
                 ->lazyById(self::CHUNK),
         );
     }

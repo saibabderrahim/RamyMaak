@@ -152,6 +152,18 @@ it('notifies only the accounts of the clients of the event (RG-B04 : politique O
         ->and(($this->notificationsOf)($this->secondA))->toBeEmpty();
 });
 
+it('never notifies a client blocked between the sending and the job (contrat §7)', function () {
+    // Le client était actif à l'envoi ; l'ADV le bloque avant l'exécution de la tâche.
+    $event = new DistributionPublished($this->regionDay->id, 1, true, [$this->a->id, $this->b->id], $this->regional->id);
+    $this->a->forceFill(['status' => 'BLOCKED'])->save();
+
+    app(NotifyDistributionPublished::class)->handle($event);
+
+    expect(($this->notificationsOf)($this->accountA))->toBeEmpty()
+        ->and(($this->notificationsOf)($this->secondA))->toBeEmpty()
+        ->and(($this->notificationsOf)($this->accountB))->toHaveCount(1);
+});
+
 it('sends N-04 to the impacted clients only on each later publication (RG-B07)', function () {
     $blocked = Client::factory()->blocked()->create(['code' => 'C0050', 'region_id' => $this->centre->id]);
     $blockedAccount = userWithRole(Role::Client, ['client_id' => $blocked->id]);

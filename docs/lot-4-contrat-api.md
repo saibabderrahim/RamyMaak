@@ -142,7 +142,7 @@ Règles (appliquées par `LimitBook`) :
 - **RG-B07** :
   - après le premier envoi, une borne ne descend pas sous V(c,p) (422 « Borne inférieure aux 30 déjà validés pour ce client. ») ;
   - une borne sous E(c,p) = S + V est permise ; l'écran avertit que la commande en attente devra être réduite à la validation.
-- **Annuler un brouillon** : renvoyer la borne publiée de la cellule (`limit`). Une valeur égale à la borne publiée efface le brouillon.
+- **Annuler un brouillon** : renvoyer la borne publiée de la cellule (`limit`). Une valeur égale à la borne publiée efface le brouillon, même si l'ADV a depuis baissé le quota sous cette borne (RG-Q06) : ce n'est pas une nouvelle valeur.
 - **RG-B05** : la surallocation (ΣB > Q) est permise et signalée, sans blocage.
 - **RG-B08**, « Reprendre J-1 » :
   - source : la dernière journée de la région, antérieure, dont la répartition a été envoyée (`distribution_version` > 0) ;
@@ -287,11 +287,13 @@ Décisions prises pendant l'implémentation, qui complètent le contrat.
 - `products[].pending` additionne S(c,p) pour tous les clients que renvoie `ClientUsage` : c'est un total de la région. `sum_limits` ne compte que les clients listés.
 - Quotas non publiés : les clients restent listés ; seuls `products` et `cells` sont vides.
 - Le nombre de requêtes de la grille ne dépend pas du volume (26 requêtes pour 30 clients × 10 produits comme pour une petite grille).
+- Écritures : le verrou de la journée régionale sérialise les écritures d'une région ; les bornes sont lues sans verrou d'intervalle, pour que deux régions qui saisissent en même temps ne s'interbloquent pas (MySQL), et une transaction interrompue par un interblocage est rejouée (3 tentatives).
 
 **Notifications et temps réel**
 - N-03 et N-04 ont leur propre classe de base, `ClientDayNotification` (adresse `/client`, sans nom de région), distincte de `RegionDayNotification` (régionaux).
 - L'heure de N-03 est l'heure limite de commande de la région au moment de l'envoi, prolongation comprise.
 - Destinataires : les comptes actifs de rôle client rattachés aux clients notifiés, lus par paquets de 100. Un client bloqué n'est jamais notifié.
 - Un compte resté rattaché au client mais passé à un autre rôle n'est ni notifié ni autorisé sur `client.{id}`.
+- Le statut du client est relu à l'exécution de la tâche : un client bloqué entre l'envoi et la tâche n'est pas notifié.
 - `LimitDraftsUpdated` parvient aussi à l'écran de l'auteur de la saisie : la PWA ne laisse jamais une relecture écraser une saisie en cours.
 - Comme au lot 3, une notification enregistrée dont la diffusion a échoué reste dans le centre de notifications, mais n'est pas rediffusée.
