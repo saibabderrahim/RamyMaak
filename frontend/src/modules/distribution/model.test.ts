@@ -4,6 +4,7 @@ import {
   available,
   belowEngaged,
   buildChange,
+  cellAvailable,
   checkLimit,
   displayedLimit,
   type EditsByClient,
@@ -104,6 +105,17 @@ describe('distribution model — D(c,p) and RG-B07', () => {
     expect(available(null, 0, 0, 200, 'REQUIRED')).toBe(0)
   })
 
+  it('computes D of a cell on the published limit, never on a draft (§5.1)', () => {
+    // Publiée 50, brouillon 60, S 10, V 30 : min(50 − 40, 200) = 10.
+    expect(cellAvailable(cell(50, { value: 60 }, 10, 30), 200, 'FREE')).toBe(10)
+    // Pas de borne publiée, brouillon 80 : la politique s'applique.
+    expect(cellAvailable(cell(null, { value: 80 }), 200, 'FREE')).toBe(200)
+    expect(cellAvailable(cell(null, { value: 80 }), 200, 'REQUIRED')).toBe(0)
+    // Borne publiée retirée en brouillon : toujours la borne publiée.
+    expect(cellAvailable(cell(30, { value: null }), 200, 'FREE')).toBe(30)
+    expect(cellAvailable(undefined, 200, 'FREE')).toBe(200)
+  })
+
   it('refuses a limit above the quota, and below the validated quantity after the first send', () => {
     expect(checkLimit(null, 500, 30, true)).toBeNull()
     expect(checkLimit(500, 500, 0, false)).toBeNull()
@@ -178,6 +190,21 @@ describe('distribution model — entry', () => {
     // Saisie locale identique : rien ; saisie en erreur ressaisie : nouvelle valeur.
     expect(buildChange({ ...base, edit: edit(70) }, '70', messages)).toBeNull()
     expect(buildChange({ ...base, edit: { value: null, text: 'x', error: 'format' } }, '50', messages)?.edit.value).toBe(50)
+  })
+
+  it('accepts the published limit again, even above a quota decreased since (RG-Q06)', () => {
+    // Quota diminué à 350 sous la borne publiée 400, brouillon 200 en attente.
+    const lowered = product(42, 350)
+    const base = { clientId: 51, product: lowered, cell: cell(400, { value: 200 }), edit: undefined, published: true }
+    expect(buildChange(base, '400', messages)).toEqual({ clientId: 51, productId: 42, edit: { value: 400, text: '400', error: null } })
+    // Saisie locale en cours : retour à la borne publiée aussi.
+    expect(buildChange({ ...base, edit: edit(300) }, '400', messages)?.edit).toEqual({ value: 400, text: '400', error: null })
+    // Toute autre valeur au-dessus du quota reste refusée.
+    expect(buildChange(base, '380', messages)?.edit.error).toBe('> 350')
+    // Sans brouillon, la borne publiée est déjà affichée : rien à changer.
+    expect(buildChange({ ...base, cell: cell(400) }, '400', messages)).toBeNull()
+    // Sans ligne publiée, rien n'est exempté.
+    expect(buildChange({ ...base, cell: undefined }, '400', messages)?.edit.error).toBe('> 350')
   })
 
   it('reads a block copied from Excel', () => {

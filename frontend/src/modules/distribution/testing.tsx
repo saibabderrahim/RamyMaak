@@ -15,6 +15,7 @@ import type {
 } from '../../shared/api/types'
 import { meQueryKey } from '../../shared/auth/session'
 import { json, makeUser, mockApi } from '../../test/utils'
+import { draftStorageKey } from './drafts'
 import { formatQuantity } from './model'
 import RegionalDistributionPage from './RegionalDistributionPage'
 import { TestLocation } from './TestLocation'
@@ -156,8 +157,23 @@ export function savedCells(body: unknown, grid: DistributionGrid = makeGrid()): 
 
 type Routes = Parameters<typeof mockApi>[0]
 
-/** Page du régional seule, utilisateur connu ; `routes` complète ou remplace les réponses simulées. */
-export function renderDistribution({ path = `/regional/repartition?day=${DAY}`, routes = {}, user = regional() }: { path?: string; routes?: Routes; user?: CurrentUser } = {}) {
+/** Saisies non enregistrées gardées dans le navigateur pour la journée DAY et la région Centre ; null : aucune. */
+export const storedDrafts = (userId = 1): LimitCellInput[] | null => JSON.parse(localStorage.getItem(draftStorageKey(userId, DAY, CENTRE.id)) ?? 'null')
+
+/**
+ * Page du régional seule, utilisateur connu ; `routes` complète ou remplace
+ * les réponses simulées. Le stockage du navigateur part vide, sauf les
+ * saisies non enregistrées `stored` d'une visite précédente (journée DAY,
+ * région Centre).
+ */
+export function renderDistribution({
+  path = `/regional/repartition?day=${DAY}`,
+  routes = {},
+  user = regional(),
+  stored = [],
+}: { path?: string; routes?: Routes; user?: CurrentUser; stored?: LimitCellInput[] } = {}) {
+  localStorage.clear()
+  if (stored.length > 0) localStorage.setItem(draftStorageKey(user.id, DAY, CENTRE.id), JSON.stringify(stored))
   const mock = mockApi({
     'GET /api/v1/auth/me': () => json(user),
     [REGIONS_URL]: ({ url }) => json(opened(url.searchParams.get('day') ?? DAY)),

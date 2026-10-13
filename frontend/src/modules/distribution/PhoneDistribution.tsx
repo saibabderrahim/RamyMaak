@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next'
 import type { DistributionGrid as Grid, DistributionGridClient, DistributionGridProduct, LimitCell } from '../../shared/api/types'
 import { Badge, Input, Select } from '../../shared/ui'
 import {
-  available,
   belowEngaged,
+  cellAvailable,
   type CellChange,
   checkLimit,
   displayedLimit,
@@ -358,19 +358,24 @@ const PhoneLimitRow = memo(function PhoneLimitRow({
   const validated = cell?.validated ?? 0
   const draft = hasDraft(cell, edit)
   const problem = invalid ? null : checkLimit(value, product.quota, validated, published)
-  const error =
-    edit?.error ??
-    (problem === null
+  // Borne publiée affichée sans brouillon, devenue hors limites (quota
+  // diminué depuis, RG-Q06) : signalée, ce n'est pas une erreur à corriger.
+  const outdated = problem !== null && !draft
+  const problemText =
+    problem === null
       ? null
       : problem.kind === 'aboveQuota'
-        ? t('distribution.errors.aboveQuota', { quota: formatQuantity(problem.quota) })
-        : t('distribution.errors.belowValidated', { validated: formatQuantity(problem.validated) }))
-  const warning = error === null && belowEngaged(value, cell)
+        ? t(outdated ? 'distribution.grid.outdatedAboveQuota' : 'distribution.errors.aboveQuota', { quota: formatQuantity(problem.quota) })
+        : t(outdated ? 'distribution.grid.outdatedBelowValidated' : 'distribution.errors.belowValidated', { validated: formatQuantity(problem.validated) })
+  const error = edit?.error ?? (outdated ? null : problemText)
+  const engaged = error === null && belowEngaged(value, cell)
+  const warning = engaged || outdated
   const sentLimit = cell?.limit ?? null
 
   const notes: Array<{ key: string; text: string; tone: string }> = []
   if (draft) notes.push({ key: 'sent', text: t('distribution.grid.sent', { value: sentLimit === null ? t('distribution.grid.noLimit') : formatQuantity(sentLimit) }), tone: 'text-sky-800' })
-  if (warning) notes.push({ key: 'warning', text: t('distribution.grid.warning', { engaged: formatQuantity(pending + validated) }), tone: 'text-amber-800' })
+  if (outdated && problemText) notes.push({ key: 'outdated', text: problemText, tone: 'text-amber-800' })
+  if (engaged) notes.push({ key: 'warning', text: t('distribution.grid.warning', { engaged: formatQuantity(pending + validated) }), tone: 'text-amber-800' })
   if (error) notes.push({ key: 'error', text: error, tone: 'font-semibold text-red-700' })
   if (highlighted) notes.push({ key: 'violation', text: t('distribution.grid.violation'), tone: 'font-semibold text-red-700' })
 
@@ -400,7 +405,8 @@ const PhoneLimitRow = memo(function PhoneLimitRow({
             <span>{t('distribution.phone.usage', { pending: formatQuantity(pending), validated: formatQuantity(validated) })}</span>
             {showAvailable && (
               <span className="font-medium text-slate-800">
-                {t('distribution.phone.available', { value: formatQuantity(available(value, pending, validated, product.remaining, policy)) })}
+                {/* D(c,p) sur la borne publiée : un brouillon ne change rien avant l'envoi. */}
+                {t('distribution.phone.available', { value: formatQuantity(cellAvailable(cell, product.remaining, policy)) })}
               </span>
             )}
           </p>

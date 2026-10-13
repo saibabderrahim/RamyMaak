@@ -14,6 +14,13 @@ export const MAX_LIMIT = 1_000_000
 /** Taille maximale d'un lot d'enregistrement (`PUT …/limits`). */
 export const MAX_BATCH = 2_000
 
+/**
+ * Corps au-delà duquel un lot part sans `keepalive`, et budget de ce qui
+ * part à la fermeture de la page : le navigateur plafonne à 64 Kio la somme
+ * des corps des requêtes `keepalive` en cours (marge gardée).
+ */
+export const KEEPALIVE_MAX_BYTES = 60_000
+
 /** Délai d'enregistrement automatique après la dernière saisie (RG-B09). */
 export const SAVE_DELAY_MS = 600
 
@@ -70,6 +77,15 @@ export function hasDraft(cell: LimitCell | undefined, edit: LocalEdit | undefine
 export function available(limit: number | null, pending: number, validated: number, remaining: number, policy: NoLimitPolicy): number {
   if (limit !== null) return Math.max(0, Math.min(limit - pending - validated, remaining))
   return policy === 'FREE' ? Math.max(0, remaining) : 0
+}
+
+/**
+ * Disponible D(c,p) d'une cellule : calculé sur la borne **publiée** B
+ * (§5.1, ce que le client peut demander maintenant), jamais sur un
+ * brouillon ou une saisie qui n'a pas encore été envoyé aux clients.
+ */
+export function cellAvailable(cell: LimitCell | undefined, remaining: number, policy: NoLimitPolicy): number {
+  return available(cell?.limit ?? null, cell?.pending ?? 0, cell?.validated ?? 0, remaining, policy)
 }
 
 /** Synthèse d'une colonne : Q, ΣB (valeurs affichées), S, V(r,p), R, surallocation (RG-B05), épuisement. */
@@ -176,7 +192,11 @@ export function buildChange({ clientId, product, cell, edit, published }: Change
   if (parsed === null) return { clientId, productId, edit: { value: null, text, error: messages.format } }
 
   const { value } = parsed
-  const problem = checkLimit(value, product.quota, cell?.validated ?? 0, published)
+  // Retour à la borne publiée (ressaisie, « Annuler les modifications ») :
+  // toujours permis, même au-dessus d'un quota diminué depuis (RG-Q06) ; le
+  // serveur efface alors le brouillon.
+  const restoring = cell !== undefined && value === cell.limit
+  const problem = restoring ? null : checkLimit(value, product.quota, cell?.validated ?? 0, published)
   if (problem) {
     const error = problem.kind === 'aboveQuota' ? messages.aboveQuota(problem.quota) : messages.belowValidated(problem.validated)
     return { clientId, productId, edit: { value: null, text, error } }

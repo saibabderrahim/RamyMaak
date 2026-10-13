@@ -3,20 +3,33 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DistributionGrid } from '../../shared/api/types'
 import { json, problem } from '../../test/utils'
-import { cellOf, COPY_URL, findGrid, GRID_URL, makeGrid, PUBLISH_URL, renderDistribution, SAVE_URL, savedCells } from './testing'
+import { cellOf, COPY_URL, DAY, findGrid, GRID_URL, makeGrid, opened, PUBLISH_URL, renderDistribution, SAVE_URL, savedCells } from './testing'
 
 afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
 })
 
+/** Réponse retenue jusqu'à `release()`. */
+function gate() {
+  let release!: () => void
+  const promise = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  return { promise, release }
+}
+
+// Clé de la page « Quotas du jour » (modules/regional/quotas), même point d'accès que la liste des régions.
+const QUOTAS_PAGE_KEY = ['regional', 'quotas', DAY]
+
 const order = (calls: Array<{ method: string; path: string }>) => calls.filter((call) => call.path !== '/sanctum/csrf-cookie').map((call) => `${call.method} ${call.path}`)
 
 describe('distribution — « Reprendre J-1 »', () => {
   it('copies the previous distribution, overwriting, then reloads the grid', async () => {
-    const { requests } = renderDistribution({ routes: { [COPY_URL]: () => json({ changed: 120, source_day: '2026-10-07' }) } })
+    const { requests, queryClient } = renderDistribution({ routes: { [COPY_URL]: () => json({ changed: 120, source_day: '2026-10-07' }) } })
     const user = userEvent.setup()
     await findGrid()
+    queryClient.setQueryData(QUOTAS_PAGE_KEY, opened(DAY))
 
     await user.click(screen.getByRole('button', { name: 'Reprendre J-1' }))
     const dialog = screen.getByRole('dialog', { name: 'Reprendre J-1' })
@@ -29,6 +42,36 @@ describe('distribution — « Reprendre J-1 »', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(requests(COPY_URL)[0]!.body).toEqual({ region_id: 3, mode: 'REPLACE' })
     await waitFor(() => expect(requests(GRID_URL)).toHaveLength(2))
+    // Statut changé : la page « Quotas du jour » sera relue.
+    expect(queryClient.getQueryState(QUOTAS_PAGE_KEY)?.isInvalidated).toBe(true)
+  })
+
+  it('cannot be closed while the copy is running', async () => {
+    const response = gate()
+    renderDistribution({
+      routes: {
+        [COPY_URL]: async () => {
+          await response.promise
+          return json({ changed: 3, source_day: '2026-10-07' })
+        },
+      },
+    })
+    const user = userEvent.setup()
+    await findGrid()
+
+    await user.click(screen.getByRole('button', { name: 'Reprendre J-1' }))
+    const dialog = screen.getByRole('dialog', { name: 'Reprendre J-1' })
+    await user.click(within(dialog).getByRole('button', { name: 'Reprendre' }))
+    expect(await within(dialog).findByRole('button', { name: 'Reprise…' })).toBeDisabled()
+    expect(within(dialog).getByRole('button', { name: 'Annuler' })).toBeDisabled()
+    // Échap et × sans effet : la reprise ne peut plus être arrêtée.
+    await user.keyboard('{Escape}')
+    await user.click(within(dialog).getByRole('button', { name: 'Fermer' }))
+    expect(screen.getByRole('dialog', { name: 'Reprendre J-1' })).toBeInTheDocument()
+
+    response.release()
+    expect(await screen.findByText('3 bornes reprises de la répartition du 07/10.')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('fills the empty cells after saving the pending edits', async () => {
@@ -86,7 +129,7 @@ describe('distribution — « Valider et envoyer aux clients »', () => {
         overallocated: [{ product_id: 42, sku: 'P0042', quota: 500, sum_limits: 620 }],
       },
     })
-    const { calls, requests } = renderDistribution({
+    const { calls, requests, queryClient } = renderDistribution({
       routes: {
         [SAVE_URL]: ({ body }) => json(savedCells(body)),
         [GRID_URL]: () => json(published ? makeGrid({ region: { ...makeGrid().region, distribution_version: 2 } }) : fresh),
@@ -114,11 +157,41 @@ describe('distribution — « Valider et envoyer aux clients »', () => {
     // Saisie enregistrée, puis grille relue, avant le récapitulatif.
     expect(order(calls)).toEqual(['GET /api/v1/regional/quotas', GRID_URL, SAVE_URL, GRID_URL])
 
+    queryClient.setQueryData(QUOTAS_PAGE_KEY, opened(DAY))
     await user.click(within(dialog).getByRole('button', { name: 'Envoyer aux clients' }))
     expect(await screen.findByText('Répartition envoyée (version 2) : 2 clients notifiés.')).toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(requests(PUBLISH_URL)[0]!.body).toEqual({ region_id: 3 })
     expect(await screen.findByText('Répartition envoyée (v2)')).toBeInTheDocument()
+    // Nouvelle version : la page « Quotas du jour » sera relue.
+    expect(queryClient.getQueryState(QUOTAS_PAGE_KEY)?.isInvalidated).toBe(true)
+  })
+
+  it('cannot be closed while the sending is in progress', async () => {
+    const response = gate()
+    renderDistribution({
+      routes: {
+        [PUBLISH_URL]: async () => {
+          await response.promise
+          return json({ version: 2, first: false, changes: 1, notified_clients: 1, overallocated: [] })
+        },
+      },
+    })
+    const user = userEvent.setup()
+    await findGrid()
+
+    await user.click(screen.getByRole('button', { name: 'Valider et envoyer aux clients' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Valider et envoyer aux clients' })
+    await user.click(within(dialog).getByRole('button', { name: 'Envoyer aux clients' }))
+    expect(await within(dialog).findByRole('button', { name: 'Envoi…' })).toBeDisabled()
+    expect(within(dialog).getByRole('button', { name: 'Annuler' })).toBeDisabled()
+    await user.keyboard('{Escape}')
+    await user.click(within(dialog).getByRole('button', { name: 'Fermer' }))
+    expect(screen.getByRole('dialog', { name: 'Valider et envoyer aux clients' })).toBeInTheDocument()
+
+    response.release()
+    expect(await screen.findByText('Répartition envoyée (version 2) : 1 client notifié.')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('announces a first send without any limit', async () => {

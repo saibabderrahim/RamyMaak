@@ -1,8 +1,9 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { DistributionGrid } from '../../shared/api/types'
-import { gridKey, mergeSavedCells, regionsKey, saveLimits } from './api'
-import { DraftQueue } from './drafts'
+import { useAuthenticatedUser } from '../../shared/auth/session'
+import { gridKey, invalidateRegions, mergeSavedCells, saveLimits } from './api'
+import { browserDraftStorage, DraftQueue, draftStorageKey } from './drafts'
 
 /**
  * File d'enregistrement des bornes d'une région pour une journée, branchée
@@ -10,10 +11,13 @@ import { DraftQueue } from './drafts'
  * et une relecture lancée avant l'enregistrement est relancée pour ne pas
  * écraser les valeurs enregistrées par des valeurs périmées. Aucune perte à
  * la fermeture (RG-B09) : la file part dès que la page est masquée ou
- * quittée, et le navigateur avertit tant que des saisies attendent.
+ * quittée, le navigateur avertit tant que des saisies attendent, et les
+ * saisies sans accusé de réception sont gardées dans le navigateur, par
+ * utilisateur, journée et région, jusqu'à la prochaine ouverture de la grille.
  */
 export function useDraftQueue(day: string, regionId: number) {
   const queryClient = useQueryClient()
+  const user = useAuthenticatedUser()
   const [queue] = useState(
     () =>
       new DraftQueue({
@@ -24,19 +28,23 @@ export function useDraftQueue(day: string, regionId: number) {
           queryClient.setQueryData<DistributionGrid>(queryKey, (grid) => grid && mergeSavedCells(grid, result))
           if (queryClient.isFetching({ queryKey }) > 0) void queryClient.invalidateQueries({ queryKey })
           // Premier brouillon : la région passe « Répartition en cours » (§6.1).
-          if (before && before.region.status !== result.status) void queryClient.invalidateQueries({ queryKey: regionsKey(day) })
+          if (before && before.region.status !== result.status) invalidateRegions(queryClient, day)
         },
         // Journée clôturée entre-temps : la grille relue passe en lecture seule.
         onClosed: () => {
           void queryClient.invalidateQueries({ queryKey: gridKey(day, regionId) })
-          void queryClient.invalidateQueries({ queryKey: regionsKey(day) })
+          invalidateRegions(queryClient, day)
         },
+        storage: browserDraftStorage(draftStorageKey(user.id, day, regionId)),
       }),
   )
   const snapshot = useSyncExternalStore(queue.subscribe, queue.getSnapshot, queue.getSnapshot)
 
   // Départ de l'écran : les saisies en attente partent sans attendre le délai.
-  useEffect(() => () => queue.dispose(), [queue])
+  useEffect(() => {
+    queue.attach()
+    return () => queue.dispose()
+  }, [queue])
 
   // Onglet masqué, application mise en arrière-plan ou fermée (RG-B09).
   useEffect(() => {

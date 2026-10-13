@@ -7,6 +7,8 @@ import { usePublishDistribution } from './api'
 import { Dialog } from './Dialog'
 import { formatQuantity } from './model'
 
+const ignore = () => undefined
+
 type Props = {
   day: string
   regionId: number
@@ -58,8 +60,12 @@ export function PublishDialog({ day, regionId, preview, policy, invalid, onViola
         ? t(policy === 'FREE' ? 'distribution.publish.noLimitsFree' : 'distribution.publish.noLimitsRequired')
         : t('distribution.publish.noDrafts')
 
+  // Envoi en cours : il ne peut plus être arrêté, le dialogue reste ouvert
+  // jusqu'à son compte rendu (Annuler, × et Échap sans effet).
+  const busy = publish.isPending
+
   return (
-    <Dialog title={t('distribution.publish.title')} onClose={onClose} size="lg">
+    <Dialog title={t('distribution.publish.title')} onClose={busy ? ignore : onClose} size="lg">
       <div className="flex flex-col gap-4 text-sm text-slate-700">
         <section aria-label={t('distribution.publish.recap')} className="flex flex-col gap-2">
           <p className="text-base font-semibold text-slate-900">{preview.first ? t('distribution.publish.first') : t('distribution.publish.changes')}</p>
@@ -87,11 +93,11 @@ export function PublishDialog({ day, regionId, preview, policy, invalid, onViola
         {violations ? <ViolationList detail={error instanceof ApiError ? (error.problem.detail ?? null) : null} violations={violations} /> : <ErrorAlert error={error} />}
 
         <div className="flex flex-wrap justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>
+          <Button variant="secondary" onClick={onClose} disabled={busy}>
             {t('common.cancel')}
           </Button>
-          <Button onClick={() => void confirm()} disabled={publish.isPending} data-autofocus>
-            {publish.isPending ? t('distribution.publish.publishing') : t('distribution.publish.confirm')}
+          <Button onClick={() => void confirm()} disabled={busy} data-autofocus>
+            {busy ? t('distribution.publish.publishing') : t('distribution.publish.confirm')}
           </Button>
         </div>
       </div>

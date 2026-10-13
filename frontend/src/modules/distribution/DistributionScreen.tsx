@@ -16,6 +16,7 @@ import type { DraftQueue, DraftSnapshot } from './drafts'
 import { useLimitChanges, useWideScreen } from './hooks'
 import {
   type CellChange,
+  editableText,
   formatDayMonth,
   formatTime,
   highlightsOf,
@@ -114,7 +115,15 @@ function DistributionEditor({ day, regionId, grid, dataUpdatedAt, refetch, queue
   const { edits } = snapshot
   const [highlights, setHighlights] = useState<Highlights>(NO_HIGHLIGHTS)
   const [dialog, setDialog] = useState<DialogState>(null)
-  const [notice, setNotice] = useState<Notice>(null)
+  const [message, setMessage] = useState<Notice>(null)
+  // Bornes reprises à l'ouverture (RG-B09) : signalées jusqu'au message suivant.
+  const [restoredSeen, setRestoredSeen] = useState(false)
+  const setNotice = (next: Notice) => {
+    setRestoredSeen(true)
+    setMessage(next)
+  }
+  const notice: Notice =
+    message ?? (!restoredSeen && snapshot.restored > 0 ? { tone: 'info', text: t('distribution.restored', { count: snapshot.restored }) } : null)
   const [preparing, setPreparing] = useState(false)
 
   const summaries = useMemo(() => summarize(grid, edits), [grid, edits])
@@ -140,6 +149,19 @@ function DistributionEditor({ day, regionId, grid, dataUpdatedAt, refetch, queue
   const closed = grid.day.status === 'CLOSED' || grid.region.status === 'CLOSED'
   const readOnly = !grid.can_edit || snapshot.closed || !online
   const canPublish = grid.can_publish && !snapshot.closed && online
+
+  // RG-B09 : saisies d'une visite précédente restées sans accusé de réception
+  // (échec réseau, départ de l'écran, application fermée) : reprises une
+  // fois, dès que la grille est modifiable, avec les contrôles d'une saisie,
+  // puis renvoyées ; abandonnées si la journée est clôturée.
+  const restoreDone = useRef(false)
+  useEffect(() => {
+    if (restoreDone.current || (readOnly && !closed)) return
+    restoreDone.current = true
+    const clients = new Set(grid.clients.map((client) => client.id))
+    queue.restore((cell) => (!readOnly && clients.has(cell.client_id) ? makeChange(cell.client_id, cell.product_id, editableText(cell.limit)) : null))
+  }, [readOnly, closed, grid.clients, queue, makeChange])
+
   const reverts = useMemo(() => (readOnly ? [] : revertChanges(grid, edits)), [readOnly, grid, edits])
   const nothingToSend = !grid.publication.first && grid.publication.drafts === 0 && snapshot.unsaved === 0 && reverts.length === 0
 

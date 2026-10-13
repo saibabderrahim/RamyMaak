@@ -6,6 +6,8 @@ import { Alert, Button, ErrorAlert } from '../../shared/ui'
 import { useCopyPrevious } from './api'
 import { Dialog } from './Dialog'
 
+const ignore = () => undefined
+
 type Props = {
   day: string
   regionId: number
@@ -55,8 +57,10 @@ export function CopyPreviousDialog({ day, regionId, flush, onDone, onClose }: Pr
     }
   }
 
+  // Reprise en cours : elle ne peut plus être arrêtée, le dialogue reste
+  // ouvert jusqu'à son compte rendu (Annuler, × et Échap sans effet).
   return (
-    <Dialog title={t('distribution.copy.title')} onClose={onClose}>
+    <Dialog title={t('distribution.copy.title')} onClose={busy ? ignore : onClose}>
       <form onSubmit={submit} noValidate className="flex flex-col gap-4 text-sm text-slate-700">
         <p>{t('distribution.copy.intro')}</p>
         <fieldset className="flex flex-col gap-1">
@@ -86,7 +90,7 @@ export function CopyPreviousDialog({ day, regionId, flush, onDone, onClose }: Pr
         {message && <Alert tone="error">{message}</Alert>}
         <ErrorAlert error={error} />
         <div className="flex flex-wrap justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>
+          <Button variant="secondary" onClick={onClose} disabled={busy}>
             {t('common.cancel')}
           </Button>
           <Button type="submit" disabled={busy}>

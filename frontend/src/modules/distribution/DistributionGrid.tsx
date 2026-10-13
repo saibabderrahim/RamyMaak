@@ -15,8 +15,8 @@ import { useTranslation } from 'react-i18next'
 import type { DistributionGrid as Grid, DistributionGridClient, DistributionGridProduct, LimitCell, NoLimitPolicy } from '../../shared/api/types'
 import { Badge } from '../../shared/ui'
 import {
-  available,
   belowEngaged,
+  cellAvailable,
   type CellChange,
   type CellId,
   checkLimit,
@@ -777,14 +777,18 @@ function LimitCellView({
   const draft = hasDraft(cell, edit)
   // Valeur affichée refusée : saisie locale, ou brouillon devenu invalide (quota diminué depuis).
   const problem = invalid ? null : checkLimit(value, product.quota, validated, published)
-  const error =
-    edit?.error ??
-    (problem === null
+  // Borne publiée affichée sans brouillon, devenue hors limites (quota
+  // diminué depuis, RG-Q06) : signalée, ce n'est pas une erreur à corriger.
+  const outdated = problem !== null && !draft
+  const problemText =
+    problem === null
       ? null
       : problem.kind === 'aboveQuota'
-        ? t('distribution.errors.aboveQuota', { quota: formatQuantity(problem.quota) })
-        : t('distribution.errors.belowValidated', { validated: formatQuantity(problem.validated) }))
-  const warning = error === null && belowEngaged(value, cell)
+        ? t(outdated ? 'distribution.grid.outdatedAboveQuota' : 'distribution.errors.aboveQuota', { quota: formatQuantity(problem.quota) })
+        : t(outdated ? 'distribution.grid.outdatedBelowValidated' : 'distribution.errors.belowValidated', { validated: formatQuantity(problem.validated) })
+  const error = edit?.error ?? (outdated ? null : problemText)
+  const engaged = error === null && belowEngaged(value, cell)
+  const warning = engaged || outdated
   const used = pending + validated > 0
   const usage = `S${formatQuantity(pending)} V${formatQuantity(validated)}`
 
@@ -797,7 +801,8 @@ function LimitCellView({
     text = used ? `S${formatQuantity(pending)} · V${formatQuantity(validated)}` : ''
     spoken = t('distribution.grid.orders', { pending: formatQuantity(pending), validated: formatQuantity(validated) })
   } else {
-    const rest = formatQuantity(available(value, pending, validated, product.remaining, policy))
+    // D(c,p) sur la borne publiée : un brouillon ne change rien avant l'envoi.
+    const rest = formatQuantity(cellAvailable(cell, product.remaining, policy))
     text = rest
     spoken = t('distribution.grid.available', { value: rest })
   }
@@ -806,7 +811,8 @@ function LimitCellView({
   const sent = draft ? t('distribution.grid.sent', { value: sentLimit === null ? labels.noLimit : formatQuantity(sentLimit) }) : null
   // Avertissement, erreur et refus : info-bulle et libellé annoncé.
   const notes: string[] = []
-  if (warning) notes.push(t('distribution.grid.warning', { engaged: formatQuantity(pending + validated) }))
+  if (outdated && problemText) notes.push(problemText)
+  if (engaged) notes.push(t('distribution.grid.warning', { engaged: formatQuantity(pending + validated) }))
   if (error) notes.push(error)
   if (highlighted) notes.push(labels.violation)
   const hints = sent ? [sent, ...notes] : notes

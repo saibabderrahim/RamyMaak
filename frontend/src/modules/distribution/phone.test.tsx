@@ -98,6 +98,8 @@ describe('distribution — phone pivot (EF-REG-03)', () => {
     await user.click(screen.getByRole('button', { name: 'Par client' }))
     const picker = screen.getByRole('combobox', { name: 'Client' })
     expect(picker).toHaveValue('12')
+    // D sur la borne publiée 50, pas sur le brouillon 60 : min(50 − 10 − 30, 200) = 10.
+    expect(screen.getByRole('textbox', { name: 'Orange 1 L — borne C0012 Client A' }).closest('li')).toHaveTextContent('Disponible : 10')
     await user.type(screen.getByRole('searchbox', { name: 'Rechercher un client' }), 'C0047')
     await waitFor(() => expect(screen.getByRole('combobox', { name: 'Client' })).toHaveValue('47'))
     expect(screen.getByText('Bloqué')).toBeInTheDocument()
@@ -111,6 +113,29 @@ describe('distribution — phone pivot (EF-REG-03)', () => {
     expect(orangeRow).toHaveTextContent('Quota 500 · Reste 200')
     // Pomme sans borne, reste épuisé : 0.
     expect(within(juices).getByRole('textbox', { name: 'Pomme 1 L — borne C0047 Client B' }).closest('li')).toHaveTextContent('Disponible : 0')
+  })
+
+  it('keeps D on the published limit while a limit is typed, and only flags a published limit above a decreased quota', async () => {
+    mockScreen(false)
+    const grid = makeGrid({ products: makeGrid().products.map((product) => (product.id === 42 ? { ...product, quota: 350, remaining: 50 } : product)) })
+    renderDistribution({ routes: { [GRID_URL]: () => json(grid), [SAVE_URL]: ({ body }) => json(savedCells(body, grid)) } })
+    const user = userEvent.setup()
+    await clientList()
+
+    // Borne envoyée 400 au-dessus du quota diminué (350, RG-Q06) : signalée, pas en erreur.
+    const outdated = screen.getByRole('textbox', { name: 'C0051 — Client C — borne Orange 1 L' })
+    expect(outdated).toHaveAttribute('aria-invalid', 'false')
+    expect(outdated.closest('li')).toHaveAttribute('data-warning', 'true')
+    expect(outdated.closest('li')).not.toHaveAttribute('data-error')
+    expect(outdated.closest('li')).toHaveTextContent('Borne envoyée supérieure au quota actuel de la région (350), diminué depuis')
+
+    await user.click(screen.getByRole('button', { name: 'Par client' }))
+    await user.type(screen.getByRole('searchbox', { name: 'Rechercher un client' }), 'C0051')
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Client' })).toHaveValue('51'))
+    const lben = screen.getByRole('textbox', { name: 'Lben 1 L — borne C0051 Client C' })
+    await user.type(lben, '10')
+    // Saisie non envoyée aux clients : D reste le reste région (pas de borne publiée, politique LIBRE).
+    expect(lben.closest('li')).toHaveTextContent('Disponible : 720')
   })
 
   it('follows the width of the screen', async () => {

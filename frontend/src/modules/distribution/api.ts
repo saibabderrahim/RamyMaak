@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError, buildUrl, csrfHeaders, NetworkError } from '../../shared/api/client'
 import { FALLBACK_REFRESH_MS } from '../../shared/realtime'
 import type {
@@ -10,6 +10,7 @@ import type {
   RegionalQuotas,
   SaveLimitsResult,
 } from '../../shared/api/types'
+import { KEEPALIVE_MAX_BYTES } from './model'
 
 /** Grille de répartition — contrat : docs/lot-4-contrat-api.md §3. */
 
@@ -58,15 +59,10 @@ export function useBackOfficeGrid(day: string, regionId: number, refetchInterval
 }
 
 /**
- * Taille au-delà de laquelle un lot part sans `keepalive` : le navigateur
- * plafonne à 64 Kio le corps des requêtes qui survivent à la page.
- */
-const KEEPALIVE_MAX_BYTES = 60_000
-
-/**
  * Bornes enregistrées en brouillon (RG-B09) ; `limit` null : pas de borne.
  * Un lot assez petit part en `keepalive` : il aboutit même si la page se
- * ferme pendant l'envoi.
+ * ferme pendant l'envoi (le navigateur plafonne à 64 Kio le corps des
+ * requêtes qui survivent à la page).
  */
 export async function saveLimits(day: string, regionId: number, cells: LimitCellInput[]): Promise<SaveLimitsResult> {
   const body = JSON.stringify({ region_id: regionId, cells })
@@ -93,7 +89,23 @@ export async function saveLimits(day: string, regionId: number, cells: LimitCell
 }
 
 /**
- * Grille et liste des régions relues après « Reprendre J-1 » ou un envoi
+ * Clé de la page « Quotas du jour » (`regionalQuotasKey` de
+ * modules/regional/quotas/api.ts) : même point d'accès que `regionsKey`,
+ * mis en cache à part. Reprise telle quelle pour ne pas dépendre de ce module.
+ */
+const quotasPageKey = (day: string) => ['regional', 'quotas', day] as const
+
+/**
+ * Statut d'une région changé (premier brouillon, « Reprendre J-1 », envoi,
+ * clôture) : les deux listes des régions du jour sont relues.
+ */
+export function invalidateRegions(queryClient: QueryClient, day: string): void {
+  void queryClient.invalidateQueries({ queryKey: regionsKey(day) })
+  void queryClient.invalidateQueries({ queryKey: quotasPageKey(day) })
+}
+
+/**
+ * Grille et listes des régions relues après « Reprendre J-1 » ou un envoi
  * (statut, version, brouillons) ; aussi quand la journée a été clôturée
  * entre-temps (409 DAY_NOT_OPEN) : la grille passe en lecture seule.
  */
@@ -101,7 +113,7 @@ function useRefreshGrid(day: string, regionId: number) {
   const queryClient = useQueryClient()
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: gridKey(day, regionId) })
-    void queryClient.invalidateQueries({ queryKey: regionsKey(day) })
+    invalidateRegions(queryClient, day)
   }
   const refreshIfClosed = (error: unknown) => {
     if (error instanceof ApiError && error.code === 'DAY_NOT_OPEN') refresh()

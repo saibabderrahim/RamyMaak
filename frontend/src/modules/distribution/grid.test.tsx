@@ -3,7 +3,24 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { json, problem } from '../../test/utils'
 import { gridKey } from './api'
-import { cellOf, DAY, findGrid, GRID_URL, makeGrid, renderDistribution, SAVE_URL, savedCells, summaryOf, text } from './testing'
+import {
+  CENTRE,
+  cellOf,
+  centreEntry,
+  DAY,
+  estEntry,
+  findGrid,
+  GRID_URL,
+  makeGrid,
+  opened,
+  REGIONS_URL,
+  renderDistribution,
+  SAVE_URL,
+  savedCells,
+  storedDrafts,
+  summaryOf,
+  text,
+} from './testing'
 
 afterEach(() => {
   vi.useRealTimers()
@@ -79,9 +96,9 @@ describe('distribution grid — display', () => {
     expect(cellOf('C0051', 'Orange 1 L')).toHaveAccessibleName(/^C0051 Client C — Orange 1 L : en attente 0, validé 0/)
 
     await user.click(screen.getByRole('button', { name: 'Reste' }))
-    // D = min(60 − 10 − 30, R 200) = 20.
-    expect(cellOf('C0012', 'Orange 1 L')).toHaveTextContent(/^20$/)
-    expect(cellOf('C0012', 'Orange 1 L')).toHaveAccessibleName(/^C0012 Client A — Orange 1 L : disponible 20/)
+    // D sur la borne publiée 50 (pas le brouillon 60) : min(50 − 10 − 30, R 200) = 10.
+    expect(cellOf('C0012', 'Orange 1 L')).toHaveTextContent(/^10$/)
+    expect(cellOf('C0012', 'Orange 1 L')).toHaveAccessibleName(/^C0012 Client A — Orange 1 L : disponible 10/)
     // Sans borne, politique LIBRE : reste région.
     expect(cellOf('C0051', 'Lben 1 L')).toHaveTextContent(/^720$/)
     // Produit épuisé : 0.
@@ -101,7 +118,23 @@ describe('distribution grid — display', () => {
     await findGrid()
     await user.click(screen.getByRole('button', { name: 'Reste' }))
     expect(cellOf('C0051', 'Lben 1 L')).toHaveTextContent(/^0$/)
-    expect(cellOf('C0012', 'Orange 1 L')).toHaveTextContent(/^20$/)
+    expect(cellOf('C0012', 'Orange 1 L')).toHaveTextContent(/^10$/)
+  })
+
+  it('computes D on the published limit, never on an entry not sent to the clients yet (§5.1)', async () => {
+    renderDistribution({ routes: { [SAVE_URL]: ({ body }) => json(savedCells(body)) } })
+    const user = userEvent.setup()
+    await findGrid()
+
+    await user.click(cellOf('C0051', 'Lben 1 L'))
+    await user.keyboard('10{Enter}')
+    await user.click(cellOf('C0047', 'Orange 1 L'))
+    await user.keyboard('{Delete}')
+    await user.click(screen.getByRole('button', { name: 'Reste' }))
+    // Pas de borne publiée (politique LIBRE) : R, malgré la borne 10 saisie.
+    expect(cellOf('C0051', 'Lben 1 L')).toHaveTextContent(/^720$/)
+    // Borne publiée 100 (S 80) : 20, malgré la borne retirée en brouillon.
+    expect(cellOf('C0047', 'Orange 1 L')).toHaveTextContent(/^20$/)
   })
 
   it('filters the rows by search and category, ΣB still covering every client', async () => {
@@ -216,6 +249,8 @@ describe('distribution grid — keyboard entry', () => {
     // Répartition déjà envoyée : pas sous le validé (20) du client (RG-B07).
     expect(cellOf('C0012', 'Pomme 1 L')).toHaveAttribute('title', 'Borne inférieure aux 20 déjà validés pour ce client.')
     expect(screen.getByText('2 bornes en erreur, non enregistrées')).toBeInTheDocument()
+    // Rien n'est parti : pas d'« Enregistrement… ».
+    expect(screen.queryByText('Enregistrement…')).not.toBeInTheDocument()
     // ΣB garde la valeur du serveur.
     expect(summaryOf('Σ bornes (ΣB)', 'Orange 1 L')).toHaveTextContent('560')
 
@@ -274,6 +309,73 @@ describe('distribution grid — keyboard entry', () => {
     await user.paste('150')
     expect(cellOf('C0047', 'Orange 1 L')).toHaveTextContent(/^150/)
     expect(cellOf('C0051', 'Orange 1 L')).toHaveTextContent(/^150/)
+  })
+})
+
+describe('distribution grid — quota decreased below a published limit (RG-Q06)', () => {
+  // Quota d'Orange diminué à 350 par l'ADV : la borne publiée 400 de C0051 le dépasse.
+  const lowered = (overrides: Parameters<typeof makeGrid>[0] = {}) =>
+    makeGrid({ products: makeGrid().products.map((product) => (product.id === 42 ? { ...product, quota: 350, remaining: 50 } : product)), ...overrides })
+
+  it('flags the published limit without an error, and accepts it typed again', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const grid = lowered()
+    const { requests } = renderDistribution({ routes: { [GRID_URL]: () => json(grid), [SAVE_URL]: ({ body }) => json(savedCells(body, grid)) } })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    await findGrid()
+
+    const outdated = cellOf('C0051', 'Orange 1 L')
+    expect(outdated).toHaveTextContent(/^!400$/)
+    expect(outdated).not.toHaveAttribute('data-error')
+    expect(outdated).not.toHaveAttribute('aria-invalid')
+    expect(outdated).toHaveAttribute('data-warning', 'true')
+    expect(outdated).toHaveAttribute('title', 'Borne envoyée supérieure au quota actuel de la région (350), diminué depuis : la validation des commandes protège le quota.')
+    expect(screen.queryByText(/en erreur/)).not.toBeInTheDocument()
+
+    // Modifiée, puis ressaisie à la borne envoyée : acceptée, plus de brouillon.
+    await user.click(outdated)
+    await user.keyboard('200{Enter}')
+    expect(cellOf('C0051', 'Orange 1 L')).toHaveAttribute('data-draft', 'true')
+    await user.click(cellOf('C0051', 'Orange 1 L'))
+    await user.keyboard('400{Enter}')
+    expect(cellOf('C0051', 'Orange 1 L')).not.toHaveAttribute('data-error')
+    expect(cellOf('C0051', 'Orange 1 L')).not.toHaveAttribute('data-draft')
+    // Une autre valeur au-dessus du quota reste refusée.
+    await user.click(cellOf('C0047', 'Orange 1 L'))
+    await user.keyboard('360{Enter}')
+    expect(cellOf('C0047', 'Orange 1 L')).toHaveAttribute('data-error', 'true')
+
+    await act(() => vi.advanceTimersByTimeAsync(600))
+    await waitFor(() => expect(requests(SAVE_URL)).toHaveLength(1))
+    expect(requests(SAVE_URL)[0]!.body).toEqual({ region_id: 3, cells: [{ client_id: 51, product_id: 42, limit: 400 }] })
+  })
+
+  it('reverts a draft to a published limit above the quota without flagging it as an error', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const base = lowered()
+    const grid = lowered({ cells: { ...base.cells, '51': { '42': { limit: 400, draft: { value: 200 }, pending: 0, validated: 0 } } } })
+    const { requests } = renderDistribution({ routes: { [GRID_URL]: () => json(grid), [SAVE_URL]: ({ body }) => json(savedCells(body, grid)) } })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    await findGrid()
+
+    await user.click(screen.getByRole('button', { name: 'Annuler les modifications' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Annuler les modifications' }))
+    const reverted = cellOf('C0051', 'Orange 1 L')
+    expect(reverted).toHaveTextContent(/^!400$/)
+    expect(reverted).not.toHaveAttribute('data-error')
+    expect(reverted).not.toHaveAttribute('data-draft')
+    expect(screen.queryByText(/en erreur/)).not.toBeInTheDocument()
+
+    await act(() => vi.advanceTimersByTimeAsync(600))
+    await waitFor(() => expect(requests(SAVE_URL)).toHaveLength(1))
+    expect(requests(SAVE_URL)[0]!.body).toEqual({
+      region_id: 3,
+      cells: [
+        { client_id: 12, product_id: 42, limit: 50 },
+        { client_id: 51, product_id: 42, limit: 400 },
+      ],
+    })
+    expect(cellOf('C0051', 'Orange 1 L')).not.toHaveAttribute('data-error')
   })
 })
 
@@ -561,6 +663,113 @@ describe('distribution grid — autosave', () => {
     const after = new Event('beforeunload', { cancelable: true })
     window.dispatchEvent(after)
     expect(after.defaultPrevented).toBe(false)
+  })
+})
+
+describe('distribution grid — no loss of unsaved limits (RG-B09)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+  })
+
+  const EST_GRID = makeGrid({ region: { ...makeGrid().region, id: 4, code: 'EST', name: 'Est' } })
+
+  it('keeps an edit whose save failed in the browser, and sends it again when the grid is reopened', async () => {
+    let down = true
+    const { requests } = renderDistribution({
+      routes: {
+        [REGIONS_URL]: () => json(opened(DAY, [centreEntry(), estEntry()])),
+        [GRID_URL]: ({ url }) => json(url.searchParams.get('region') === '4' ? EST_GRID : makeGrid()),
+        [SAVE_URL]: ({ body }) => (down ? problem(500, 'SERVER_ERROR', 'Service indisponible.') : json(savedCells(body))),
+      },
+    })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    await findGrid()
+
+    await user.click(cellOf('C0012', 'Lben 1 L'))
+    await user.keyboard('15{Enter}')
+    // En attente, puis en échec : gardée dans le navigateur.
+    expect(storedDrafts()).toEqual([{ client_id: 12, product_id: 57, limit: 15 }])
+    await act(() => vi.advanceTimersByTimeAsync(600))
+    expect(await screen.findByText('Échec de l’enregistrement. Service indisponible.')).toBeInTheDocument()
+    expect(storedDrafts()).toEqual([{ client_id: 12, product_id: 57, limit: 15 }])
+
+    // Autre région : la saisie part une dernière fois, échoue, et reste gardée.
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Région' }), '4')
+    expect(await screen.findByRole('heading', { name: 'Est (EST)' })).toBeInTheDocument()
+    await waitFor(() => expect(requests(SAVE_URL)).toHaveLength(2))
+    expect(storedDrafts()).toEqual([{ client_id: 12, product_id: 57, limit: 15 }])
+
+    // Retour sur la région : la saisie est reprise, signalée et renvoyée.
+    down = false
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Région' }), String(CENTRE.id))
+    expect(await screen.findByText('1 borne non enregistrée a été récupérée et est renvoyée.')).toBeInTheDocument()
+    expect(cellOf('C0012', 'Lben 1 L')).toHaveTextContent(/^15/)
+    await waitFor(() => expect(requests(SAVE_URL)).toHaveLength(3))
+    expect(requests(SAVE_URL)[2]!.body).toEqual({ region_id: 3, cells: [{ client_id: 12, product_id: 57, limit: 15 }] })
+    await waitFor(() => expect(storedDrafts()).toBeNull())
+    expect(await screen.findByText(/^Enregistré à /)).toBeInTheDocument()
+  })
+
+  it('restores the edits of a previous visit with the checks of an entry', async () => {
+    const { requests } = renderDistribution({
+      routes: { [SAVE_URL]: ({ body }) => json(savedCells(body)) },
+      stored: [
+        { client_id: 51, product_id: 57, limit: 30 },
+        // Déjà la valeur du serveur (brouillon 60) : rien à renvoyer.
+        { client_id: 12, product_id: 42, limit: 60 },
+        // Au-dessus du quota de Pomme (300) : refusée sur place.
+        { client_id: 12, product_id: 43, limit: 700 },
+        // Client sorti de la région.
+        { client_id: 99, product_id: 42, limit: 10 },
+      ],
+    })
+    await findGrid()
+
+    expect(await screen.findByText('1 borne non enregistrée a été récupérée et est renvoyée.')).toBeInTheDocument()
+    expect(cellOf('C0051', 'Lben 1 L')).toHaveTextContent(/^30$/)
+    expect(cellOf('C0051', 'Lben 1 L')).toHaveAttribute('data-draft', 'true')
+    expect(cellOf('C0012', 'Pomme 1 L')).toHaveAttribute('data-error', 'true')
+    // Envoyée sans attendre le délai.
+    await waitFor(() => expect(requests(SAVE_URL)).toHaveLength(1))
+    expect(requests(SAVE_URL)[0]!.body).toEqual({ region_id: 3, cells: [{ client_id: 51, product_id: 57, limit: 30 }] })
+    // Accusé de réception : plus rien de gardé, la valeur refusée non plus.
+    await waitFor(() => expect(storedDrafts()).toBeNull())
+    expect(screen.getByText('1 borne en erreur, non enregistrée')).toBeInTheDocument()
+  })
+
+  it('waits for an editable grid before restoring, and forgets the edits of a closed day', async () => {
+    const stored = [{ client_id: 51, product_id: 57, limit: 30 }]
+    const first = renderDistribution({ routes: { [GRID_URL]: () => json(makeGrid({ can_edit: false, can_publish: false })) }, stored })
+    await findGrid()
+    expect(storedDrafts()).toEqual(stored)
+    expect(first.requests(SAVE_URL)).toHaveLength(0)
+    first.unmount()
+
+    const grid = makeGrid()
+    const second = renderDistribution({
+      routes: { [GRID_URL]: () => json(makeGrid({ day: { ...grid.day, status: 'CLOSED' }, region: { ...grid.region, status: 'CLOSED' }, can_edit: false, can_publish: false })) },
+      stored,
+    })
+    await findGrid()
+    expect(storedDrafts()).toBeNull()
+    expect(second.requests(SAVE_URL)).toHaveLength(0)
+  })
+
+  it('rereads the « Quotas du jour » page after the first draft of the region', async () => {
+    const grid = makeGrid({ region: { ...makeGrid().region, status: 'QUOTA_PUBLISHED', distribution_version: 0, distribution_published_at: null } })
+    const { queryClient } = renderDistribution({
+      routes: { [GRID_URL]: () => json(grid), [SAVE_URL]: ({ body }) => json({ ...savedCells(body, grid), status: 'DISTRIBUTION_DRAFT' }) },
+    })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    await findGrid()
+    // Page « Quotas du jour » déjà visitée (modules/regional/quotas).
+    queryClient.setQueryData(['regional', 'quotas', DAY], opened(DAY))
+
+    await user.click(cellOf('C0051', 'Lben 1 L'))
+    await user.keyboard('12{Enter}')
+    await act(() => vi.advanceTimersByTimeAsync(600))
+    expect(await screen.findByText('Répartition en cours')).toBeInTheDocument()
+    expect(queryClient.getQueryState(['regional', 'quotas', DAY])?.isInvalidated).toBe(true)
   })
 })
 

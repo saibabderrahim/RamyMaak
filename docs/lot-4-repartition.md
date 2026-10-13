@@ -27,9 +27,9 @@ Valeur par défaut de la spécification retenue : un produit sans borne reste co
 
 ## Vérifications
 
-- **API** : 1 023 tests Pest, exécutés sur SQLite et sur MySQL 8 ; la CI les exécute sur MySQL 8.4.
-- **PWA** : 332 tests Vitest ; lint, types et build sans avertissement. La grille est chargée à la demande (29 Ko, 10 Ko compressés) ; la lecture back-office reste hors du pré-cache.
-- **Parcours réel dans Chromium** (Playwright) sur l'API, MySQL, la file d'attente et Reverb, en six sessions simultanées (ADV, régional sur PC et sur téléphone, deux clients, Admin), 44 contrôles :
+- **API** : 1 025 tests Pest, exécutés sur SQLite et sur MySQL 8 ; la CI les exécute sur MySQL 8.4.
+- **PWA** : 353 tests Vitest ; lint, types et build sans avertissement. La grille est chargée à la demande (29 Ko, 10 Ko compressés) ; la lecture back-office reste hors du pré-cache.
+- **Parcours réel dans Chromium** (Playwright) sur l'API, MySQL, la file d'attente et Reverb, en six sessions simultanées (ADV, régional sur PC et sur téléphone, deux clients, Admin), 47 contrôles :
   - le régional ouvre « Répartition » de demain : « En attente des quotas de l'ADV » ;
   - l'ADV publie les quotas de la région Centre : la grille apparaît chez le régional **en moins d'une seconde**, sans recharger ;
   - saisie au clavier, surallocation signalée en orange (Σ bornes 650 > quota 600), collage d'un bloc Excel ; l'ADV voit « Répartition en cours » en temps réel ;
@@ -38,8 +38,17 @@ Valeur par défaut de la spécification retenue : un produit sans borne reste co
   - les deux clients reçoivent N-03 avec le bon texte, la cloche se met à jour en moins d'une seconde, l'ouverture mène à l'accueil client ;
   - l'ADV voit « Répartition envoyée (v1) » sans recharger et ouvre la grille en lecture seule ;
   - sur téléphone, le régional baisse une borne (vue « Par produit », barre de synthèse) et renvoie : « 1 client sera notifié », version 2 ; seul ce client reçoit N-04 ; la grille ouverte sur PC se met à jour ;
+  - le mode Reste affiche le disponible calculé sur la borne **envoyée** (100), pas sur le brouillon en cours (200) ;
+  - réseau coupé pendant une saisie, puis changement d'écran : à la réouverture, « 1 borne non enregistrée a été récupérée et est renvoyée. » et la borne est enregistrée ;
   - Admin : grille en lecture, mode Reste (disponible du client) ;
   - journal « limits » et refus d'accès (client 403 sur la grille, ADV 403 en écriture).
+- **Revue contradictoire** en quatre axes (sécurité et périmètre, conformité, robustesse de l'API, écrans), chaque constat vérifié par un second relecteur : 11 constats confirmés (9 distincts), tous corrigés et couverts par un test qui échoue sans la correction :
+  - le disponible du mode Reste et de la vue téléphone était calculé sur le brouillon au lieu de la borne envoyée (§5.1) ;
+  - « Annuler les modifications » était refusé si l'ADV avait baissé le quota sous une borne envoyée, et le brouillon non voulu bloquait l'envoi suivant ;
+  - une borne dont l'enregistrement avait échoué pouvait être perdue en changeant d'écran ou en fermant l'application (RG-B09) ; une très grande saisie collée pouvait l'être à la fermeture de la page ;
+  - deux régionaux de régions différentes saisissant en même temps pouvaient s'interbloquer sous MySQL (erreur serveur) ;
+  - un client bloqué juste après l'envoi pouvait encore recevoir N-03 / N-04 ;
+  - « Reprendre J-1 » et l'envoi pouvaient être « annulés » pendant leur exécution, sans effet réel ; l'indicateur restait sur « Enregistrement… » après une saisie refusée ; « Quotas du jour » n'était pas relu après un envoi.
 
 ## Mettre à jour la production (v0.3.0 → v0.4.0)
 
@@ -92,6 +101,9 @@ Vérification finale : sur le téléphone d'un client de la région, la cloche s
 | I-33 | Destinataires de N-03 / N-04 : comptes actifs de rôle client rattachés au client | §7.8 |
 | I-34 | L'heure de N-03 est l'heure limite de commande de la région, prolongation comprise | RG-A05 |
 | I-35 | La grille ne compte dans ΣB que les clients de la région ce jour-là (actifs ou bloqués) | Un client inactif ou parti dans une autre région ne consomme pas le quota |
+| I-36 | Les bornes saisies et pas encore enregistrées sont gardées dans le navigateur (par utilisateur, journée et région) et renvoyées à la réouverture de la grille | RG-B09 : aucune perte, même réseau coupé ou application fermée |
+| I-37 | Le disponible (mode Reste, vue téléphone) est calculé sur la borne envoyée ; une borne en brouillon ne change rien pour le client avant l'envoi | §5.1 : D dépend de B, borne publiée |
+| I-38 | Retaper la borne envoyée annule le brouillon, même si l'ADV a baissé le quota sous cette borne depuis ; la borne envoyée reste valable (signalée « à vérifier ») | RG-Q06 : la baisse d'un quota n'invalide pas la répartition |
 
 ## Reporté, avec la dépendance qui le justifie
 

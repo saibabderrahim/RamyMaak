@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 import type { User } from '../../shared/api/types'
 import { json, makeUser, mockApi, problem, renderApp } from '../../test/utils'
 
@@ -21,6 +21,11 @@ const account: User = {
   created_at: '2026-10-08T08:00:00+00:00',
   updated_at: '2026-10-08T08:00:00+00:00',
 }
+
+// Module Admin chargé à la demande : compilé une fois avant les tests.
+beforeAll(async () => {
+  await import('.')
+}, 30_000)
 
 const page = <T,>(data: T[]) => ({ data, meta: { current_page: 1, last_page: 1, per_page: 25, total: data.length, from: 1, to: data.length } })
 
