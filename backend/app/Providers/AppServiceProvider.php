@@ -3,7 +3,7 @@
 namespace App\Providers;
 
 use App\Domain\Limits\ClientUsage;
-use App\Domain\Limits\NoClientUsage;
+use App\Domain\Orders\OrderUsage;
 use App\Domain\Settings\Settings;
 use App\Models\AuditLog;
 use App\Models\BusinessDay;
@@ -12,6 +12,7 @@ use App\Models\ClientCategory;
 use App\Models\ClientLimit;
 use App\Models\Depot;
 use App\Models\Import;
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductFamily;
 use App\Models\ProductPrice;
@@ -38,7 +39,8 @@ class AppServiceProvider extends ServiceProvider
         // ne garde pas de paramètres périmés.
         $this->app->scoped(Settings::class);
         // Consommation des clients (S, V) : fournie par les commandes à partir du lot 5.
-        $this->app->bind(ClientUsage::class, NoClientUsage::class);
+        // S(c,p) et V(c,p) lus sur les commandes (lot 5).
+        $this->app->bind(ClientUsage::class, OrderUsage::class);
     }
 
     public function boot(): void
@@ -64,6 +66,7 @@ class AppServiceProvider extends ServiceProvider
             'region_day' => RegionDay::class,
             'region_quota' => RegionQuota::class,
             'client_limit' => ClientLimit::class,
+            'order' => Order::class,
         ]);
 
         // Journée désignée par sa date « AAAA-MM-JJ » dans les URL (§11.1) ;

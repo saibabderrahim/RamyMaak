@@ -14,6 +14,10 @@ enum NotificationType: string
     case CutoffExtended = 'CUTOFF_EXTENDED';
     case DistributionPublished = 'DISTRIBUTION_PUBLISHED';
     case LimitsUpdated = 'LIMITS_UPDATED';
+    case OrderSubmitted = 'ORDER_SUBMITTED';
+    case OrderChanged = 'ORDER_CHANGED';
+    case OrderDecided = 'ORDER_DECIDED';
+    case OrderExpired = 'ORDER_EXPIRED';
 
     /** Code de la spécification (§7.8), null pour une notification sans code. */
     public function code(): ?string
@@ -25,6 +29,12 @@ enum NotificationType: string
             self::CutoffExtended => null,
             self::DistributionPublished => 'N-03',
             self::LimitsUpdated => 'N-04',
+            self::OrderSubmitted => 'N-05',
+            // Commande modifiée ou annulée par le client.
+            self::OrderChanged => 'N-06',
+            // Validée, ajustée, rejetée ou annulée (décisions du lot 6).
+            self::OrderDecided => 'N-07',
+            self::OrderExpired => 'N-14',
         };
     }
 }

@@ -214,9 +214,6 @@ const distribution = {
     done_one: 'Répartition envoyée (version {{version}}) : {{count}} client notifié.',
     done_other: 'Répartition envoyée (version {{version}}) : {{count}} clients notifiés.',
   },
-  dialog: {
-    close: 'Fermer',
-  },
   backOffice: {
     title: 'Répartition — {{region}} — {{date}}',
     back: 'Retour à la journée du {{date}}',

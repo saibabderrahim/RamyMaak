@@ -4,7 +4,7 @@ import { ApiError } from '../../shared/api/client'
 import type { DistributionResult, LimitViolation, NoLimitPolicy, PublicationPreview } from '../../shared/api/types'
 import { Alert, Button, ErrorAlert } from '../../shared/ui'
 import { usePublishDistribution } from './api'
-import { Dialog } from './Dialog'
+import { Dialog } from '../../shared/ui/Dialog'
 import { formatQuantity } from './model'
 
 const ignore = () => undefined

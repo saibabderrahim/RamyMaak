@@ -5,11 +5,14 @@ import { LOGIN_PATH } from '../auth/guards'
 import { homePath, useAuthenticatedUser, useLogout } from '../auth/session'
 import { NotificationBell } from '../notifications/NotificationBell'
 import { OfflineBanner } from '../pwa/components'
+import { useCartLineCount } from '../../modules/client/cart/store'
 
-type NavItem = { to: string; label: string; end?: boolean }
+/** `badge` : pastille (nombre) ; `tabBar: false` : hors de la barre d'onglets du téléphone, lien dans l'en-tête. */
+type NavItem = { to: string; label: string; end?: boolean; badge?: number; tabBar?: boolean }
 
 function useNavItems(role: Role, permissions: readonly string[]): NavItem[] {
   const { t } = useTranslation()
+  const cartLines = useCartLineCount()
   const profile = { to: '/profil', label: t('nav.profile') }
 
   switch (role) {
@@ -43,12 +46,35 @@ function useNavItems(role: Role, permissions: readonly string[]): NavItem[] {
         { to: '/regional', label: t('nav.home'), end: true },
         { to: '/regional/quotas', label: t('nav.quotas') },
         { to: '/regional/repartition', label: t('nav.distribution') },
+        { to: '/regional/commandes', label: t('nav.orders') },
         { to: '/regional/clients', label: t('nav.myClients') },
-        profile,
+        // Cinq onglets au plus sur un téléphone de 320 px : le profil passe dans l'en-tête.
+        { ...profile, tabBar: false },
       ]
     case 'client':
-      return [{ to: '/client', label: t('nav.home'), end: true }, profile]
+      return [
+        { to: '/client', label: t('nav.home'), end: true },
+        { to: '/client/catalogue', label: t('nav.order') },
+        { to: '/client/panier', label: t('nav.cart'), badge: cartLines },
+        { to: '/client/commandes', label: t('nav.orders') },
+        profile,
+      ]
   }
+}
+
+/** Libellé d'une entrée, avec sa pastille (nombre annoncé dans le nom accessible). */
+function NavLabel({ item }: { item: NavItem }) {
+  const { t } = useTranslation()
+  if (!item.badge) return <>{item.label}</>
+  return (
+    <span className="flex items-center gap-1">
+      <span className="sr-only">{t('nav.withCount', { label: item.label, count: item.badge })}</span>
+      <span aria-hidden="true">{item.label}</span>
+      <span aria-hidden="true" className="min-w-5 rounded-full bg-brand-600 px-1.5 text-center text-xs font-semibold text-white">
+        {item.badge > 99 ? '99+' : item.badge}
+      </span>
+    </span>
+  )
 }
 
 /** Barre d'onglets en bas de l'écran pour les rôles de terrain (téléphone). */
@@ -92,11 +118,20 @@ export function AppShell() {
             <nav aria-label={t('nav.menu')} className="hidden min-w-0 flex-1 gap-1 lg:flex">
               {items.map((item) => (
                 <NavLink key={item.to} to={item.to} end={item.end} className={linkClass}>
-                  {item.label}
+                  <NavLabel item={item} />
                 </NavLink>
               ))}
             </nav>
           )}
+          {/* Entrées hors barre d'onglets (téléphone) : dans l'en-tête. */}
+          {hasTabBar(user.role) &&
+            items
+              .filter((item) => item.tabBar === false)
+              .map((item) => (
+                <NavLink key={item.to} to={item.to} end={item.end} className={`${linkClass({ isActive: false })} lg:hidden`}>
+                  {item.label}
+                </NavLink>
+              ))}
           <div className="ms-auto flex shrink-0 items-center gap-3">
             {/* Cloche des notifications, pour tous les rôles et sur téléphone (EF-NOT-01). */}
             <NotificationBell />
@@ -137,11 +172,13 @@ export function AppShell() {
           aria-label={t('nav.menu')}
           className="fixed inset-x-0 bottom-0 z-40 flex border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] lg:hidden"
         >
-          {items.map((item) => (
-            <NavLink key={item.to} to={item.to} end={item.end} className={tabClass}>
-              {item.label}
-            </NavLink>
-          ))}
+          {items
+            .filter((item) => item.tabBar !== false)
+            .map((item) => (
+              <NavLink key={item.to} to={item.to} end={item.end} className={tabClass}>
+                <NavLabel item={item} />
+              </NavLink>
+            ))}
         </nav>
       )}
     </div>

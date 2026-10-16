@@ -4,7 +4,7 @@ import { ApiError } from '../../shared/api/client'
 import type { CopyMode, CopyPreviousResult } from '../../shared/api/types'
 import { Alert, Button, ErrorAlert } from '../../shared/ui'
 import { useCopyPrevious } from './api'
-import { Dialog } from './Dialog'
+import { Dialog } from '../../shared/ui/Dialog'
 
 const ignore = () => undefined
 

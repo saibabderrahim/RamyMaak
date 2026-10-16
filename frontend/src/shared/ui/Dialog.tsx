@@ -3,9 +3,9 @@ import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 
 /**
- * Boîte de dialogue modale de la répartition (la PWA du régional ne charge
- * pas les composants du back-office) : focus placé dans la boîte (élément
- * marqué `data-autofocus`, sinon premier élément), gardé à l'intérieur
+ * Boîte de dialogue modale des écrans terrain (régional, client), qui ne
+ * chargent pas les composants du back-office : focus placé dans la boîte
+ * (élément marqué `data-autofocus`, sinon premier élément), gardé à l'intérieur
  * (Tab), Échap pour fermer, focus rendu à l'élément d'origine à la
  * fermeture. Sur téléphone, la boîte s'ouvre en bas de l'écran.
  */
@@ -91,7 +91,7 @@ export function Dialog({ title, onClose, children, size = 'md' }: Props) {
             type="button"
             data-dialog-close
             onClick={() => close.current()}
-            aria-label={t('distribution.dialog.close')}
+            aria-label={t('common.close')}
             className="-me-2 -mt-2 inline-flex size-11 items-center justify-center rounded-lg text-xl text-slate-600 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-brand-600"
           >
             <span aria-hidden="true">×</span>

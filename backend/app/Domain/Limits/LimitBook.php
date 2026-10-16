@@ -68,15 +68,27 @@ final class LimitBook
      */
     public function availableQuotas(RegionDay $regionDay): array
     {
+        return $this->availableQuotaRows($regionDay)
+            ->map(fn (RegionQuota $quota) => (int) $quota->quantity)
+            ->all();
+    }
+
+    /**
+     * Quotas des produits disponibles (même règle qu'availableQuotas), avec
+     * le compteur validé V(r,p) : base du disponible des commandes (lot 5).
+     *
+     * @return Collection<int, RegionQuota> produit → quota
+     */
+    public function availableQuotaRows(RegionDay $regionDay): Collection
+    {
         $day = $regionDay->businessDay->day;
 
         return RegionQuota::query()
             ->where('region_day_id', $regionDay->id)
             ->where('quantity', '>', 0)
             ->whereHas('product', fn (Builder $product) => $product->activeOn($day))
-            ->pluck('quantity', 'product_id')
-            ->map(fn ($quantity) => (int) $quantity)
-            ->all();
+            ->get(['id', 'product_id', 'quantity', 'validated_qty'])
+            ->keyBy('product_id');
     }
 
     /**

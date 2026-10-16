@@ -6,8 +6,8 @@ use App\Models\RegionDay;
 
 /**
  * Consommation des clients d'une région pour une journée (§5.1) : quantités
- * en attente S(c,p) (commandes envoyées) et validées V(c,p). Fournie par
- * les commandes à partir des lots 5 et 6 ; d'ici là, aucune commande.
+ * en attente S(c,p) (commandes envoyées) et validées V(c,p), lues sur les
+ * commandes (App\Domain\Orders\OrderUsage).
  */
 interface ClientUsage
 {

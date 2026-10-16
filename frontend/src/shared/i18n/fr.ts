@@ -27,6 +27,12 @@ const fr = {
     pagination: 'Page {{page}} sur {{pages}} · {{total}} résultat(s)',
     retry: 'Réessayer',
     all: 'Tous',
+    close: 'Fermer',
+    quantity: {
+      label: 'Quantité de {{name}}',
+      decrease: 'Diminuer la quantité de {{name}}',
+      increase: 'Augmenter la quantité de {{name}}',
+    },
   },
   roles: {
     admin: 'Admin',
@@ -82,6 +88,10 @@ const fr = {
     days: 'Journées',
     quotas: 'Quotas',
     distribution: 'Répartition',
+    order: 'Commander',
+    cart: 'Panier',
+    withCount: '{{label}} ({{count}})',
+    orders: 'Commandes',
     notifications: 'Notifications',
     menu: 'Menu principal',
   },

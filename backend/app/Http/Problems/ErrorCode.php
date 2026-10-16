@@ -24,6 +24,7 @@ enum ErrorCode: string
     case RegionQuotaExceeded = 'REGION_QUOTA_EXCEEDED';
     case QuotaBelowValidated = 'QUOTA_BELOW_VALIDATED';
     case MaxOrdersReached = 'MAX_ORDERS_REACHED';
+    case OrderBelowMinimum = 'ORDER_BELOW_MINIMUM';
     case VersionConflict = 'VERSION_CONFLICT';
     case InvalidTransition = 'INVALID_TRANSITION';
     case ImportHasErrors = 'IMPORT_HAS_ERRORS';
@@ -34,7 +35,7 @@ enum ErrorCode: string
     public function status(): int
     {
         return match ($this) {
-            self::ValidationFailed, self::ProductNotAvailable => 422,
+            self::ValidationFailed, self::ProductNotAvailable, self::OrderBelowMinimum => 422,
             self::Unauthenticated, self::InvalidCredentials => 401,
             self::Forbidden, self::AccountDisabled, self::PasswordChangeRequired, self::ClientBlocked => 403,
             self::AccountLocked => 423,

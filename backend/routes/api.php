@@ -17,8 +17,11 @@ use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\ProductFamilyController;
 use App\Http\Controllers\Api\V1\ProductMediaController;
 use App\Http\Controllers\Api\V1\ProductPriceController;
+use App\Http\Controllers\Api\V1\Client\ClientOrderController;
+use App\Http\Controllers\Api\V1\Client\ClientTodayController;
 use App\Http\Controllers\Api\V1\Regional\DistributionGridController;
 use App\Http\Controllers\Api\V1\Regional\LimitController;
+use App\Http\Controllers\Api\V1\Regional\RegionalOrderController;
 use App\Http\Controllers\Api\V1\RegionalQuotaController;
 use App\Http\Controllers\Api\V1\RegionController;
 use App\Http\Middleware\EnforceSessionPolicy;
@@ -103,6 +106,20 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             // Répartition en lecture pour l'ADV et l'Admin.
             Route::get('adv/days/{businessDay}/regions/{region}/grid', [DistributionGridController::class, 'showForBackOffice'])
                 ->name('adv.grid.show');
+
+            // Commandes client (lot 5) — contrat : docs/lot-5-contrat-api.md
+            // {order} : ULID public, résolu par les contrôleurs (403 avant 404).
+            Route::prefix('client')->name('client.')->group(function () {
+                Route::get('today', [ClientTodayController::class, 'show'])->name('today.show');
+                Route::get('orders', [ClientOrderController::class, 'index'])->name('orders.index');
+                Route::post('orders', [ClientOrderController::class, 'store'])->name('orders.store');
+                Route::get('orders/{order}', [ClientOrderController::class, 'show'])->name('orders.show');
+                Route::patch('orders/{order}', [ClientOrderController::class, 'update'])->name('orders.update');
+                Route::post('orders/{order}/cancel', [ClientOrderController::class, 'cancel'])->name('orders.cancel');
+            });
+            // Commandes reçues, en lecture pour le régional (les décisions arrivent au lot 6).
+            Route::get('regional/orders', [RegionalOrderController::class, 'index'])->name('regional.orders.index');
+            Route::get('regional/orders/{order}', [RegionalOrderController::class, 'show'])->name('regional.orders.show');
 
             // Centre de notifications (EF-NOT-01).
             Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');

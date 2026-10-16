@@ -2,6 +2,7 @@
 
 namespace App\Domain\Days;
 
+use App\Domain\Orders\OrderExpiry;
 use App\Domain\Settings\Settings;
 use App\Events\CutoffExtended;
 use App\Events\DayClosed;
@@ -27,7 +28,10 @@ use Illuminate\Validation\ValidationException;
  */
 final class DayCalendar
 {
-    public function __construct(private readonly Settings $settings) {}
+    public function __construct(
+        private readonly Settings $settings,
+        private readonly OrderExpiry $orders,
+    ) {}
 
     public function isWorkingDay(CarbonInterface $day): bool
     {
@@ -223,7 +227,8 @@ final class DayCalendar
 
     /**
      * Clôture la journée (§4.4) : journée et journées régionales clôturées,
-     * quotas figés. Rejouable sans double effet.
+     * quotas figés, commandes encore envoyées expirées. Rejouable sans
+     * double effet.
      */
     public function close(BusinessDay $day): bool
     {
@@ -237,6 +242,8 @@ final class DayCalendar
             $day->closed_at = now();
             $day->save();
             $day->regionDays()->update(['status' => RegionDayStatus::Closed->value, 'updated_at' => now()]);
+            // Commandes encore envoyées : expirées, quantités en attente libérées (§4.4, N-14).
+            $this->orders->expire($day);
 
             activity('days')->performedOn($day)->event('closed')->log(__('days.audit.closed'));
             event(new DayClosed($day->id));

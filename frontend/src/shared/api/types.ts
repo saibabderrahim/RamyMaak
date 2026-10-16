@@ -406,6 +406,10 @@ export const NOTIFICATION_TYPES = [
   'CUTOFF_EXTENDED',
   'DISTRIBUTION_PUBLISHED',
   'LIMITS_UPDATED',
+  'ORDER_SUBMITTED',
+  'ORDER_CHANGED',
+  'ORDER_DECIDED',
+  'ORDER_EXPIRED',
 ] as const
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number]
 
@@ -523,4 +527,188 @@ export type LimitViolation = {
   requested: number | null
   quota?: number
   validated?: number
+}
+
+/* ---------- Commandes client (lot 5) — contrat : docs/lot-5-contrat-api.md ---------- */
+
+export const ORDER_STATUSES = [
+  'SUBMITTED',
+  'VALIDATED',
+  'REJECTED',
+  'CANCELLED',
+  'EXPIRED',
+  'IN_PREPARATION',
+  'PREPARED',
+  'SHIPPED',
+  'DELIVERED',
+] as const
+export type OrderStatus = (typeof ORDER_STATUSES)[number]
+
+/** État de la prise de commande d'un client pour une journée (§11.3). */
+export const CLIENT_DAY_STATUSES = ['WAITING_QUOTAS', 'ORDERING_OPEN', 'ORDERING_CLOSED', 'DAY_CLOSED'] as const
+export type ClientDayStatus = (typeof CLIENT_DAY_STATUSES)[number]
+
+/** Raison pour laquelle le client ne peut pas envoyer de commande ; null : envoi possible. */
+export type SubmitBlocker = 'CLIENT_BLOCKED' | 'MAX_ORDERS_REACHED' | 'DAY_NOT_OPEN' | 'CUTOFF_PASSED'
+
+/**
+ * Produit du catalogue du jour. limit / available : borne publiée et disponible D(c,p), null sans borne
+ * (rien n'est affiché, RG-C09) ; engaged : quantité déjà demandée ou validée par le client ce jour-là.
+ */
+export type ClientProduct = {
+  id: number
+  sku: string
+  name: string
+  short_name: string
+  family_id: number
+  format: string | null
+  sales_unit_label: string
+  units_per_sales_unit: number
+  vat_rate: number
+  price: PriceRef
+  photos: ProductPhoto[]
+  is_new: boolean
+  is_featured: boolean
+  limit: number | null
+  engaged: number
+  available: number | null
+  sold_out: boolean
+}
+
+export type ClientFamily = { id: number; code: string; name: string; sort_order: number }
+
+export type OrderSummary = {
+  id: string
+  number: string
+  day: string
+  status: OrderStatus
+  status_label: string
+  version: number
+  submitted_at: string
+  total_ht: number
+  total_ttc: number
+  lines_count: number
+  is_adjusted: boolean
+  can_modify: boolean
+  can_cancel: boolean
+}
+
+export type ClientToday = {
+  /** Heure du serveur (ISO 8601 UTC) : l'heure de l'appareil ne fait pas foi (D-10). */
+  server_time: string
+  day: string
+  delivery_date: string | null
+  status: ClientDayStatus
+  /** "HH:MM" Africa/Algiers, prolongation de la région comprise. */
+  ordering_cutoff: string | null
+  ordering_cutoff_at: string | null
+  ordering_cutoff_extended: boolean
+  client: { id: number; code: string; name: string; status: ClientStatus }
+  max_orders_per_day: number
+  min_amount_ht: number | null
+  can_submit: boolean
+  submit_blocker: SubmitBlocker | null
+  orders: OrderSummary[]
+  families: ClientFamily[]
+  products: ClientProduct[]
+}
+
+export type OrderLine = {
+  product_id: number
+  sku: string
+  name: string
+  short_name: string
+  sales_unit_label: string
+  photo: { thumb: string; medium: string } | null
+  requested_qty: number
+  validated_qty: number | null
+  shipped_qty: number | null
+  unit_price_ht: number
+  vat_rate: number
+  amount_ht: number
+  adjustment_reason_code: string | null
+}
+
+export type OrderActor = 'CLIENT' | 'REGIONAL' | 'ADV' | 'SYSTEM'
+
+export type OrderHistoryEntry = {
+  from: OrderStatus | null
+  to: OrderStatus
+  version: number
+  at: string
+  actor: OrderActor
+  /** Nom de l'auteur : comptes du client seulement côté client ; tous côté régional. */
+  by_name: string | null
+  comment: string | null
+}
+
+export type Order = OrderSummary & {
+  submitted_by: { id: number; name: string } | null
+  comment: string | null
+  total_vat: number
+  decided_at: string | null
+  decision_reason_code: string | null
+  decision_comment: string | null
+  /** Heure limite de modification et d'annulation (ISO 8601), null hors statut Envoyée. */
+  modifiable_until: string | null
+  lines: OrderLine[]
+  history: OrderHistoryEntry[]
+}
+
+export type OrderLineInput = { product_id: number; quantity: number }
+
+export type SubmitOrderInput = {
+  client_request_id: string
+  day: string
+  comment: string | null
+  lines: OrderLineInput[]
+}
+
+export type UpdateOrderInput = { version: number; comment: string | null; lines: OrderLineInput[] }
+
+/** Refus d'un envoi : PRODUCT_NOT_AVAILABLE (sans requested/max_allowed) ou CLIENT_LIMIT_EXCEEDED. */
+export type OrderViolation = {
+  line: number
+  product_id: number
+  requested?: number
+  /** Maximum possible ; null sans borne (le reste de la région n'est jamais montré, RG-C09). */
+  max_allowed?: number | null
+}
+
+/** Commande vue par le régional (lecture au lot 5). */
+export type RegionalOrderSummary = {
+  id: string
+  number: string
+  day: string
+  status: OrderStatus
+  status_label: string
+  version: number
+  submitted_at: string
+  updated_at: string
+  client: { id: number; code: string; name: string; status: ClientStatus }
+  region: RegionRef
+  lines_count: number
+  total_ht: number
+  is_adjusted: boolean
+}
+
+/** Contexte de quotas d'une ligne pour le régional : borne, validé du client, quota, validé et reste de la région. */
+export type RegionalOrderLineContext = {
+  limit: number | null
+  client_validated: number
+  region_quota: number
+  region_validated: number
+  region_remaining: number
+}
+
+export type RegionalOrder = Omit<Order, 'lines' | 'can_modify' | 'can_cancel' | 'modifiable_until'> & {
+  client: { id: number; code: string; name: string; status: ClientStatus; phone: string | null; phone2: string | null }
+  region: RegionRef
+  lines: (OrderLine & { context: RegionalOrderLineContext })[]
+  /** Décisions au lot 6. */
+  can_validate: boolean
+}
+
+export type RegionalOrdersPage = Paginated<RegionalOrderSummary> & {
+  meta: Paginated<RegionalOrderSummary>['meta'] & { counts: { SUBMITTED: number; VALIDATED: number; REJECTED: number } }
 }
