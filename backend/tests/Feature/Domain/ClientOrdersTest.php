@@ -17,6 +17,7 @@ use App\Events\OrdersExpired;
 use App\Events\OrderSubmitted;
 use App\Events\OrderUpdated;
 use App\Http\Problems\ApiException;
+use App\Http\Resources\Orders\OrderPresenter;
 use App\Models\AuditLog;
 use App\Models\Client;
 use App\Models\Order;
@@ -317,4 +318,32 @@ it('allows only the transitions of §6.3, with their actor', function () {
     ]);
     expect(fn () => $workflow->assertCan(OrderStatus::Expired, OrderStatus::Submitted, OrderActor::Client))
         ->toThrow(ApiException::class, 'Commande « Expirée » : impossible de passer à « Envoyée ».');
+});
+
+it('presents an order for the client and the regional views (contrat §3, §4)', function () {
+    $order = ($this->submit)($this->accountA, [[$this->orange, 40], [$this->lben, 7]])['order'];
+    $order = $this->orders->modify($this->secondA, $order->public_id, 1, ($this->lines)([[$this->orange, 40], [$this->lben, 8]]), null);
+    $order->load(OrderPresenter::RELATIONS);
+
+    expect(OrderPresenter::summary($order))->toBe([
+        'id' => $order->public_id,
+        'number' => 'RMK-261008-00001',
+        'day' => '2026-10-08',
+        'status' => 'SUBMITTED',
+        'status_label' => 'Envoyée',
+        'version' => 2,
+        'submitted_at' => '2026-10-08T08:30:00+00:00',
+        'total_ht' => 36960.0,
+        'total_ttc' => 43886.4,
+        'lines_count' => 2,
+        'is_adjusted' => false,
+    ])
+        ->and(OrderPresenter::lines($order)[1])->toMatchArray([
+            'product_id' => $this->lben->id, 'sku' => 'P0103', 'photo' => null, 'requested_qty' => 8,
+            'validated_qty' => null, 'unit_price_ht' => 120.0, 'vat_rate' => 9.0, 'amount_ht' => 960.0,
+        ])
+        ->and(OrderPresenter::history($order, false))->toBe([
+            ['from' => null, 'to' => 'SUBMITTED', 'version' => 1, 'at' => '2026-10-08T08:30:00+00:00', 'actor' => 'CLIENT', 'by_name' => $this->accountA->name, 'comment' => null],
+            ['from' => 'SUBMITTED', 'to' => 'SUBMITTED', 'version' => 2, 'at' => '2026-10-08T08:30:00+00:00', 'actor' => 'CLIENT', 'by_name' => $this->secondA->name, 'comment' => null],
+        ]);
 });

@@ -710,5 +710,5 @@ export type RegionalOrder = Omit<Order, 'lines' | 'can_modify' | 'can_cancel' | 
 }
 
 export type RegionalOrdersPage = Paginated<RegionalOrderSummary> & {
-  meta: Paginated<RegionalOrderSummary>['meta'] & { counts: { SUBMITTED: number; VALIDATED: number; REJECTED: number } }
+  meta: Paginated<RegionalOrderSummary>['meta'] & { counts: { SUBMITTED: number; VALIDATED: number; REJECTED: number; CLOSED: number } }
 }
