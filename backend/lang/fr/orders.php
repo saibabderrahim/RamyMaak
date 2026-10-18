@@ -22,4 +22,21 @@ return [
         'cancelled' => 'Commande annulée par le client',
         'expired' => 'Commandes expirées à la clôture',
     ],
+    // Points d'accès du client (contrat du lot 5, §3).
+    'client' => [
+        'attributes' => [
+            'day' => 'journée',
+            'client_request_id' => 'identifiant d\'envoi',
+            'comment' => 'commentaire',
+            'version' => 'version',
+            'lines' => 'lignes',
+            'lines.*' => 'ligne',
+            'lines.*.product_id' => 'produit',
+            'lines.*.quantity' => 'quantité',
+        ],
+        'day_format' => 'Journée attendue au format AAAA-MM-JJ.',
+        'quantity_format' => 'La quantité doit être un nombre entier de 1 à :max.',
+        'duplicate_line' => 'Ce produit figure déjà dans la commande.',
+        'unknown_status' => 'Statut de commande inconnu.',
+    ],
 ];

@@ -31,4 +31,44 @@ return [
         'title' => 'Quotas du :day mis à jour',
         'body' => 'Vos quotas du jour ont été mis à jour.',
     ],
+    // RG-A05 (clients actifs de la région, répartition envoyée)
+    'cutoff_extended_client' => [
+        'title' => 'Heure limite de commande prolongée',
+        'body' => 'Commandez jusqu\'à :time.',
+    ],
+    // N-05 (régionaux)
+    'order_submitted' => [
+        'title' => 'Nouvelle commande — :code :name',
+        'body' => ':number à valider.',
+    ],
+    // N-06 (régionaux)
+    'order_changed' => [
+        'title' => [
+            'updated' => 'Commande :number modifiée',
+            'cancelled' => 'Commande :number annulée',
+        ],
+        'body' => [
+            'updated' => ':name a modifié sa commande.',
+            'cancelled' => ':name a annulé sa commande.',
+        ],
+    ],
+    // N-07 (clients, décisions du lot 6)
+    'order_decided' => [
+        'title' => [
+            'VALIDATED' => 'Commande :number validée',
+            'REJECTED' => 'Commande :number rejetée',
+            'CANCELLED' => 'Commande :number annulée',
+        ],
+        'body' => [
+            'VALIDATED' => 'Votre commande :number est validée.',
+            'ADJUSTED' => '{1} Votre commande :number est validée (1 ligne ajustée).|[2,*] Votre commande :number est validée (:count lignes ajustées).',
+            'REJECTED' => 'Votre commande :number est rejetée.',
+            'CANCELLED' => 'Votre commande :number est annulée.',
+        ],
+    ],
+    // N-14 (clients)
+    'order_expired' => [
+        'title' => 'Commande :number expirée',
+        'body' => 'Elle n\'a pas été validée avant la clôture de la journée.',
+    ],
 ];
