@@ -377,6 +377,38 @@ it('proposes the first day open for ordering, from today on (I-42)', function ()
     ($this->today)('?day=2026-10-08')->assertJsonPath('day', '2026-10-08')->assertJsonPath('status', 'DAY_CLOSED');
 });
 
+it('excludes the order being modified from the engaged quantity, on its day by default (§5.1, RG-C05)', function () {
+    // Orange : borne 50, toute commandée par la commande modifiée.
+    $order = ($this->submit)($this->account, [[$this->orange, 50], [$this->pomme, 2]]);
+    $orange = fn ($response) => collect($response->json('products'))->firstWhere('sku', 'P0042');
+
+    $plain = ($this->today)('?day=2026-10-08')->assertOk();
+    expect($orange($plain))->toMatchArray(['limit' => 50, 'engaged' => 50, 'available' => 0, 'sold_out' => true]);
+
+    // Sans journée, celle de la commande ; identifiant en minuscules accepté (I-56).
+    $editing = ($this->today)('?order='.strtolower($order->public_id))->assertOk()->assertJsonPath('day', '2026-10-08');
+    expect($orange($editing))->toMatchArray(['limit' => 50, 'engaged' => 0, 'available' => 50, 'sold_out' => false]);
+    ($this->today)('?day=2026-10-08&order='.$order->public_id)->assertOk()->assertJsonPath('products.*.available', $editing->json('products.*.available'));
+
+    // Une fois annulée, plus rien à exclure : ses quantités ne comptent déjà plus.
+    app(ClientOrders::class)->cancel($this->account, $order->public_id, 1);
+    expect($orange(($this->today)('?order='.$order->public_id)->assertOk()))->toMatchArray(['engaged' => 0, 'available' => 50]);
+});
+
+it('answers 404 to an order of another client or a malformed id, and 422 to an order of another day', function () {
+    $other = ($this->submit)($this->accountB, [[$this->orange, 5]]);
+    $mine = ($this->submit)($this->account, [[$this->orange, 5]]);
+
+    expectProblem(($this->today)('?order='.$other->public_id), 404, 'NOT_FOUND');
+    expectProblem(($this->today)('?order=RMK-261008-00001'), 404, 'NOT_FOUND');
+    // 404 avant la validation de la journée.
+    expectProblem(($this->today)('?day=demain&order='.$other->public_id), 404, 'NOT_FOUND');
+
+    openOrderingDay('2026-10-11', $this->centre, [[$this->orange, 100]]);
+    expectProblem(($this->today)('?day=2026-10-11&order='.$mine->public_id), 422, 'VALIDATION_FAILED');
+    ($this->today)('?day=2026-10-11&order='.$mine->public_id)->assertJsonStructure(['errors' => ['order']]);
+});
+
 it('answers 422 to an invalid day', function (string $query) {
     expectProblem(($this->today)($query), 422, 'VALIDATION_FAILED');
     ($this->today)($query)->assertJsonStructure(['errors' => ['day']]);

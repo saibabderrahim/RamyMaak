@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Domain\Orders\OrderStatus;
 use Database\Factories\OrderFactory;
+use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -18,7 +19,7 @@ use Illuminate\Support\Str;
  *
  * @property int $id
  * @property string $public_id
- * @property string $number
+ * @property string $number alloué en dernier dans la transaction d'envoi (NULL avant)
  * @property int $business_day_id
  * @property int $region_id
  * @property int $client_id
@@ -44,7 +45,7 @@ use Illuminate\Support\Str;
 class Order extends Model
 {
     /** @use HasFactory<OrderFactory> */
-    use HasFactory;
+    use HasFactory, HasUlids;
 
     protected $fillable = [
         'public_id', 'number', 'business_day_id', 'region_id', 'client_id', 'status', 'version',
@@ -56,12 +57,21 @@ class Order extends Model
         'is_adjusted' => false,
     ];
 
-    protected static function booted(): void
+    /**
+     * HasUlids sur `public_id` seulement (la clé reste l'id entier) : posé à
+     * l'insertion même sans événements de modèle (Event::fake, createQuietly).
+     *
+     * @return list<string>
+     */
+    public function uniqueIds(): array
     {
-        // ULID en majuscules (Crockford) : HasUlids le mettrait en minuscules.
-        static::creating(function (Order $order): void {
-            $order->public_id ??= strtoupper((string) Str::ulid());
-        });
+        return ['public_id'];
+    }
+
+    /** ULID en majuscules (Crockford) ; HasUlids le mettrait en minuscules. */
+    public function newUniqueId(): string
+    {
+        return strtoupper((string) Str::ulid());
     }
 
     protected function casts(): array

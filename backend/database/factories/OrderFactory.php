@@ -6,7 +6,6 @@ use App\Domain\Orders\OrderStatus;
 use App\Models\BusinessDay;
 use App\Models\Client;
 use App\Models\Order;
-use App\Models\Region;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -21,10 +20,12 @@ class OrderFactory extends Factory
     public function definition(): array
     {
         return [
+            'public_id' => strtoupper((string) Str::ulid()),
             'number' => 'RMK-'.fake()->unique()->numerify('######-#####'),
             'business_day_id' => BusinessDay::factory(),
-            'region_id' => Region::factory(),
             'client_id' => Client::factory(),
+            // Région du client à l'envoi (§10.2).
+            'region_id' => fn (array $attributes) => Client::query()->whereKey($attributes['client_id'])->value('region_id'),
             'status' => OrderStatus::Submitted,
             'version' => 1,
             'client_request_id' => (string) Str::uuid(),

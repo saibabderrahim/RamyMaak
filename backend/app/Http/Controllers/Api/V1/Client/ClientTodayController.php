@@ -17,11 +17,14 @@ class ClientTodayController extends Controller
 {
     public function __construct(private readonly OrderingWindow $window) {}
 
-    /** GET /client/today[?day=AAAA-MM-JJ] ; sans journée, celle que propose le serveur (I-42). */
+    /**
+     * GET /client/today[?day=AAAA-MM-JJ][&order={id}] ; sans journée, celle de
+     * la commande modifiée, sinon celle que propose le serveur (I-42).
+     */
     public function show(ClientTodayRequest $request): ClientTodayResource
     {
         $client = $request->client();
 
-        return ClientTodayResource::for($client, $request->day() ?? $this->window->defaultDay($client));
+        return ClientTodayResource::for($client, $request->day() ?? $this->window->defaultDay($client), $request->editing());
     }
 }

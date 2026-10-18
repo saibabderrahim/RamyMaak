@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+/** Quantité maximale d'une ligne de commande (contrat du lot 5, I-60). */
+export const MAX_LINE_QUANTITY = 1_000_000
+
 type Props = {
   /** Nom du produit, pour les libellés annoncés. */
   name: string
   value: number
   onChange: (value: number) => void
-  /** Maximum (disponible du client) ; null : pas de maximum affiché (RG-C09). */
+  /** Maximum (disponible du client) ; null : pas de maximum affiché (RG-C09), seulement MAX_LINE_QUANTITY. */
   max?: number | null
   disabled?: boolean
 }
@@ -14,7 +17,7 @@ type Props = {
 /**
  * Sélecteur de quantité entière ≥ 0 (catalogue, panier) : boutons − / +
  * de 44 px et saisie au clavier numérique (EF-CLT-02, ENF-11), bloqué au
- * maximum quand il est connu. 0 retire le produit.
+ * maximum quand il est connu, sinon à MAX_LINE_QUANTITY. 0 retire le produit.
  */
 export function QuantityStepper({ name, value, onChange, max = null, disabled = false }: Props) {
   const { t } = useTranslation()
@@ -22,7 +25,8 @@ export function QuantityStepper({ name, value, onChange, max = null, disabled = 
   const [typed, setTyped] = useState<string | null>(null)
   const text = typed ?? String(value)
 
-  const clamp = (next: number) => Math.max(0, max === null ? next : Math.min(next, max))
+  const limit = Math.min(max ?? MAX_LINE_QUANTITY, MAX_LINE_QUANTITY)
+  const clamp = (next: number) => Math.max(0, Math.min(next, limit))
   const commit = (raw: string) => {
     const parsed = Number.parseInt(raw.replace(/\D/g, ''), 10)
     const next = clamp(Number.isNaN(parsed) ? 0 : parsed)
@@ -63,7 +67,7 @@ export function QuantityStepper({ name, value, onChange, max = null, disabled = 
         type="button"
         className={button}
         aria-label={t('common.quantity.increase', { name })}
-        disabled={disabled || (max !== null && value >= max)}
+        disabled={disabled || value >= limit}
         onClick={() => onChange(clamp(value + 1))}
       >
         +

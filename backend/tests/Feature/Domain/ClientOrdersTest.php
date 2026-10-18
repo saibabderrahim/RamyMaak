@@ -347,3 +347,32 @@ it('presents an order for the client and the regional views (contrat §3, §4)',
             ['from' => 'SUBMITTED', 'to' => 'SUBMITTED', 'version' => 2, 'at' => '2026-10-08T08:30:00+00:00', 'actor' => 'CLIENT', 'by_name' => $this->secondA->name, 'comment' => null],
         ]);
 });
+
+it('sets the public id without model events and keeps the factory order in the region of its client (§10.2, I-56)', function () {
+    Event::fake();
+
+    $order = Order::factory()->for($this->b)->create(['business_day_id' => $this->regionDay->business_day_id]);
+    expect(Order::isPublicId($order->public_id))->toBeTrue()
+        ->and($order->public_id)->toBe(strtoupper($order->public_id))
+        ->and($order->region_id)->toBe($this->centre->id);
+
+    $created = ($this->submit)($this->accountA, [[$this->orange, 5]])['order'];
+    expect(Order::isPublicId($created->public_id))->toBeTrue()
+        ->and($created->public_id)->toBe(strtoupper($created->public_id))
+        ->and($created->fresh()->number)->toBe('RMK-261008-00001');
+    Event::assertDispatched(OrderSubmitted::class);
+});
+
+it('numbers the orders of the day in sequence across clients and regions, without gap after a refusal (I-55)', function () {
+    $c = Client::factory()->create(['region_id' => $this->est->id]);
+    openOrderingDay('2026-10-08', $this->est, [[$this->orange, 100]]);
+    $accountC = userWithRole(Role::Client, ['client_id' => $c->id]);
+
+    $first = ($this->submit)($this->accountA, [[$this->orange, 5]])['order'];
+    expect(fn () => ($this->submit)($this->accountB, [[$this->orange, 999999]]))->toThrow(ApiException::class);
+    $second = ($this->submit)($accountC, [[$this->orange, 5]])['order'];
+    $third = ($this->submit)($this->accountB, [[$this->pomme, 1]])['order'];
+
+    expect([$first->number, $second->number, $third->number])->toBe(['RMK-261008-00001', 'RMK-261008-00002', 'RMK-261008-00003'])
+        ->and($first->lines()->count())->toBe(1);
+});

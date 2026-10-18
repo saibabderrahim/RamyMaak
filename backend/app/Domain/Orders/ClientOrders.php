@@ -30,8 +30,10 @@ use Illuminate\Support\Facades\DB;
  * plusieurs appareils sont sérialisés et E(c,p) est relu après le verrou.
  *
  * Ordre des verrous, le même partout : client → journée (partagé) →
- * commande → numéro. La clôture verrouille la journée puis les commandes,
- * jamais le client : pas de cycle.
+ * commande → numéro du jour (pris en dernier, juste avant le commit). La
+ * clôture verrouille la journée puis les commandes, jamais le client : pas
+ * de cycle. Tout écrivain d'une commande envoyée (lot 6 compris) prend la
+ * journée en partagé avant la commande.
  */
 final class ClientOrders
 {
@@ -94,7 +96,6 @@ final class ClientOrders
                 $this->assertMinimum($totals['ht']);
 
                 $order = Order::create([
-                    'number' => $this->numbers->next($businessDay),
                     'business_day_id' => $businessDay->id,
                     'region_id' => $regionDay->region_id,
                     'client_id' => $client->id,
@@ -108,10 +109,10 @@ final class ClientOrders
                     'total_vat' => Money::amount($totals['vat']),
                     'total_ttc' => Money::amount($totals['ht'] + $totals['vat']),
                 ]);
-                foreach ($priced as $line) {
-                    $order->lines()->create($this->lineAttributes($line));
-                }
+                $this->insertLines($order, $priced);
                 $this->history($order, null, OrderStatus::Submitted, $by->id);
+                // Numéro en dernier : la ligne du jour, commune à tous les envois, est tenue le moins longtemps possible.
+                $order->forceFill(['number' => $this->numbers->next($businessDay)])->save();
 
                 activity('orders')
                     ->performedOn($order)
@@ -155,13 +156,16 @@ final class ClientOrders
      */
     public function modify(User $by, string $publicId, int $version, array $lines, ?string $comment): Order
     {
-        return DB::transaction(function () use ($by, $publicId, $version, $lines, $comment): Order {
+        $dayId = $this->orderDay($by, $publicId);
+
+        return DB::transaction(function () use ($by, $publicId, $dayId, $version, $lines, $comment): Order {
             $client = $this->lockClient($by);
+            $businessDay = $this->lockDay($dayId);
             $order = $this->lockOrder($client, $publicId);
             $this->workflow->assertCan($order->status, OrderStatus::Submitted, OrderActor::Client);
             $this->assertVersion($order, $version);
             $this->assertActive($client);
-            $state = $this->lockedState($order);
+            $state = $this->window->forRegion($businessDay, $order->region_id);
             $this->window->assertOpen($state);
             /** @var RegionDay $regionDay */
             $regionDay = $state->regionDay;
@@ -227,12 +231,15 @@ final class ClientOrders
      */
     public function cancel(User $by, string $publicId, int $version): Order
     {
-        return DB::transaction(function () use ($by, $publicId, $version): Order {
+        $dayId = $this->orderDay($by, $publicId);
+
+        return DB::transaction(function () use ($by, $publicId, $dayId, $version): Order {
             $client = $this->lockClient($by);
+            $businessDay = $this->lockDay($dayId);
             $order = $this->lockOrder($client, $publicId);
             $this->workflow->assertCan($order->status, OrderStatus::Cancelled, OrderActor::Client);
             $this->assertVersion($order, $version);
-            $this->window->assertOpen($this->lockedState($order));
+            $this->window->assertOpen($this->window->forRegion($businessDay, $order->region_id));
 
             $this->bump($order, $version, OrderStatus::Cancelled);
             $this->history($order, OrderStatus::Submitted, OrderStatus::Cancelled, $by->id);
@@ -265,25 +272,42 @@ final class ClientOrders
         return $client;
     }
 
+    /**
+     * Journée de la commande du client (sinon 403 ou 404), lue hors de la
+     * transaction : elle ne change jamais, et la transaction peut alors
+     * verrouiller la journée avant la commande, dans l'ordre de la clôture
+     * (journée → commandes), sans ouvrir son instantané avant les verrous.
+     */
+    private function orderDay(User $by, string $publicId): int
+    {
+        if ($by->client_id === null) {
+            throw new ApiException(ErrorCode::Forbidden, __('errors.FORBIDDEN'));
+        }
+        $dayId = Order::isPublicId($publicId)
+            ? Order::query()->where('client_id', $by->client_id)->where('public_id', strtoupper($publicId))->value('business_day_id')
+            : null;
+        if ($dayId === null) {
+            throw new ApiException(ErrorCode::NotFound, __('orders.not_found'));
+        }
+
+        return (int) $dayId;
+    }
+
+    /** Journée verrouillée en partagé : la clôture attend la fin de l'écriture. */
+    private function lockDay(int $dayId): BusinessDay
+    {
+        return BusinessDay::query()->sharedLock()->findOrFail($dayId);
+    }
+
     /** Commande du client (sinon 404), verrouillée. */
     private function lockOrder(Client $client, string $publicId): Order
     {
-        $order = Order::isPublicId($publicId)
-            ? Order::query()->where('client_id', $client->id)->where('public_id', strtoupper($publicId))->lockForUpdate()->first()
-            : null;
+        $order = Order::query()->where('client_id', $client->id)->where('public_id', strtoupper($publicId))->lockForUpdate()->first();
         if ($order === null) {
             throw new ApiException(ErrorCode::NotFound, __('orders.not_found'));
         }
 
         return $order;
-    }
-
-    private function lockedState(Order $order): OrderingState
-    {
-        /** @var BusinessDay $businessDay */
-        $businessDay = BusinessDay::query()->sharedLock()->findOrFail($order->business_day_id);
-
-        return $this->window->forRegion($businessDay, $order->region_id);
     }
 
     private function assertActive(Client $client): void
@@ -416,7 +440,9 @@ final class ClientOrders
             ->where('version', $version)
             ->update([...$attributes, 'status' => $to->value, 'version' => $version + 1, 'updated_at' => now()]);
         if ($updated === 0) {
-            throw new ApiException(ErrorCode::VersionConflict, __('orders.version_conflict'));
+            throw new ApiException(ErrorCode::VersionConflict, __('orders.version_conflict'), [
+                'version' => (int) Order::query()->whereKey($order->id)->value('version'),
+            ]);
         }
         $order->forceFill([...$attributes, 'status' => $to, 'version' => $version + 1]);
     }
@@ -454,6 +480,22 @@ final class ClientOrders
         ksort($quantities);
 
         return $quantities;
+    }
+
+    /**
+     * Lignes de l'envoi en une instruction (jusqu'à 200, I-60).
+     *
+     * @param  list<array{product_id: int, requested_qty: int, unit_price_ht: string, vat_rate: string}>  $lines
+     */
+    private function insertLines(Order $order, array $lines): void
+    {
+        $now = now();
+        OrderLine::query()->insert(array_map(fn (array $line) => [
+            ...$this->lineAttributes($line),
+            'order_id' => $order->id,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ], $lines));
     }
 
     /**

@@ -19,7 +19,9 @@ return new class extends Migration
             // Seul identifiant exposé par l'API (ULID, non devinable).
             $table->char('public_id', 26)->unique();
             // Lisible, ex. RMK-261008-00042 (journée et rang dans la journée).
-            $table->string('number', 20)->unique();
+            // Alloué en dernier dans la transaction d'envoi : NULL le temps de
+            // l'insertion seulement (plusieurs NULL admis par l'index unique).
+            $table->string('number', 20)->nullable()->unique();
             $table->foreignId('business_day_id')->constrained('business_days')->restrictOnDelete();
             // Région du client au moment de l'envoi, figée (RG-S04).
             $table->foreignId('region_id')->constrained('regions')->restrictOnDelete();

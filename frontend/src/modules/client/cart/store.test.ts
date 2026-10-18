@@ -69,6 +69,20 @@ describe('cart store', () => {
     })
   })
 
+  it('rebuilds a new cart for « Recommander », dropping the order being modified and the interrupted sending', () => {
+    const store = new CartStore(cartKey(7, 12))
+    store.startEditing({ id: '01JA2Z6K8QW3X9M4T7RBN5CDEF', number: 'RMK-261008-00042', version: 2, day: '2026-10-08', comment: 'Livrer tôt', lines: [] })
+    const previous = store.beginSend()
+
+    store.rebuild('2026-10-11', [
+      { product_id: 42, quantity: 30 },
+      { product_id: 57, quantity: 0 },
+    ])
+
+    expect(store.get()).toEqual({ v: 1, day: '2026-10-11', lines: [{ product_id: 42, quantity: 30 }], comment: '', editing: null, pending: null })
+    expect(store.beginSend()).not.toBe(previous)
+  })
+
   it('ignores unreadable content and empties the shared stores at logout', () => {
     localStorage.setItem(cartKey(7, 12), '{"v":1,"lines":[{"product_id":"x","quantity":2},{"product_id":5,"quantity":0},{"product_id":6,"quantity":2}]}')
     expect(new CartStore(cartKey(7, 12)).get().lines).toEqual([{ product_id: 6, quantity: 2 }])

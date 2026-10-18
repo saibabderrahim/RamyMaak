@@ -11,8 +11,12 @@ import { useLiveRefresh } from '../../shared/realtime'
  */
 
 export const clientKey = ['client'] as const
-/** Journée de commande ; sans `day`, celle que propose le serveur (I-42). */
-export const todayKey = (day?: string) => ['client', 'today', day ?? 'default'] as const
+/**
+ * Journée de commande ; sans `day`, celle que propose le serveur (I-42).
+ * `order` : commande en cours de modification, exclue de l'engagé (§5.1).
+ */
+export const todayKey = (day?: string, order?: string) =>
+  order ? (['client', 'today', day ?? 'default', order] as const) : (['client', 'today', day ?? 'default'] as const)
 export const ordersKey = (params: OrdersParams = {}) => ['client', 'orders', params] as const
 export const orderKey = (id: string) => ['client', 'order', id] as const
 
@@ -30,11 +34,16 @@ export function useClientLive(): number | false {
   return useLiveRefresh(user.client_id === null ? null : `client.${user.client_id}`, CLIENT_EVENTS, [clientKey])
 }
 
-export function useClientToday(day?: string) {
+/**
+ * Journée du client. En modification (`order` = id de la commande), le
+ * disponible est calculé hors de ses quantités : sans cela, elles seraient
+ * comptées deux fois et le panier serait plafonné à tort.
+ */
+export function useClientToday(day?: string, order?: string) {
   const refetchInterval = useClientLive()
   return useQuery({
-    queryKey: todayKey(day),
-    queryFn: ({ signal }) => api.get<ClientToday>('/client/today', day ? { day } : undefined, signal),
+    queryKey: todayKey(day, order),
+    queryFn: ({ signal }) => api.get<ClientToday>('/client/today', day || order ? { day, order } : undefined, signal),
     refetchInterval,
   })
 }

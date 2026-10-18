@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it } from 'vitest'
-import { QuantityStepper } from './QuantityStepper'
+import { MAX_LINE_QUANTITY, QuantityStepper } from './QuantityStepper'
 
 function Harness({ max }: { max: number | null }) {
   const [value, setValue] = useState(0)
@@ -32,5 +32,11 @@ describe('QuantityStepper', () => {
     await user.type(input, '250')
     await user.tab()
     expect(input).toHaveValue('250')
+    // Plafond d'une ligne de commande (I-60), jamais affiché comme un maximum.
+    await user.clear(input)
+    await user.type(input, '2000000')
+    await user.tab()
+    expect(input).toHaveValue(String(MAX_LINE_QUANTITY))
+    expect(screen.getByRole('button', { name: 'Augmenter la quantité de Jus orange 1 L' })).toBeDisabled()
   })
 })

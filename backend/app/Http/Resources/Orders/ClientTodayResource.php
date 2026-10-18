@@ -60,8 +60,12 @@ class ClientTodayResource extends JsonResource
         parent::__construct($state);
     }
 
-    /** Journée `$day` du client (état, commandes, catalogue). */
-    public static function for(Client $client, CarbonImmutable $day): self
+    /**
+     * Journée `$day` du client (état, commandes, catalogue). En modification,
+     * E(c,p) exclut la commande modifiée tant qu'elle est envoyée (§5.1) :
+     * le disponible montré est celui que contrôlera la modification.
+     */
+    public static function for(Client $client, CarbonImmutable $day, ?Order $editing = null): self
     {
         $state = app(OrderingWindow::class)->state($client, $day);
         $settings = app(Settings::class);
@@ -79,7 +83,10 @@ class ClientTodayResource extends JsonResource
         $catalogue = in_array($state->status, [ClientDayStatus::OrderingOpen, ClientDayStatus::OrderingClosed], true)
             && $state->regionDay !== null
             && $state->regionDay->isDistributionPublished();
-        $availability = $catalogue ? app(OrderBook::class)->availability($state->regionDay, $client->id) : [];
+        $except = $editing !== null && $editing->status === OrderStatus::Submitted && $editing->business_day_id === $state->businessDay?->id
+            ? $editing->id
+            : null;
+        $availability = $catalogue ? app(OrderBook::class)->availability($state->regionDay, $client->id, $except) : [];
 
         return new self(
             $state,

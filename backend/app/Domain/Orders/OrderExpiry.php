@@ -25,10 +25,14 @@ final class OrderExpiry
      */
     public function expire(BusinessDay $day): array
     {
+        // Lecture verrouillante (lecture courante) : un écrivain qui ne prendrait
+        // pas la journée en partagé est attendu, et seules les commandes encore
+        // envoyées après lui reçoivent historique, journal et N-14.
         $orders = Order::query()
             ->where('business_day_id', $day->id)
             ->where('status', OrderStatus::Submitted->value)
             ->orderBy('id')
+            ->lockForUpdate()
             ->get(['id', 'number', 'version']);
         if ($orders->isEmpty()) {
             return [];

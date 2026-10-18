@@ -117,9 +117,20 @@ export class CartStore {
     this.set({ ...this.cart, comment })
   }
 
-  /** Remplace les lignes (« Recommander », rapprochement avec le catalogue du jour). */
+  /**
+   * Remplace les lignes en gardant la modification et l'envoi en cours
+   * (rapprochement avec le catalogue du jour).
+   */
   replace(day: string, lines: CartLine[], comment?: string): void {
     this.set({ ...this.cart, day, lines: lines.filter((line) => line.quantity > 0), comment: comment ?? this.cart.comment })
+  }
+
+  /**
+   * Nouveau panier (« Recommander ») : ni modification ni envoi interrompu
+   * repris, commentaire vide ; le prochain envoi aura un nouvel identifiant.
+   */
+  rebuild(day: string, lines: CartLine[]): void {
+    this.set({ ...EMPTY_CART, day, lines: lines.filter((line) => line.quantity > 0) })
   }
 
   /** Charge une commande envoyée pour la modifier (PATCH avec sa version). */

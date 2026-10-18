@@ -32,6 +32,8 @@ Celles des lots 2 à 4 s'appliquent (contrats des lots 2, 3 et 4, §1, et leurs 
   - `cancel(User, publicId, version)` → `Order`.
 
   `lines` = `[{product_id, quantity}]`. Tous les contrôles métier sont faits ici (ordre au §3), sous le verrou du client (§5.8), avec idempotence (RG-C07), historique, journal d'audit et événement.
+
+  **Ordre des verrous**, le même pour tout écrivain d'une commande envoyée, lot 6 compris : client (FOR UPDATE, première instruction) → journée (partagé) → commande (FOR UPDATE) → numéro du jour, alloué en dernier. La clôture verrouille la journée, puis les commandes : jamais de cycle (I-61).
 - `OrderingWindow` :
   - `state(Client, day, lock)` et `forRegion(BusinessDay, regionId)` → `OrderingState` (journée, journée régionale, statut `ClientDayStatus`, heure limite applicable `cutoffAt`, `extended`) ;
   - `defaultDay(Client)` : journée proposée (I-42) ;
@@ -61,7 +63,7 @@ Le lot 5 exerce l'envoi, la modification, l'annulation par le client et l'expira
 - `cancelled` ;
 - `expired` (sur la journée) : nombre, 200 numéros au plus.
 
-**Numéro** : `RMK-AAMMJJ-NNNNN`, rang dans la journée (`order_number_sequences`), inchangé à la modification. **Identifiant exposé** : `public_id`, ULID en majuscules. L'id interne n'est jamais exposé.
+**Numéro** : `RMK-AAMMJJ-NNNNN`, rang dans la journée (`order_number_sequences`, une seule instruction `INSERT … ON DUPLICATE KEY UPDATE`), alloué en dernier dans la transaction d'envoi, inchangé à la modification. **Identifiant exposé** : `public_id`, ULID en majuscules. L'id interne n'est jamais exposé.
 
 ## 2. Droits
 
@@ -78,9 +80,11 @@ L'ADV et l'Admin reçoivent 403 sur ces points d'accès : ils lisent les command
 
 ## 3. Client
 
-### `GET /client/today[?day=AAAA-MM-JJ]`
+### `GET /client/today[?day=AAAA-MM-JJ][&order={id}]`
 
 Sans `day`, la journée vient de `OrderingWindow::defaultDay`. Un `day` invalide → 422.
+
+`order` : commande **en cours de modification** (I-62). Elle doit être une commande du client, sinon 404 (avant la validation). Sans `day`, sa journée est prise ; un `day` différent → 422 sur `order`. Tant qu'elle est envoyée, `engaged` et `available` sont calculés **hors de ses quantités** (§5.1), comme le fera `modify` : sans ce paramètre, ses quantités seraient comptées deux fois et le panier serait plafonné, ou vidé, à tort.
 
 ```json
 {
@@ -115,7 +119,7 @@ Champs de l'état de la journée :
   2. `ORDERING_CLOSED` : heure limite passée ;
   3. `ORDERING_OPEN` : répartition envoyée ;
   4. `WAITING_QUOTAS` : sinon, y compris pour une journée non ouverte.
-- **`ordering_cutoff*`** : heure limite de commande **de la région du client**, prolongation comprise (RG-A05). Ces champs valent null si la journée n'est pas ouverte.
+- **`ordering_cutoff*`** : heure limite de commande **de la région du client**, prolongation comprise (RG-A05). `ordering_cutoff` et `ordering_cutoff_at` valent null si la journée n'est pas ouverte, `ordering_cutoff_extended` vaut alors `false`.
 - **`can_submit`** et **`submit_blocker`** : `can_submit` est vrai si **toutes** ces conditions sont réunies :
   - le client est actif ;
   - `status` vaut `ORDERING_OPEN` ;
@@ -125,7 +129,7 @@ Champs de l'état de la journée :
 - **`orders`** : commandes du client pour **cette journée**, tous statuts, de la plus récente à la plus ancienne.
 
 Catalogue :
-- **`products`** : `OrderBook::availability`. Liste vide tant que la répartition n'est pas envoyée (`status` ≠ `ORDERING_OPEN` et ≠ `ORDERING_CLOSED`).
+- **`products`** : `OrderBook::availability`. Liste vide tant que la répartition de la région n'est pas envoyée (journée régionale absente ou non publiée), même après l'heure limite (`ORDERING_CLOSED` sans répartition), et pour une journée clôturée.
   - Les produits commandables sont triés comme la matrice du lot 3 (famille, puis `sort_order` et `sku`).
   - `price` suit la forme PriceRef du lot 2, calculée avec `Money`.
   - `photos` suit la forme du lot 2, principale en premier.
@@ -178,10 +182,10 @@ Droits d'action sur une commande :
 
 | Méthode | Chemin | Corps | Réponse |
 |---|---|---|---|
-| GET | `/client/orders` | `filter[day]`, `filter[status]` (liste séparée par des virgules), `page`, `per_page` (25 par défaut, 100 au plus) | page de `OrderSummary`, toutes journées, `submitted_at` décroissant |
+| GET | `/client/orders` | `filter[day]` (une journée), `filter[status]` (liste séparée par des virgules, casse indifférente), `page`, `per_page` (25 par défaut, 100 au plus) ; autre filtre ou `sort` → 422 | page de `OrderSummary`, toutes journées, `submitted_at` décroissant |
 | GET | `/client/orders/{id}` | — | `Order` |
-| POST | `/client/orders` | `client_request_id` (uuid, requis) ; `day` (`AAAA-MM-JJ`, requis) ; `comment` (null ou ≤ 500 caractères) ; `lines` (1 à 200 éléments `{product_id: entier, quantity: entier 1 à 1 000 000}`, un produit au plus une fois, sinon 422 sur `lines.N.product_id`) | **201** `Order` (nouvelle) ou **200** `Order` (renvoi du même identifiant, RG-C07) |
-| PATCH | `/client/orders/{id}` | `version` (requis) ; `lines` (règles du POST) ; `comment` (clé requise, null permis) | 200 `Order` : remplacement complet, contrôles rejoués, E hors de cette commande |
+| POST | `/client/orders` | `client_request_id` (uuid, requis) ; `day` (`AAAA-MM-JJ`, requis) ; `comment` (facultatif, null ou ≤ 500 caractères) ; `lines` (1 à 200 éléments `{product_id: entier, quantity: entier 1 à 1 000 000}`, un produit au plus une fois, sinon 422 sur `lines.N.product_id`) | **201** `Order` (nouvelle) ou **200** `Order` (renvoi du même identifiant, RG-C07) |
+| PATCH | `/client/orders/{id}` | `version` (entier ≥ 1, requis) ; `lines` (règles du POST) ; `comment` (clé requise, null permis) | 200 `Order` : remplacement complet, contrôles rejoués, E hors de cette commande |
 | POST | `/client/orders/{id}/cancel` | `version` (requis) | 200 `Order` |
 
 **Ordre des contrôles** :
@@ -261,9 +265,9 @@ Notifications, en base et sur `user.{id}`, envoyées par une tâche de fond rejo
 |---|---|---|---|---|---|
 | `ORDER_SUBMITTED` | N-05 | `OrderSubmitted` | régionaux de la région ce jour-là (`RegionStaff::regionals`, titulaire et suppléants actifs) | « Nouvelle commande — C0012 Superette El Baraka » / « RMK-261008-00042 à valider. » | `/regional/commandes/{id}` |
 | `ORDER_CHANGED` | N-06 | `OrderUpdated`, `OrderCancelled` | idem | « Commande RMK-261008-00042 modifiée » / « Superette El Baraka a modifié sa commande. » ; « … annulée » / « … a annulé sa commande. » | idem |
-| `ORDER_DECIDED` | N-07 | lot 6 (classe, textes et destinataires livrés au lot 5) | comptes actifs de rôle client du client | « Votre commande RMK-… est validée. » / « … validée (2 lignes ajustées). » / « … est rejetée. » / « … est annulée. » | `/client/commandes/{id}` |
+| `ORDER_DECIDED` | N-07 | lot 6 (classe, textes et destinataires livrés au lot 5) | comptes actifs de rôle client du client | « Commande RMK-… validée » / « Votre commande RMK-… est validée. » ou « … validée (2 lignes ajustées). » (« 1 ligne ajustée ») ; « Commande RMK-… rejetée » / « … est rejetée. » ; « Commande RMK-… annulée » / « … est annulée. » | `/client/commandes/{id}` |
 | `ORDER_EXPIRED` | N-14 | `OrdersExpired` | comptes actifs de rôle client du client | « Commande RMK-… expirée » / « Elle n'a pas été validée avant la clôture de la journée. » | `/client/commandes/{id}` |
-| `CUTOFF_EXTENDED` | — | `CutoffExtended`, type `ORDERING` | en plus des régionaux (lot 3) : comptes actifs de rôle client des clients **actifs** de la région, si la répartition est envoyée | « Heure limite de commande prolongée » / « Commandez jusqu'à 13:30. » | `/client` |
+| `CUTOFF_EXTENDED` | — | `CutoffExtended`, type `ORDERING` | en plus des régionaux (lot 3) : comptes actifs de rôle client des clients **actifs** de la région, si la répartition est envoyée et la région non clôturée quand la tâche s'exécute | « Heure limite de commande prolongée » / « Commandez jusqu'à 13:30. » | `/client` |
 
 Les textes ne portent jamais de montant (EF-NOT-03). Clés d'unicité :
 - N-05 et N-14 : commande et destinataire ;
@@ -306,7 +310,7 @@ La grille de répartition (lot 4) relit S en direct sur les événements de comm
 - **Fiche produit** : carrousel par défilement natif, grande image, UV, prix unitaire indicatif.
 - **Barre du panier** fixe : nombre de lignes et total HT.
 - **Lecture seule** pour un client bloqué ou une commande impossible.
-- **Modification d'une commande** : bandeau « Modification de la commande RMK-… » avec « Abandonner la modification ».
+- **Modification d'une commande** : bandeau « Modification de la commande RMK-… » avec « Abandonner la modification ». Le catalogue lit alors `useClientToday(cart.day, cart.editing.orderId)` (`?order=`) : disponible hors de la commande modifiée.
 
 **Panier** :
 - **Contenu** : lignes avec photo, quantité et montant ; totaux HT, TVA et TTC « indicatifs » (`shared/money.ts`) ; commentaire de 500 caractères au plus.
@@ -316,7 +320,7 @@ La grille de répartition (lot 4) relit S en direct sur les événements de comm
   - 2xx : panier vidé, puis détail de la commande.
   - Refus 4xx métier : `abandonSend()`, puis affichage des violations ligne par ligne.
   - `VERSION_CONFLICT` en modification : relecture de la commande et message.
-- **Rapprochement** avec `GET /client/today` (journée du panier ou de la commande modifiée), au chargement et à chaque relecture. Un produit qui n'est plus commandable est retiré ; une quantité au-dessus de `available` (s'il n'est pas null) est plafonnée ; un avis le signale. Une relecture n'écrase jamais une saisie en cours.
+- **Rapprochement** avec `GET /client/today` (journée du panier, ou de la commande modifiée avec `?order=`), au chargement et à chaque relecture. Un produit qui n'est plus commandable est retiré ; une quantité au-dessus de `available` (s'il n'est pas null) est plafonnée ; un avis le signale. Une relecture n'écrase jamais une saisie en cours.
 - **Changement de journée** (`cart.day` ≠ journée proposée, hors modification) : panier vidé avec un avis.
 
 **Mes commandes** :
@@ -327,7 +331,7 @@ La grille de répartition (lot 4) relit S en direct sur les événements de comm
   - historique et totaux.
 - **Modifier** (`can_modify`) : `store.startEditing(order)`, après confirmation si le panier contient autre chose, puis le catalogue.
 - **Annuler** (`can_cancel`) : confirmation, puis `POST …/cancel {version}`.
-- **Recommander** : panier rebâti depuis une commande passée, sur la journée proposée.
+- **Recommander** : panier rebâti depuis une commande passée, sur la journée proposée, avec `store.rebuild(day, lines)` (ni modification en cours ni envoi interrompu repris).
   - Les produits non commandables sont ignorés ; les quantités sont plafonnées à `available` s'il n'est pas null.
   - Un résumé indique les changements, puis ouverture du panier.
 
@@ -405,3 +409,6 @@ Reporté :
 | I-58 | Régional : liste et détail des commandes en lecture au lot 5 |
 | I-59 | Prolongation de l'heure limite de commande : les clients actifs de la région sont notifiés si la répartition est envoyée |
 | I-60 | Limites de saisie : 200 lignes, 1 000 000 par ligne, commentaire de 500 caractères |
+| I-61 | Ordre des verrous : client → journée (partagé) → commande → numéro du jour, alloué en dernier ; la clôture verrouille la journée puis les commandes (lecture verrouillante) |
+| I-62 | `GET /client/today?order=` : disponible hors de la commande en cours de modification ; journée de la commande par défaut |
+| I-63 | Quantité saisie plafonnée à 1 000 000 même sans borne (`MAX_LINE_QUANTITY`, I-60), sans afficher de maximum |
