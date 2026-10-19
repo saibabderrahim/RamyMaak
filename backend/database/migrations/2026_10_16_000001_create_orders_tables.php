@@ -75,7 +75,7 @@ return new class extends Migration
             $table->index('product_id');
         });
 
-        // Historique des transitions (§6.3) : auteur (NULL = système), date, commentaire. Jamais modifié.
+        // Historique des transitions (§6.3) : acteur et auteur (NULL = système), date, commentaire. Jamais modifié.
         Schema::create('order_status_history', function (Blueprint $table) {
             $table->id();
             $table->foreignId('order_id')->constrained('orders')->restrictOnDelete();
@@ -84,6 +84,8 @@ return new class extends Migration
             // Version de la commande après la transition.
             $table->unsignedInteger('version');
             $table->foreignId('user_id')->nullable()->constrained('users')->restrictOnDelete();
+            // Acteur au moment de la transition (OrderActor), indépendant du rôle actuel du compte.
+            $table->string('actor', 10);
             $table->string('comment', 500)->nullable();
             $table->dateTime('created_at');
 

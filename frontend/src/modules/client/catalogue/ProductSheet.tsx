@@ -5,7 +5,7 @@ import { Badge, Button } from '../../../shared/ui'
 import { Dialog } from '../../../shared/ui/Dialog'
 import { ProductImage } from '../../../shared/ui/ProductImage'
 import { QuantityStepper } from '../../../shared/ui/QuantityStepper'
-import { formatQuantity, formatRate } from '../cart/format'
+import { formatRate, limitText } from '../cart/format'
 
 type Props = {
   product: ClientProduct
@@ -84,7 +84,7 @@ export function ProductSheet({ product, quantity, onQuantity, readOnly, onClose 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
           <div className="flex flex-col">
             <span className="text-sm font-medium text-slate-800">{t('orders.client.sheet.quantity')}</span>
-            {product.limit !== null && <span className="text-xs text-slate-600">{t('orders.client.catalogue.max', { max: formatQuantity(product.available ?? 0) })}</span>}
+            {product.limit !== null && <span className="text-xs text-slate-600">{limitText(t, product)}</span>}
           </div>
           <QuantityStepper name={product.name} value={quantity} onChange={onQuantity} max={product.available} disabled={readOnly || product.sold_out} />
         </div>

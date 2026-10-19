@@ -64,9 +64,25 @@ describe('cart store', () => {
       day: '2026-10-08',
       lines: [{ product_id: 42, quantity: 40 }],
       comment: '',
-      editing: { orderId: '01JA2Z6K8QW3X9M4T7RBN5CDEF', number: 'RMK-261008-00042', version: 2 },
+      editing: { orderId: '01JA2Z6K8QW3X9M4T7RBN5CDEF', number: 'RMK-261008-00042', version: 2, prices: {} },
       pending: null,
     })
+  })
+
+  it('keeps the frozen price and VAT of each line of the order being modified (RG-P03, I-47)', () => {
+    const store = new CartStore(cartKey(7, 12))
+    store.startEditing({
+      id: '01JA2Z6K8QW3X9M4T7RBN5CDEF',
+      number: 'RMK-261008-00042',
+      version: 2,
+      day: '2026-10-08',
+      comment: null,
+      lines: [{ product_id: 42, requested_qty: 40, unit_price_ht: 900, vat_rate: 19 } as never],
+    })
+
+    expect(store.get().editing?.prices).toEqual({ 42: { unit_price_ht: 900, vat_rate: 19 } })
+    // Relu depuis le stockage (autre onglet, rechargement).
+    expect(new CartStore(cartKey(7, 12)).get().editing?.prices).toEqual({ 42: { unit_price_ht: 900, vat_rate: 19 } })
   })
 
   it('rebuilds a new cart for « Recommander », dropping the order being modified and the interrupted sending', () => {

@@ -98,7 +98,7 @@ function Catalogue({ today, cart, store, notice }: { today: ClientToday; cart: C
 
   const quantities = new Map(cart.lines.map((line) => [line.product_id, line.quantity]))
   const setQuantity = (productId: number, quantity: number) => store.setQuantity(today.day, productId, quantity)
-  const items = cartItems(cart.lines, today.products)
+  const items = cartItems(cart.lines, today.products, cart.editing?.prices)
   const visible = filterProducts(today.products, familyId, debounced)
 
   return (

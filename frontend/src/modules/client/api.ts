@@ -1,8 +1,8 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../shared/api/client'
-import type { ClientToday, Order, OrderStatus, OrderSummary, Paginated } from '../../shared/api/types'
+import type { AppNotification, ClientToday, Order, OrderStatus, OrderSummary, Paginated } from '../../shared/api/types'
 import { useAuthenticatedUser } from '../../shared/auth/session'
-import { useLiveRefresh } from '../../shared/realtime'
+import { NOTIFICATION_EVENT, useChannel, useLiveRefresh } from '../../shared/realtime'
 
 /**
  * Données du client (lot 5) — contrat : docs/lot-5-contrat-api.md §3.
@@ -27,10 +27,19 @@ export const CLIENT_EVENTS = ['LimitsUpdated', 'OrderSubmitted', 'OrderUpdated',
 
 /**
  * Rafraîchissement en temps réel des données du client (canal client.{id}) ;
- * renvoie l'intervalle de repli (30 s) à passer en refetchInterval.
+ * renvoie l'intervalle de repli (30 s) à passer en refetchInterval. Une
+ * prolongation de l'heure limite (RG-A05, I-59) n'est notifiée que sur
+ * `user.{id}` : elle relit aussi la journée, que l'écran affiche peut-être
+ * déjà « Commandes clôturées ».
  */
 export function useClientLive(): number | false {
   const user = useAuthenticatedUser()
+  const queryClient = useQueryClient()
+  useChannel(`user.${user.id}`, {
+    [NOTIFICATION_EVENT]: (payload) => {
+      if ((payload as Partial<AppNotification> | null)?.type === 'CUTOFF_EXTENDED') void queryClient.invalidateQueries({ queryKey: clientKey })
+    },
+  })
   return useLiveRefresh(user.client_id === null ? null : `client.${user.client_id}`, CLIENT_EVENTS, [clientKey])
 }
 

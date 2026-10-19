@@ -2,7 +2,6 @@
 
 namespace App\Http\Resources\Orders;
 
-use App\Domain\Access\Role;
 use App\Domain\Orders\OrderActor;
 use App\Domain\Referentials\ProductPhotos;
 use App\Models\Order;
@@ -21,7 +20,7 @@ use Spatie\MediaLibrary\MediaCollections\Models\Media;
 final class OrderPresenter
 {
     /** Relations lues par lines() et history(). */
-    public const RELATIONS = ['businessDay:id,day', 'lines.product:id,sku,name,short_name,sales_unit_label', 'lines.product.media', 'history.user.roles'];
+    public const RELATIONS = ['businessDay:id,day', 'lines.product:id,sku,name,short_name,sales_unit_label', 'lines.product.media', 'history.user:id,name'];
 
     /**
      * @return array<string, mixed>
@@ -82,7 +81,7 @@ final class OrderPresenter
     public static function history(Order $order, bool $staffNames): array
     {
         return $order->history->map(function (OrderStatusHistory $entry) use ($staffNames): array {
-            $actor = self::actor($entry);
+            $actor = $entry->actor;
 
             return [
                 'from' => $entry->from_status?->value,
@@ -94,16 +93,6 @@ final class OrderPresenter
                 'comment' => $entry->comment,
             ];
         })->values()->all();
-    }
-
-    public static function actor(OrderStatusHistory $entry): OrderActor
-    {
-        return match ($entry->user?->appRole()) {
-            null => OrderActor::System,
-            Role::Client => OrderActor::Client,
-            Role::Regional => OrderActor::Regional,
-            Role::Adv, Role::Admin => OrderActor::Adv,
-        };
     }
 
     /** @return array{thumb: string, medium: string}|null */

@@ -144,6 +144,9 @@ export function fetchOrder(queryClient: QueryClient, id: string): Promise<Order>
     queryKey: orderKey(id),
     queryFn: ({ signal }) => api.get<Order>(`/client/orders/${encodeURIComponent(id)}`, undefined, signal),
     staleTime: 0,
+    // Hors ligne : échec immédiat (message), jamais une attente suspendue qui agirait au retour du réseau.
+    networkMode: 'always',
+    retry: false,
   })
 }
 

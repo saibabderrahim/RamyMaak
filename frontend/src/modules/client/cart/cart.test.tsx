@@ -198,6 +198,39 @@ describe('cart (EF-CLT-03)', () => {
     expect(storedCart()).toBeNull()
   })
 
+  it('keeps the cart and starts afresh when the interrupted sending had created an order cancelled since', async () => {
+    const user = userEvent.setup()
+    fillCart()
+    let attempt = 0
+    const { requests } = cartApi({
+      [ORDERS_URL]: () => {
+        attempt += 1
+        if (attempt === 1) throw new TypeError('Failed to fetch')
+        // Le premier envoi avait abouti ; la commande a été annulée depuis (« Mes commandes », autre compte).
+        if (attempt === 2) return replayed({ status: 'CANCELLED', status_label: 'Annulée', can_modify: false, can_cancel: false })
+        return created()
+      },
+    })
+    renderClient('/client/panier')
+
+    await sendOrder(user)
+    expect(await screen.findByText('Pas de réseau — panier conservé, réessayez.')).toBeInTheDocument()
+    const first = storedCart()?.pending?.client_request_id
+    await sendOrder(user)
+    expect(
+      await screen.findByText(`L’envoi interrompu avait créé la commande ${ORDER_NUMBER}, depuis annulée : envoyez à nouveau pour créer une nouvelle commande.`),
+    ).toBeInTheDocument()
+    expect(screen.getByTestId('location')).toHaveTextContent('/client/panier')
+    expect(storedCart()?.lines).toHaveLength(2)
+    expect(storedCart()?.pending).toBeNull()
+
+    await sendOrder(user)
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(`/client/commandes/${ORDER_ID}`))
+    const ids = requests(ORDERS_URL).map((call) => (call.body as { client_request_id: string }).client_request_id)
+    expect(ids.slice(0, 2)).toEqual([first, first])
+    expect(ids[2]).not.toBe(first)
+  })
+
   it('warns when a resent order was already saved without the changes made since the interruption', async () => {
     const user = userEvent.setup()
     fillCart()

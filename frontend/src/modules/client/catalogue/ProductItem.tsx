@@ -4,7 +4,7 @@ import { formatAmount } from '../../../shared/format'
 import { Badge } from '../../../shared/ui'
 import { ProductImage } from '../../../shared/ui/ProductImage'
 import { QuantityStepper } from '../../../shared/ui/QuantityStepper'
-import { formatQuantity } from '../cart/format'
+import { limitText } from '../cart/format'
 import type { CatalogueView } from './view'
 
 // Sélecteur étiré à la largeur de la carte (galerie à 2 colonnes, cartes étroites à côté du panier latéral).
@@ -67,7 +67,7 @@ export function ProductItem({ product, quantity, onQuantity, readOnly, view, onO
           {product.is_new && <Badge tone="brand">{t('orders.client.catalogue.isNew')}</Badge>}
           {product.is_featured && <Badge tone="warning">{t('orders.client.catalogue.featured')}</Badge>}
           {/* Sans borne, aucune quantité n'est montrée (RG-C09). */}
-          {product.limit !== null && <span className="text-xs font-medium text-slate-700">{t('orders.client.catalogue.max', { max: formatQuantity(product.available ?? 0) })}</span>}
+          {product.limit !== null && <span className="text-xs font-medium text-slate-700">{limitText(t, product)}</span>}
         </div>
         <div className={`mt-auto pt-1 ${list ? FLUID_FROM_TABLET : FLUID}`}>
           <QuantityStepper name={product.name} value={quantity} onChange={onQuantity} max={product.available} disabled={readOnly || product.sold_out} />

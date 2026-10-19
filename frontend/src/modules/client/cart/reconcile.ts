@@ -1,7 +1,7 @@
 import type { ClientProduct, OrderLineInput } from '../../../shared/api/types'
 import { type PricedLine, type Totals, totals } from '../../../shared/money'
 import { MAX_LINE_QUANTITY } from '../../../shared/ui/QuantityStepper'
-import type { CartLine } from './store'
+import type { CartLine, FrozenPrice } from './store'
 
 // Panier rapproché du catalogue du jour (contrat du lot 5, §6 « Panier ») et
 // montants indicatifs calculés avec les règles du serveur (shared/money.ts,
@@ -48,21 +48,31 @@ export function reconcileLines(
   return { lines: kept, changes }
 }
 
-/** Ligne du panier avec son produit du jour. */
-export type CartItem = { line: CartLine; product: ClientProduct }
+/** Ligne du panier avec son produit du jour, et son prix figé quand elle vient de la commande modifiée. */
+export type CartItem = { line: CartLine; product: ClientProduct; frozen?: FrozenPrice }
 
-/** Lignes dont le produit figure au catalogue du jour, dans l'ordre du panier. */
-export function cartItems(lines: readonly CartLine[], products: readonly ClientProduct[]): CartItem[] {
+/**
+ * Lignes dont le produit figure au catalogue du jour, dans l'ordre du
+ * panier. `frozen` : prix figés de la commande modifiée (I-47).
+ */
+export function cartItems(lines: readonly CartLine[], products: readonly ClientProduct[], frozen: Readonly<Record<string, FrozenPrice>> = {}): CartItem[] {
   const byId = new Map(products.map((product) => [product.id, product]))
   return lines.flatMap((line) => {
     const product = byId.get(line.product_id)
-    return product ? [{ line, product }] : []
+    const price = frozen[String(line.product_id)]
+    return product ? [price ? { line, product, frozen: price } : { line, product }] : []
   })
 }
 
-/** Ligne chiffrée au prix du jour de l'unité de vente (`price.price_ht`). */
-export function pricedLine({ line, product }: CartItem): PricedLine {
-  return { unit_price_ht: product.price.price_ht, vat_rate: product.vat_rate, quantity: line.quantity }
+/**
+ * Ligne chiffrée comme le fera le serveur : prix et TVA figés pour un
+ * produit gardé d'une commande modifiée (RG-P03, I-47), sinon prix du jour
+ * de l'unité de vente (`price.price_ht`) et TVA du produit.
+ */
+export function pricedLine({ line, product, frozen }: CartItem): PricedLine {
+  return frozen
+    ? { unit_price_ht: frozen.unit_price_ht, vat_rate: frozen.vat_rate, quantity: line.quantity }
+    : { unit_price_ht: product.price.price_ht, vat_rate: product.vat_rate, quantity: line.quantity }
 }
 
 /** Totaux HT, TVA et TTC indicatifs du panier. */

@@ -447,6 +447,7 @@ final class ClientOrders
         $order->forceFill([...$attributes, 'status' => $to, 'version' => $version + 1]);
     }
 
+    /** Transition faite par un compte du client (envoi, modification, annulation). */
     private function history(Order $order, ?OrderStatus $from, OrderStatus $to, ?int $userId, ?string $comment = null): void
     {
         OrderStatusHistory::create([
@@ -455,6 +456,7 @@ final class ClientOrders
             'to_status' => $to,
             'version' => $order->version,
             'user_id' => $userId,
+            'actor' => OrderActor::Client,
             'comment' => $comment,
             'created_at' => now(),
         ]);

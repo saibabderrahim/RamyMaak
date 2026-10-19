@@ -1,9 +1,9 @@
 import { act, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { purgeSessionStorage } from '../../../shared/storage'
-import { disconnectRealtime } from '../../../shared/realtime'
+import { disconnectRealtime, NOTIFICATION_EVENT } from '../../../shared/realtime'
 import { json } from '../../../test/utils'
-import { CLIENT_ID, clientUser, closedOrder, LIST_URL, makeOrder, makePage, makeSummary, ORDER_ID, ORDER_URL, ordersApi, renderOrders } from './testing'
+import { CLIENT_ID, clientUser, closedOrder, LIST_URL, makeOrder, makePage, makeSummary, ORDER_ID, ORDER_URL, ordersApi, renderOrders, USER_ID } from './testing'
 
 // Temps réel simulé (même principe que shared/realtime/realtime.test.tsx).
 const fake = vi.hoisted(() => ({ listeners: new Map<string, Set<(payload: unknown) => void>>() }))
@@ -54,6 +54,25 @@ describe('my orders, live (client.{id})', () => {
 
     await waitFor(() => expect(within(overview).getByText('Expirée')).toBeInTheDocument())
     expect(within(overview).queryByRole('button', { name: 'Annuler la commande' })).not.toBeInTheDocument()
+  })
+
+  it('reloads the client data when the ordering cutoff is extended (notification on user.{id}, RG-A05)', async () => {
+    let order = closedOrder({ status: 'SUBMITTED' })
+    const api = ordersApi({ [ORDER_URL]: () => json(order) }, live)
+    renderOrders(`/client/commandes/${ORDER_ID}`, undefined, live)
+    const overview = await screen.findByRole('region', { name: 'Commande du jeudi 08/10/2026' })
+    expect(within(overview).queryByRole('button', { name: 'Annuler la commande' })).not.toBeInTheDocument()
+    const notifications = `user.${USER_ID}:.${NOTIFICATION_EVENT}`
+    await waitFor(() => expect(fake.listeners.get(notifications)?.size).toBeGreaterThan(0))
+    const reads = api.requests(`GET /api/v1/client/orders/${ORDER_ID}`).length
+
+    // Une autre notification ne relit rien.
+    act(() => fake.listeners.get(notifications)?.forEach((listener) => listener({ type: 'ORDER_EXPIRED' })))
+    order = makeOrder()
+    act(() => fake.listeners.get(notifications)?.forEach((listener) => listener({ type: 'CUTOFF_EXTENDED' })))
+
+    await waitFor(() => expect(within(overview).getByRole('button', { name: 'Annuler la commande' })).toBeInTheDocument())
+    expect(api.requests(`GET /api/v1/client/orders/${ORDER_ID}`).length).toBe(reads + 1)
   })
 
   it('reloads the list on a new order sent from another account of the client', async () => {

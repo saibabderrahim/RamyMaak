@@ -1,4 +1,5 @@
 import { screen, waitFor, within } from '@testing-library/react'
+import { onlineManager } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { ClientToday, Order } from '../../../shared/api/types'
@@ -92,6 +93,35 @@ describe('modify an order (RG-C05)', () => {
     await userEvent.click(within(dialog()).getByRole('button', { name: 'Remplacer mon panier' }))
     await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/client/catalogue'))
     expect(storedCart()?.editing?.orderId).toBe(ORDER_ID)
+  })
+})
+
+describe('modify an order offline', () => {
+  afterEach(() => onlineManager.setOnline(true))
+
+  it('fails at once with a message and never replaces the cart when the network comes back', async () => {
+    fillCart()
+    let offline = false
+    const api = await renderDetail(() => {
+      if (offline) throw new TypeError('Failed to fetch')
+      return makeOrder()
+    })
+    offline = true
+    onlineManager.setOnline(false)
+    const reads = api.requests(`GET /api/v1/client/orders/${ORDER_ID}`).length
+
+    await userEvent.click(screen.getByRole('button', { name: 'Modifier la commande' }))
+    await userEvent.click(within(dialog()).getByRole('button', { name: 'Remplacer mon panier' }))
+
+    // Lecture tentée tout de suite (pas suspendue) ; l'échec ferme la confirmation.
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(api.requests(`GET /api/v1/client/orders/${ORDER_ID}`).length).toBeGreaterThan(reads)
+    offline = false
+    onlineManager.setOnline(true)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(storedCart()?.lines).toEqual([{ product_id: pomme.id, quantity: 3 }])
+    expect(storedCart()?.editing).toBeNull()
+    expect(screen.getByTestId('where')).toHaveTextContent(PATH)
   })
 })
 

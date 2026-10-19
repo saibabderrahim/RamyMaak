@@ -60,6 +60,7 @@ const client = {
     readOnly: 'Catalogue en lecture seule.',
     price: '{{ht}} HT · {{ttc}} TTC',
     max: 'Max : {{max}}',
+    limitMax: 'Borne : {{limit}} · Max : {{max}}',
     soldOut: 'Épuisé',
     isNew: 'Nouveau',
     featured: 'Mis en avant',
@@ -136,6 +137,7 @@ const client = {
   errors: {
     network: 'Pas de réseau — panier conservé, réessayez.',
     server: 'Envoi interrompu — panier conservé, réessayez.',
+    deadReplay: 'L’envoi interrompu avait créé la commande {{number}}, depuis {{status}} : envoyez à nouveau pour créer une nouvelle commande.',
     CLIENT_BLOCKED: 'Commande suspendue : votre compte client est bloqué. Contactez votre commercial régional.',
     DAY_NOT_OPEN: 'La prise de commande n’est pas ouverte pour cette journée : la commande n’a pas été envoyée.',
     CUTOFF_PASSED: 'L’heure limite de commande est dépassée : la commande n’a pas été envoyée.',

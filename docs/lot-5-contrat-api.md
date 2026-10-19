@@ -84,7 +84,7 @@ L'ADV et l'Admin reçoivent 403 sur ces points d'accès : ils lisent les command
 
 Sans `day`, la journée vient de `OrderingWindow::defaultDay`. Un `day` invalide → 422.
 
-`order` : commande **en cours de modification** (I-62). Elle doit être une commande du client, sinon 404 (avant la validation). Sans `day`, sa journée est prise ; un `day` différent → 422 sur `order`. Tant qu'elle est envoyée, `engaged` et `available` sont calculés **hors de ses quantités** (§5.1), comme le fera `modify` : sans ce paramètre, ses quantités seraient comptées deux fois et le panier serait plafonné, ou vidé, à tort.
+`order` : commande **en cours de modification** (I-62). Elle doit être une commande du client, sinon 404 (avant la validation). Sans `day`, sa journée est prise ; un `day` différent → 422 sur `order`. Tant qu'elle est envoyée, l'état, le catalogue et le disponible sont ceux de **sa région figée** (RG-S04, même après un changement de région du client), et `engaged` et `available` sont calculés **hors de ses quantités** (§5.1), comme le fera `modify` : sans ce paramètre, ses quantités seraient comptées deux fois et le panier serait plafonné, ou vidé, à tort.
 
 ```json
 {
@@ -178,7 +178,7 @@ Droits d'action sur une commande :
                  "by_name": "Gérant C0012", "comment": null } ] }
 ```
 - `modifiable_until` : heure limite applicable tant que la commande est `SUBMITTED`, sinon null.
-- `history` : vue client = `OrderPresenter::history($order, false)` ; les comptes du régional et de l'ADV ne sont pas nommés.
+- `history` : vue client = `OrderPresenter::history($order, false)` ; les comptes du régional et de l'ADV ne sont pas nommés. L'acteur est enregistré avec chaque transition (`order_status_history.actor`), jamais déduit du rôle actuel du compte (I-65).
 
 | Méthode | Chemin | Corps | Réponse |
 |---|---|---|---|
@@ -306,7 +306,7 @@ La grille de répartition (lot 4) relit S en direct sur les événements de comm
 **Catalogue** :
 - **Navigation** : onglets de familles qui défilent horizontalement, et recherche instantanée sur nom et code.
 - **Affichage** : sur téléphone, liste compacte (vignette 72 px) ou galerie à 2 colonnes, choix gardé sur l'appareil. Tablette : 3 colonnes. PC : 4 à 6 colonnes, avec le panier en panneau latéral à partir de 1024 px.
-- **Carte produit** : photo, nom, UV, prix HT et TTC, « Max : n » seulement si une borne existe, sélecteur de quantité (`QuantityStepper`) bloqué à `available` quand il n'est pas null. Un produit épuisé est grisé et désactivé.
+- **Carte produit** : photo, nom, UV, prix HT et TTC, « Max : n » seulement si une borne existe (« Borne : b · Max : n » quand le disponible est sous la borne, RG-C09), sélecteur de quantité (`QuantityStepper`) bloqué à `available` quand il n'est pas null. Un produit épuisé est grisé et désactivé.
 - **Fiche produit** : carrousel par défilement natif, grande image, UV, prix unitaire indicatif.
 - **Barre du panier** fixe : nombre de lignes et total HT.
 - **Lecture seule** pour un client bloqué ou une commande impossible.
@@ -412,3 +412,6 @@ Reporté :
 | I-61 | Ordre des verrous : client → journée (partagé) → commande → numéro du jour, alloué en dernier ; la clôture verrouille la journée puis les commandes (lecture verrouillante) |
 | I-62 | `GET /client/today?order=` : disponible hors de la commande en cours de modification ; journée de la commande par défaut |
 | I-63 | Quantité saisie plafonnée à 1 000 000 même sans borne (`MAX_LINE_QUANTITY`, I-60), sans afficher de maximum |
+| I-64 | Sans borne, un refus `CLIENT_LIMIT_EXCEEDED` nomme la ligne en cause sans quantité (`max_allowed` null) : des essais successifs permettent d'en déduire le reste de la région. Effet inhérent à RG-C03 (le refus indique le produit) ; accepté, sans limitation ni journal des refus au lot 5 |
+| I-65 | Historique : l'acteur (CLIENT, REGIONAL, ADV, SYSTEM) est enregistré avec la transition ; un changement de rôle du compte ne le modifie pas |
+| I-66 | En modification, le panier chiffre les produits gardés au prix et à la TVA figés de la commande, les produits ajoutés au prix du jour (comme `modify`, I-47) |

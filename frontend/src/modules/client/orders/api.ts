@@ -34,5 +34,8 @@ export function fetchProposedDay(queryClient: QueryClient): Promise<ClientToday>
     queryKey: todayKey(),
     queryFn: ({ signal }) => api.get<ClientToday>('/client/today', undefined, signal),
     staleTime: 0,
+    // Hors ligne : échec immédiat (message), jamais une attente suspendue qui agirait au retour du réseau.
+    networkMode: 'always',
+    retry: false,
   })
 }

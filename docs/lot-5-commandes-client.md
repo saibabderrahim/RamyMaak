@@ -35,8 +35,8 @@ Valeurs par défaut de la spécification retenues :
 
 ## Vérifications
 
-- **API** : 1 253 tests Pest, exécutés sur SQLite et sur MySQL 8, dont 16 tests de concurrence propres à MySQL (processus parallèles : envois simultanés d'un client et de plusieurs clients, modification contre annulation, clôture pendant les écritures) ; la CI les exécute sur MySQL 8.4.
-- **PWA** : 521 tests Vitest ; lint, types et build sans avertissement. Les écrans client et régional ne chargent aucun code du back-office, qui reste hors du pré-cache.
+- **API** : 1 255 tests Pest, exécutés sur SQLite et sur MySQL 8, dont 16 tests de concurrence propres à MySQL (processus parallèles : envois simultanés d'un client et de plusieurs clients, modification contre annulation, clôture pendant les écritures) ; la CI les exécute sur MySQL 8.4.
+- **PWA** : 528 tests Vitest ; lint, types et build sans avertissement. Les écrans client et régional ne chargent aucun code du back-office, qui reste hors du pré-cache.
 - **Parcours réel dans Chromium** (Playwright) sur l'API, MySQL, la file d'attente et Reverb : deux clients sur téléphone (Pixel 7) et le régional sur PC, 56 contrôles.
   - Le régional ouvre « Commandes reçues » de demain : rien à valider.
   - Accueil du client C0012 : journée de demain proposée, « Commandes ouvertes jusqu'à 13:00 », date de livraison. Le catalogue n'a pas le produit interdit (borne 0) ; « Max : 120 » s'affiche sur le produit borné, et rien sur le produit sans borne. Une saisie de 999 est ramenée à 120.
@@ -48,6 +48,21 @@ Valeurs par défaut de la spécification retenues :
   - C0047 envoie `RMK-261020-00002` puis l'annule : le régional reçoit N-05 puis N-06 « annulée », et les compteurs passent à 1 à valider et 1 annulée.
   - Clôture de la journée : la commande de C0012 passe « Expirée » sous les yeux du client, qui reçoit N-14 ; S revient à 0 dans la grille.
   - Refus d'accès : un client n'a ni les commandes du régional (403) ni celles d'un autre client (404) ; un régional n'a pas l'accueil client (403).
+  - Sur un téléphone de 360 px, l'en-tête du régional tient dans l'écran.
+- **Relecture du socle**, avant l'écriture des écrans, sur les verrous MySQL et les règles métier : 13 constats (10 distincts), tous corrigés.
+  - Plus d'interblocage entre envois simultanés sur la numérotation du jour, ni entre une modification et la clôture.
+  - La clôture ne fait expirer que les commandes encore envoyées.
+  - En modification, le catalogue calcule le disponible hors de la commande modifiée ; sans cela, il retirait du panier les lignes de la commande elle-même.
+  - « Recommander » repart d'un panier neuf ; une quantité est plafonnée à 1 000 000 même sans borne.
+- **Revue contradictoire finale** en quatre axes (sécurité et périmètre, conformité, robustesse de l'API, écrans), chaque constat vérifié par un second relecteur : 10 constats confirmés (8 problèmes distincts), tous corrigés et couverts par un test ; le seul constat de sécurité (déduction du reste de la région par essais successifs) est inhérent à la règle de refus et retenu comme décision I-64.
+  - En modification, le panier chiffrait les produits gardés au prix du jour au lieu du prix figé de la commande (RG-P03) : les totaux confirmés pouvaient différer de ceux enregistrés.
+  - Le catalogue n'affichait que le disponible, jamais la borne (RG-C09) : « Borne : 50 · Max : 20 » quand le disponible est en dessous.
+  - Une prolongation de l'heure limite ne rafraîchissait pas les écrans ouverts du client (« Commandes clôturées » restait affiché).
+  - Après un changement de région du client, la modification d'une commande lisait le catalogue de la nouvelle région au lieu de celui de la commande (RG-S04).
+  - L'auteur d'une transition dans l'historique suivait le rôle actuel du compte ; il est désormais enregistré avec la transition.
+  - Hors ligne, « Modifier la commande » restait bloqué, puis remplaçait le panier au retour du réseau.
+  - Un envoi interrompu, puis renvoyé après l'annulation de la commande créée entre-temps, vidait le panier sans créer de commande.
+  - Sur un téléphone de 360 px, l'en-tête du régional débordait de l'écran.
 
 ## Mettre à jour la production (v0.4.0 → v0.5.0)
 
@@ -99,7 +114,10 @@ Les décisions I-39 à I-63 sont détaillées au §8 du [contrat](lot-5-contrat-
 | I-54 | Renvoi du même identifiant : la commande existante est rendue, pour tous les comptes du client | RG-C07 |
 | I-59 | Prolongation de l'heure limite de commande : les clients actifs de la région sont prévenus si la répartition est envoyée | RG-A05 |
 | I-61 | Ordre des verrous commun à toutes les écritures d'une commande, clôture comprise | §5.8 : aucun interblocage sous charge |
-| I-62 | En modification, le disponible affiché exclut la commande modifiée | §5.1 |
+| I-62 | En modification, le disponible affiché exclut la commande modifiée, dans la région figée de la commande | §5.1, RG-S04 |
+| I-64 | Sans borne, un refus nomme la ligne en cause sans quantité ; des essais successifs permettent d'en déduire le reste de la région. Accepté, sans limitation au lot 5 | RG-C03 impose de nommer le produit refusé |
+| I-65 | L'acteur de chaque transition est enregistré dans l'historique | Un changement de rôle ne réécrit pas le passé (§6.3) |
+| I-66 | En modification, le panier chiffre les produits gardés au prix figé | Les totaux confirmés sont ceux enregistrés (RG-P03, I-47) |
 
 ## Reporté, avec la dépendance qui le justifie
 

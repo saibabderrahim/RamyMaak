@@ -3,6 +3,7 @@
 use App\Domain\Access\Role;
 use App\Domain\Limits\LimitBook;
 use App\Domain\Orders\ClientOrders;
+use App\Domain\Orders\OrderActor;
 use App\Domain\Orders\OrderStatus;
 use App\Domain\Settings\Settings;
 use App\Events\CutoffExtended;
@@ -107,11 +108,11 @@ beforeEach(function () {
     ]);
     OrderStatusHistory::create([
         'order_id' => $this->validated->id, 'from_status' => null, 'to_status' => OrderStatus::Submitted, 'version' => 1,
-        'user_id' => $this->accountA->id, 'created_at' => CarbonImmutable::parse('2026-10-08 08:30', 'Africa/Algiers')->utc(),
+        'user_id' => $this->accountA->id, 'actor' => OrderActor::Client, 'created_at' => CarbonImmutable::parse('2026-10-08 08:30', 'Africa/Algiers')->utc(),
     ]);
     OrderStatusHistory::create([
         'order_id' => $this->validated->id, 'from_status' => OrderStatus::Submitted, 'to_status' => OrderStatus::Validated, 'version' => 2,
-        'user_id' => $this->regional->id, 'comment' => 'Quota limité', 'created_at' => now(),
+        'user_id' => $this->regional->id, 'actor' => OrderActor::Regional, 'comment' => 'Quota limité', 'created_at' => now(),
     ]);
     RegionQuota::query()->where('region_day_id', $this->regionDay->id)->where('product_id', $this->orange->id)->update(['validated_qty' => 15]);
     $factory = fn (string $state, string $time) => Order::factory()->{$state}()->create([
@@ -357,7 +358,7 @@ describe('GET /regional/orders/{id}', function () {
         $one = $queries($this->first);
         $many = Order::factory()->create(['business_day_id' => $this->regionDay->business_day_id, 'client_id' => $this->b->id, 'submitted_by' => $this->accountB->id]);
         OrderLine::factory()->for($many)->count(8)->create(['product_id' => fn () => Product::factory()]);
-        OrderStatusHistory::create(['order_id' => $many->id, 'to_status' => OrderStatus::Submitted, 'version' => 1, 'user_id' => $this->accountB->id, 'created_at' => now()]);
+        OrderStatusHistory::create(['order_id' => $many->id, 'to_status' => OrderStatus::Submitted, 'version' => 1, 'user_id' => $this->accountB->id, 'actor' => OrderActor::Client, 'created_at' => now()]);
 
         expect($queries($many))->toBe($one)
             ->and(($this->show)($many)->json('lines.7.context'))->toBe([

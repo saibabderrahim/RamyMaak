@@ -92,6 +92,8 @@ export function AppShell() {
   const logout = useLogout()
   const navigate = useNavigate()
   const items = useNavItems(user.role, user.permissions)
+  // Entrées hors barre d'onglets (téléphone) : dans l'en-tête.
+  const headerItems = hasTabBar(user.role) ? items.filter((item) => item.tabBar === false) : []
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     `flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-lg px-3 text-sm font-medium ${
@@ -107,10 +109,11 @@ export function AppShell() {
     <div className="flex min-h-dvh flex-col">
       <OfflineBanner />
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-2">
+        <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-2 sm:gap-4">
           <NavLink to={homePath(user.role)} className="flex shrink-0 items-center gap-2 font-bold text-brand-700">
             <img src="/icons/icon-192.png" alt="" className="size-8 rounded-lg" />
-            {t('app.name')}
+            {/* Entrée d'en-tête en plus (« Profil » du régional) : sur téléphone, le logo seul tient dans 360 px. */}
+            <span className={headerItems.length > 0 ? 'sr-only sm:not-sr-only' : undefined}>{t('app.name')}</span>
           </NavLink>
           {/* Rôles de terrain (peu d'entrées) : menu dans l'en-tête sur grand écran.
               Le back-office, au menu plus long, a sa propre ligne sous l'en-tête. */}
@@ -123,15 +126,11 @@ export function AppShell() {
               ))}
             </nav>
           )}
-          {/* Entrées hors barre d'onglets (téléphone) : dans l'en-tête. */}
-          {hasTabBar(user.role) &&
-            items
-              .filter((item) => item.tabBar === false)
-              .map((item) => (
-                <NavLink key={item.to} to={item.to} end={item.end} className={`${linkClass({ isActive: false })} lg:hidden`}>
-                  {item.label}
-                </NavLink>
-              ))}
+          {headerItems.map((item) => (
+            <NavLink key={item.to} to={item.to} end={item.end} className={`${linkClass({ isActive: false })} lg:hidden`}>
+              {item.label}
+            </NavLink>
+          ))}
           <div className="ms-auto flex shrink-0 items-center gap-3">
             {/* Cloche des notifications, pour tous les rôles et sur téléphone (EF-NOT-01). */}
             <NotificationBell />

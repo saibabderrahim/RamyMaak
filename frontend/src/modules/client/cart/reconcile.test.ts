@@ -79,6 +79,24 @@ describe('reconciliation of the cart with the catalogue of the day', () => {
     expect(cartTotals([])).toEqual({ ht: 0, vat: 0, ttc: 0 })
   })
 
+  it('prices a kept line of the order being modified at its frozen price and VAT, an added one at the price of the day (I-47)', () => {
+    const items = cartItems(
+      [
+        { product_id: orange.id, quantity: 10 },
+        { product_id: lben.id, quantity: 2 },
+      ],
+      products,
+      { [orange.id]: { unit_price_ht: 800, vat_rate: 9 } },
+    )
+    expect(cartTotals(items)).toEqual(
+      totals([
+        { unit_price_ht: 800, vat_rate: 9, quantity: 10 },
+        { unit_price_ht: 130.5, vat_rate: 9, quantity: 2 },
+      ]),
+    )
+    expect(lineAmount(items[0]!)).toBe(8000)
+  })
+
   it('sends the lines in the order of the cart and a trimmed comment, null when empty', () => {
     expect(orderLines([{ product_id: 42, quantity: 3 }])).toEqual([{ product_id: 42, quantity: 3 }])
     expect(normalizeComment('  Livrer tôt ')).toBe('Livrer tôt')

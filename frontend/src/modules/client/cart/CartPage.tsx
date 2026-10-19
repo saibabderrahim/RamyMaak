@@ -4,7 +4,7 @@ import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { ApiError, NetworkError } from '../../../shared/api/client'
-import type { ClientToday, Order } from '../../../shared/api/types'
+import type { ClientToday, Order, OrderStatus } from '../../../shared/api/types'
 import { formatAmount } from '../../../shared/format'
 import type { Totals } from '../../../shared/money'
 import { useOnline } from '../../../shared/pwa/online'
@@ -16,8 +16,8 @@ import { clientKey } from '../api'
 import { locationNotice } from '../orders/view'
 import { fetchOrder, isRetryable, type LineIssue, sameContent, type SendResult, sendIssues, useSendCart } from './api'
 import { CartNoticeAlert, DaySummary, EditingBanner, PRIMARY_LINK, TodayLoading, TotalsList } from './components'
-import { formatQuantity } from './format'
-import { type CartItem, cartItems, cartTotals, lineAmount } from './reconcile'
+import { formatQuantity, limitText } from './format'
+import { type CartItem, cartItems, cartTotals, lineAmount, pricedLine } from './reconcile'
 import type { Cart } from './store'
 import { useCartToday } from './sync'
 
@@ -27,10 +27,14 @@ const MAX_COMMENT = 500
 const ignore = () => undefined
 
 /** Compte rendu d'un envoi qui n'a pas abouti. */
+/** Commandes closes : un renvoi qui les rend n'a rien créé. */
+const DEAD_STATUSES: readonly OrderStatus[] = ['CANCELLED', 'EXPIRED', 'REJECTED']
+
 type Outcome =
   | { kind: 'retry'; network: boolean }
   | { kind: 'refused'; error: ApiError; fields: string[] }
   | { kind: 'conflict'; number: string; order: Order | null }
+  | { kind: 'dead'; number: string; status: string }
 
 /**
  * Panier (EF-CLT-03 ; contrat du lot 5 §6) : lignes avec photo, quantité et
@@ -68,7 +72,7 @@ export default function CartPage() {
   const [issues, setIssues] = useState<ReadonlyMap<number, LineIssue>>(() => new Map())
 
   const editing = cart.editing
-  const items = today ? cartItems(cart.lines, today.products) : []
+  const items = today ? cartItems(cart.lines, today.products, editing?.prices) : []
   const sums = cartTotals(items)
   const editingOrder = editing && today ? today.orders.find((order) => order.id === editing.orderId) : undefined
   const blocker = !today
@@ -83,6 +87,14 @@ export default function CartPage() {
   const canSend = online && !send.isPending && today !== undefined && blocker === null && items.length > 0
 
   const succeed = ({ order, kind }: SendResult, sent: Cart) => {
+    // Renvoi qui rend une commande close depuis (annulée, expirée, rejetée) : rien n'a été créé ; le panier
+    // est gardé et le prochain envoi aura un nouvel identifiant.
+    if (kind === 'replayed' && DEAD_STATUSES.includes(order.status)) {
+      store.abandonSend()
+      void queryClient.invalidateQueries({ queryKey: clientKey })
+      setOutcome({ kind: 'dead', number: order.number, status: order.status_label })
+      return
+    }
     // Renvoi d'un envoi interrompu (même identifiant, 200) : le serveur rend la commande déjà créée sans
     // comparer son contenu (I-54) ; si le panier a changé depuis, ses changements n'y figurent pas.
     const notice =
@@ -237,9 +249,9 @@ function CartLineRow({ item, issue, onQuantity }: { item: CartItem; issue: LineI
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <p className="font-semibold leading-snug text-slate-900">{product.name}</p>
           <p className="text-xs text-slate-600">
-            {product.sales_unit_label} · {t('orders.client.cart.unitPrice', { amount: formatAmount(product.price.price_ht) })}
+            {product.sales_unit_label} · {t('orders.client.cart.unitPrice', { amount: formatAmount(pricedLine(item).unit_price_ht) })}
           </p>
-          {product.limit !== null && <p className="text-xs font-medium text-slate-700">{t('orders.client.catalogue.max', { max: formatQuantity(product.available ?? 0) })}</p>}
+          {product.limit !== null && <p className="text-xs font-medium text-slate-700">{limitText(t, product)}</p>}
           {shown && <LineIssueText issue={shown} onQuantity={onQuantity} />}
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
             <QuantityStepper name={product.name} value={line.quantity} onChange={onQuantity} max={product.available} />
@@ -337,6 +349,10 @@ function OutcomeAlert({
 
   if (outcome.kind === 'retry') {
     return <Alert tone="warning">{outcome.network ? t('orders.client.errors.network') : t('orders.client.errors.server')}</Alert>
+  }
+
+  if (outcome.kind === 'dead') {
+    return <Alert tone="warning">{t('orders.client.errors.deadReplay', { number: outcome.number, status: outcome.status.toLocaleLowerCase('fr') })}</Alert>
   }
 
   if (outcome.kind === 'conflict') {

@@ -376,3 +376,16 @@ it('numbers the orders of the day in sequence across clients and regions, withou
     expect([$first->number, $second->number, $third->number])->toBe(['RMK-261008-00001', 'RMK-261008-00002', 'RMK-261008-00003'])
         ->and($first->lines()->count())->toBe(1);
 });
+
+it('keeps the actor of each transition when the role of its author changes later (§6.3)', function () {
+    $order = ($this->submit)($this->accountA, [[$this->orange, 5]])['order'];
+    $this->accountA->syncRoles([Role::Regional->value]);
+
+    $history = OrderPresenter::history($order->fresh()->load(OrderPresenter::RELATIONS), false);
+    expect($history)->toHaveCount(1)
+        ->and($history[0])->toMatchArray(['actor' => 'CLIENT', 'by_name' => $this->accountA->name]);
+
+    app(DayCalendar::class)->close($this->regionDay->businessDay);
+    $history = OrderPresenter::history($order->fresh()->load(OrderPresenter::RELATIONS), false);
+    expect($history[1])->toMatchArray(['to' => 'EXPIRED', 'actor' => 'SYSTEM', 'by_name' => null]);
+});

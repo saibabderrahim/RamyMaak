@@ -153,7 +153,7 @@ describe('client home (EF-CLT-01)', () => {
       day: DAY,
       lines: [{ product_id: orange.id, quantity: 45 }],
       comment: 'Livrer avant 10 h',
-      editing: { orderId: ORDER_ID, number: ORDER_NUMBER, version: 2 },
+      editing: expect.objectContaining({ orderId: ORDER_ID, number: ORDER_NUMBER, version: 2 }),
       pending: null,
     })
   })

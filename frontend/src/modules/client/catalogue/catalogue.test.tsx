@@ -100,7 +100,8 @@ describe('catalogue of the day (EF-CLT-02)', () => {
     const orangeCard = await screen.findByRole('article', { name: 'Jus orange 1 L' })
     expect(orangeCard).toHaveTextContent('Fardeau 6 × 1 L')
     expect(orangeCard).toHaveTextContent(plain(`${formatAmount(900)} HT · ${formatAmount(1071)} TTC`))
-    expect(within(orangeCard).getByText('Max : 40')).toBeInTheDocument()
+    // Disponible sous la borne (déjà engagé) : les deux sont montrés (RG-C09).
+    expect(within(orangeCard).getByText('Borne : 50 · Max : 40')).toBeInTheDocument()
     expect(within(orangeCard).getByText('Mis en avant')).toBeInTheDocument()
     // Désignation courte sur téléphone, complète à partir de la tablette ; la fiche est annoncée sous le nom complet.
     expect(within(orangeCard).getByText('Orange 1 L')).toHaveClass('sm:hidden')
@@ -212,7 +213,7 @@ describe('catalogue of the day (EF-CLT-02)', () => {
     expect(sheet).toHaveTextContent(plain(`Prix HT${formatAmount(900)}`))
     expect(sheet).toHaveTextContent(plain(`Prix TTC${formatAmount(1071)}`))
     expect(sheet).toHaveTextContent('TVA19 %')
-    expect(within(sheet).getByText('Max : 40')).toBeInTheDocument()
+    expect(within(sheet).getByText('Borne : 50 · Max : 40')).toBeInTheDocument()
 
     await user.click(stepper(sheet, 'Jus orange 1 L').plus)
     expect(testCart().get().lines).toEqual([{ product_id: orange.id, quantity: 1 }])
@@ -354,7 +355,7 @@ describe('catalogue of the day (EF-CLT-02)', () => {
     expect(within(orangeCard).getByText('Max : 50')).toBeInTheDocument()
     await user.click(plus)
     expect(testCart().get().lines).toEqual([{ product_id: orange.id, quantity: 46 }])
-    expect(testCart().get().editing).toEqual({ orderId: ORDER_ID, number: ORDER_NUMBER, version: 2 })
+    expect(testCart().get().editing).toMatchObject({ orderId: ORDER_ID, number: ORDER_NUMBER, version: 2 })
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Abandonner la modification' }))

@@ -49,6 +49,7 @@ final class OrderExpiry
             'to_status' => OrderStatus::Expired->value,
             'version' => $order->version + 1,
             'user_id' => null,
+            'actor' => OrderActor::System->value,
             'comment' => null,
             'created_at' => $now,
         ])->all());

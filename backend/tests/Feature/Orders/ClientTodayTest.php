@@ -395,6 +395,25 @@ it('excludes the order being modified from the engaged quantity, on its day by d
     expect($orange(($this->today)('?order='.$order->public_id)->assertOk()))->toMatchArray(['engaged' => 0, 'available' => 50]);
 });
 
+it('reads the order being modified in its frozen region, as the modification is checked, after a region change (RG-S04, I-62)', function () {
+    $order = ($this->submit)($this->account, [[$this->orange, 40]]);
+    $ouest = Region::factory()->create(['code' => 'OUEST']);
+    $this->a->forceFill(['next_region_id' => $ouest->id, 'region_change_on' => '2026-10-08'])->save();
+
+    // Nouvelle commande : région du jour (OUEST), pas encore répartie.
+    ($this->today)()->assertOk()->assertJsonPath('status', 'WAITING_QUOTAS')->assertJsonPath('products', []);
+
+    // Modification : région figée de la commande (CENTRE), comme PATCH.
+    $editing = ($this->today)('?order='.$order->public_id)->assertOk()
+        ->assertJsonPath('status', 'ORDERING_OPEN')
+        ->assertJsonPath('orders.0.id', $order->public_id)
+        ->assertJsonPath('orders.0.can_modify', true);
+    expect(collect($editing->json('products'))->firstWhere('sku', 'P0042'))->toMatchArray(['limit' => 50, 'engaged' => 0, 'available' => 50]);
+    $this->actingAs($this->account)->patchJson('/api/v1/client/orders/'.$order->public_id, [
+        'version' => 1, 'comment' => null, 'lines' => [['product_id' => $this->orange->id, 'quantity' => 50]],
+    ])->assertOk()->assertJsonPath('version', 2);
+});
+
 it('answers 404 to an order of another client or a malformed id, and 422 to an order of another day', function () {
     $other = ($this->submit)($this->accountB, [[$this->orange, 5]]);
     $mine = ($this->submit)($this->account, [[$this->orange, 5]]);

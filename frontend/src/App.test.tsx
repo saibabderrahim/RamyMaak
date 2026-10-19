@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { json, makeUser, mockApi, problem, renderApp } from './test/utils'
@@ -100,6 +100,22 @@ describe('navigation and session', () => {
 
     expect((await screen.findAllByRole('link', { name: 'Journal d’audit' })).length).toBeGreaterThan(0)
     expect(screen.queryByRole('link', { name: 'Accueil' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the phone header of the regional within 360 px: logo only, the name stays for screen readers', async () => {
+    mockApi({ 'GET /api/v1/auth/me': () => json(makeUser('regional')) })
+    renderApp('/profil')
+    const home = await screen.findByRole('link', { name: 'RamyMaak' })
+    expect(within(home).getByText('RamyMaak')).toHaveClass('sr-only', 'sm:not-sr-only')
+    // « Profil » hors de la barre d'onglets : dans l'en-tête sur téléphone.
+    expect(screen.getAllByRole('link', { name: 'Profil' }).length).toBeGreaterThan(0)
+  })
+
+  it('shows the application name in the header of the client', async () => {
+    mockApi({ 'GET /api/v1/auth/me': () => json(makeUser('client', { client_id: 12 })) })
+    renderApp('/profil')
+    const home = await screen.findByRole('link', { name: 'RamyMaak' })
+    expect(within(home).getByText('RamyMaak')).not.toHaveClass('sr-only')
   })
 
   it('returns to the login page with a message when the session expires', async () => {

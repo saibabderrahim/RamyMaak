@@ -3,6 +3,7 @@
 use App\Domain\Access\Role;
 use App\Domain\Days\DayCalendar;
 use App\Domain\Orders\ClientOrders;
+use App\Domain\Orders\OrderActor;
 use App\Domain\Orders\OrderStatus;
 use App\Domain\Settings\Settings;
 use App\Events\CutoffExtended;
@@ -75,12 +76,12 @@ beforeEach(function () {
         'product_id' => $this->orange->id, 'requested_qty' => 20, 'validated_qty' => 15, 'unit_price_ht' => '900.00', 'vat_rate' => '19.00',
         'adjustment_reason_code' => 'QUOTA_INSUFFISANT',
     ]);
-    OrderStatusHistory::create(['order_id' => $this->validated->id, 'from_status' => null, 'to_status' => OrderStatus::Submitted, 'version' => 1, 'user_id' => $this->second->id, 'created_at' => now()]);
+    OrderStatusHistory::create(['order_id' => $this->validated->id, 'from_status' => null, 'to_status' => OrderStatus::Submitted, 'version' => 1, 'user_id' => $this->second->id, 'actor' => OrderActor::Client, 'created_at' => now()]);
     $at('2026-10-07 11:00');
     $this->validated->forceFill(['decided_at' => now()])->save();
     OrderStatusHistory::create([
         'order_id' => $this->validated->id, 'from_status' => OrderStatus::Submitted, 'to_status' => OrderStatus::Validated, 'version' => 2,
-        'user_id' => $this->regional->id, 'comment' => 'Quota limité', 'created_at' => now(),
+        'user_id' => $this->regional->id, 'actor' => OrderActor::Regional, 'comment' => 'Quota limité', 'created_at' => now(),
     ]);
     app(DayCalendar::class)->close($day7->businessDay);
 

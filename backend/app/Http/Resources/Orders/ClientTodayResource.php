@@ -12,6 +12,7 @@ use App\Domain\Referentials\ProductPhotos;
 use App\Domain\Settings\Settings;
 use App\Http\Problems\ErrorCode;
 use App\Http\Resources\ProductPhotoResource;
+use App\Models\BusinessDay;
 use App\Models\Client;
 use App\Models\Order;
 use App\Models\Product;
@@ -62,12 +63,17 @@ class ClientTodayResource extends JsonResource
 
     /**
      * Journée `$day` du client (état, commandes, catalogue). En modification,
-     * E(c,p) exclut la commande modifiée tant qu'elle est envoyée (§5.1) :
-     * le disponible montré est celui que contrôlera la modification.
+     * tant que la commande est envoyée : fenêtre et catalogue de sa région
+     * figée, et E(c,p) hors de ses quantités (§5.1) — le disponible montré
+     * est celui que contrôlera la modification.
      */
     public static function for(Client $client, CarbonImmutable $day, ?Order $editing = null): self
     {
-        $state = app(OrderingWindow::class)->state($client, $day);
+        $window = app(OrderingWindow::class);
+        // En modification, la région figée de la commande (RG-S04), celle que contrôle modify.
+        $state = $editing !== null && $editing->status === OrderStatus::Submitted
+            ? $window->forRegion(BusinessDay::query()->findOrFail($editing->business_day_id), $editing->region_id)
+            : $window->state($client, $day);
         $settings = app(Settings::class);
 
         $orders = $state->businessDay === null ? collect() : Order::query()

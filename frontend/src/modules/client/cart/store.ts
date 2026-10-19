@@ -15,8 +15,15 @@ export const CART_PREFIX = 'ramymaak:cart:'
 
 export type CartLine = { product_id: number; quantity: number }
 
-/** Commande envoyée en cours de modification (PATCH avec sa version). */
-export type CartEditing = { orderId: string; number: string; version: number }
+/** Prix HT et TVA figés d'une ligne de la commande envoyée (RG-P03). */
+export type FrozenPrice = { unit_price_ht: number; vat_rate: number }
+
+/**
+ * Commande envoyée en cours de modification (PATCH avec sa version), avec
+ * les prix figés de ses lignes par produit : un produit gardé garde son
+ * prix, un produit ajouté prend celui du jour (I-47).
+ */
+export type CartEditing = { orderId: string; number: string; version: number; prices: Record<string, FrozenPrice> }
 
 export type Cart = {
   v: 1
@@ -55,13 +62,29 @@ function parse(value: unknown): Cart {
     comment: typeof cart.comment === 'string' ? cart.comment : '',
     editing:
       editing && typeof editing.orderId === 'string' && typeof editing.number === 'string' && Number.isInteger(editing.version)
-        ? { orderId: editing.orderId, number: editing.number, version: editing.version as number }
+        ? { orderId: editing.orderId, number: editing.number, version: editing.version as number, prices: parsePrices(editing.prices) }
         : null,
     pending:
       pending && typeof pending.client_request_id === 'string' && typeof pending.at === 'string'
         ? { client_request_id: pending.client_request_id, at: pending.at }
         : null,
   }
+}
+
+/** Prix figés relus ; une entrée illisible est ignorée (prix du jour). */
+function parsePrices(value: unknown): Record<string, FrozenPrice> {
+  if (typeof value !== 'object' || value === null) return {}
+  const prices: Record<string, FrozenPrice> = {}
+  for (const [productId, price] of Object.entries(value as Record<string, unknown>)) {
+    if (frozenPrice(price)) prices[productId] = { unit_price_ht: price.unit_price_ht, vat_rate: price.vat_rate }
+  }
+  return prices
+}
+
+function frozenPrice(value: unknown): value is FrozenPrice {
+  if (typeof value !== 'object' || value === null) return false
+  const price = value as Record<string, unknown>
+  return Number.isFinite(price.unit_price_ht) && Number.isFinite(price.vat_rate)
 }
 
 function isEmpty(cart: Cart): boolean {
@@ -140,7 +163,12 @@ export class CartStore {
       day: order.day,
       lines: order.lines.map((line) => ({ product_id: line.product_id, quantity: line.requested_qty })),
       comment: order.comment ?? '',
-      editing: { orderId: order.id, number: order.number, version: order.version },
+      editing: {
+        orderId: order.id,
+        number: order.number,
+        version: order.version,
+        prices: parsePrices(Object.fromEntries(order.lines.map((line) => [line.product_id, line]))),
+      },
       pending: null,
     })
   }
