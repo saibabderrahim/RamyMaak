@@ -21,8 +21,20 @@ export const gridKey = (day: string, regionId: number) => ['distribution', 'grid
 
 export const backOfficeGridKey = (day: string, regionId: number) => ['distribution', 'backoffice', day, regionId] as const
 
-/** Événements du canal `region-day.{regionId}.{day}` qui imposent de relire la grille (§9.6). */
-export const GRID_EVENTS = ['DistributionPublished', 'LimitDraftsUpdated', 'QuotaPublished'] as const
+/**
+ * Événements du canal `region-day.{regionId}.{day}` qui imposent de relire la
+ * grille (§9.6) ; ceux des commandes tiennent S à jour en direct (contrat du
+ * lot 5, §5).
+ */
+export const GRID_EVENTS = [
+  'DistributionPublished',
+  'LimitDraftsUpdated',
+  'QuotaPublished',
+  'OrderSubmitted',
+  'OrderUpdated',
+  'OrderCancelled',
+  'OrdersExpired',
+] as const
 
 /**
  * Régions du régional ce jour-là. Journée pas encore ouverte, ou aucune

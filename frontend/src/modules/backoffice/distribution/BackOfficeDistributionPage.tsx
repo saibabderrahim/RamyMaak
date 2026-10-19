@@ -15,7 +15,8 @@ import { useBackoffice } from '../shared/access'
 
 // Événements de la journée (`adv.{day}`) et de la région (`region-day.{regionId}.{day}`, brouillons du régional).
 const DAY_EVENTS = ['DistributionPublished', 'QuotaPublished', 'DayClosed'] as const
-const REGION_EVENTS = ['LimitDraftsUpdated'] as const
+// S relu en direct sur les événements de commande (contrat du lot 5, §5).
+const REGION_EVENTS = ['LimitDraftsUpdated', 'OrderSubmitted', 'OrderUpdated', 'OrderCancelled', 'OrdersExpired'] as const
 
 const NO_EDITS: EditsByClient = new Map()
 const noop = () => undefined
