@@ -1,21 +1,13 @@
-import {
-  type KeyboardEvent as ReactKeyboardEvent,
-  type ReactNode,
-  type TextareaHTMLAttributes,
-  forwardRef,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-} from 'react'
+import { type KeyboardEvent as ReactKeyboardEvent, type ReactNode, useEffect, useId, useLayoutEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
-import { Badge, Button, ErrorAlert } from '../../../shared/ui'
+import { Badge, Button } from '../../../shared/ui'
 
 /**
  * Composants communs des écrans back-office (référentiels, lot 2) : boîtes
  * de dialogue, onglets, tableaux, fiches. Accessibles au clavier et aux
- * lecteurs d'écran (WCAG 2.1 AA, ENF-11).
+ * lecteurs d'écran (WCAG 2.1 AA, ENF-11). `Textarea` et `ConfirmDialog`
+ * sont dans shared/ui (lot 6) : les écrans terrain s'en servent aussi.
  */
 
 function cx(...classes: Array<string | false | null | undefined>): string {
@@ -126,39 +118,6 @@ export function Dialog({ open, title, onClose, children, size = 'md' }: DialogPr
   )
 }
 
-type ConfirmDialogProps = {
-  open: boolean
-  title: string
-  children: ReactNode
-  confirmLabel: string
-  tone?: 'primary' | 'danger'
-  pending?: boolean
-  error?: unknown
-  onConfirm: () => void
-  onCancel: () => void
-}
-
-/** Confirmation explicite d'une action (fin d'affectation, remplacement…). */
-export function ConfirmDialog({ open, title, children, confirmLabel, tone = 'primary', pending = false, error, onConfirm, onCancel }: ConfirmDialogProps) {
-  const { t } = useTranslation()
-  return (
-    <Dialog open={open} title={title} onClose={onCancel}>
-      <div className="flex flex-col gap-4 text-sm text-slate-700">
-        {children}
-        <ErrorAlert error={error} />
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button variant="secondary" onClick={onCancel} data-autofocus>
-            {t('common.cancel')}
-          </Button>
-          <Button variant={tone} onClick={onConfirm} disabled={pending}>
-            {pending ? t('common.saving') : confirmLabel}
-          </Button>
-        </div>
-      </div>
-    </Dialog>
-  )
-}
-
 /** Pied de formulaire en boîte de dialogue : Annuler, Enregistrer. */
 export function DialogActions({ submitting, onCancel, submitLabel }: { submitting: boolean; onCancel: () => void; submitLabel?: string }) {
   const { t } = useTranslation()
@@ -243,17 +202,6 @@ export function TabPanel({ id, tab, children }: { id: string; tab: string; child
     </div>
   )
 }
-
-const TEXTAREA_CLASSES =
-  'min-h-24 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base text-slate-900 shadow-xs ' +
-  'focus:border-brand-600 focus:outline-2 focus:outline-brand-600/30 aria-[invalid=true]:border-red-600 disabled:bg-slate-100'
-
-export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(function Textarea(
-  { className, ...props },
-  ref,
-) {
-  return <textarea ref={ref} className={cx(TEXTAREA_CLASSES, className)} {...props} />
-})
 
 /** Tableau défilant horizontalement sur petit écran (tablette). */
 export function DataTable({ label, children, className }: { label?: string; children: ReactNode; className?: string }) {

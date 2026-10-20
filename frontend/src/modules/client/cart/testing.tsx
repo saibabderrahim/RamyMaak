@@ -125,6 +125,7 @@ export function makeOrder(overrides: Partial<Order> = {}): Order {
     total_vat: 11115,
     decided_at: null,
     decision_reason_code: null,
+    decision_reason: null,
     decision_comment: null,
     modifiable_until: '2026-10-08T12:00:00+00:00',
     lines: [
@@ -142,6 +143,8 @@ export function makeOrder(overrides: Partial<Order> = {}): Order {
         vat_rate: 19,
         amount_ht: 40500,
         adjustment_reason_code: null,
+        adjustment_reason: null,
+        adjustment_comment: null,
       },
     ],
     history: [{ from: null, to: 'SUBMITTED', version: 1, at: '2026-10-08T08:40:00+00:00', actor: 'CLIENT', by_name: 'Gérant C0012', comment: null }],
@@ -173,6 +176,8 @@ export function orderOf(lines: readonly CartLine[], overrides: Partial<Order> = 
       vat_rate: priced.vat_rate,
       amount_ht: totals([priced]).ht,
       adjustment_reason_code: null,
+      adjustment_reason: null,
+      adjustment_comment: null,
     }
   })
   const sums = totals(orderLines.map((line) => ({ unit_price_ht: line.unit_price_ht, vat_rate: line.vat_rate, quantity: line.requested_qty })))

@@ -3,10 +3,14 @@
 use App\Http\Controllers\Api\V1\Admin\AuditLogController;
 use App\Http\Controllers\Api\V1\Admin\ClientAccountController;
 use App\Http\Controllers\Api\V1\Admin\DepotController;
+use App\Http\Controllers\Api\V1\Admin\ReasonCodeController as AdminReasonCodeController;
 use App\Http\Controllers\Api\V1\Admin\RegionAssignmentController;
 use App\Http\Controllers\Api\V1\Admin\SettingsController;
 use App\Http\Controllers\Api\V1\Admin\UserController;
+use App\Http\Controllers\Api\V1\Adv\AdvOrderController;
 use App\Http\Controllers\Api\V1\Adv\DayController;
+use App\Http\Controllers\Api\V1\Adv\DayDocumentController;
+use App\Http\Controllers\Api\V1\Adv\DayMonitoringController;
 use App\Http\Controllers\Api\V1\Adv\QuotaController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\Client\ClientOrderController;
@@ -19,9 +23,12 @@ use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\ProductFamilyController;
 use App\Http\Controllers\Api\V1\ProductMediaController;
 use App\Http\Controllers\Api\V1\ProductPriceController;
+use App\Http\Controllers\Api\V1\ReasonCodeController;
 use App\Http\Controllers\Api\V1\Regional\DistributionGridController;
 use App\Http\Controllers\Api\V1\Regional\LimitController;
+use App\Http\Controllers\Api\V1\Regional\RegionalDashboardController;
 use App\Http\Controllers\Api\V1\Regional\RegionalOrderController;
+use App\Http\Controllers\Api\V1\Regional\RegionalOrderDecisionController;
 use App\Http\Controllers\Api\V1\RegionalQuotaController;
 use App\Http\Controllers\Api\V1\RegionController;
 use App\Http\Middleware\EnforceSessionPolicy;
@@ -117,9 +124,27 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
                 Route::patch('orders/{order}', [ClientOrderController::class, 'update'])->name('orders.update');
                 Route::post('orders/{order}/cancel', [ClientOrderController::class, 'cancel'])->name('orders.cancel');
             });
-            // Commandes reçues, en lecture pour le régional (les décisions arrivent au lot 6).
+            // Commandes reçues par le régional.
             Route::get('regional/orders', [RegionalOrderController::class, 'index'])->name('regional.orders.index');
             Route::get('regional/orders/{order}', [RegionalOrderController::class, 'show'])->name('regional.orders.show');
+
+            // Validation et traitement ADV (lot 6) — contrat : docs/lot-6-contrat-api.md
+            // {order} : ULID public, résolu par les requêtes (403 avant 404).
+            Route::post('regional/orders/{order}/validate', [RegionalOrderDecisionController::class, 'validate'])->name('regional.orders.validate');
+            Route::post('regional/orders/{order}/reject', [RegionalOrderDecisionController::class, 'reject'])->name('regional.orders.reject');
+            Route::get('regional/dashboard', [RegionalDashboardController::class, 'show'])->name('regional.dashboard.show');
+            Route::get('reason-codes', [ReasonCodeController::class, 'index'])->name('reason-codes.index');
+            Route::prefix('adv')->name('adv.')->group(function () {
+                Route::get('orders', [AdvOrderController::class, 'index'])->name('orders.index');
+                Route::post('orders/bulk-status', [AdvOrderController::class, 'bulkStatus'])->name('orders.bulk-status');
+                Route::get('orders/{order}', [AdvOrderController::class, 'show'])->name('orders.show');
+                Route::patch('orders/{order}/shipping', [AdvOrderController::class, 'shipping'])->name('orders.shipping');
+                Route::post('orders/{order}/cancel', [AdvOrderController::class, 'cancel'])->name('orders.cancel');
+                Route::get('orders/{order}/pdf', [AdvOrderController::class, 'pdf'])->name('orders.pdf');
+                Route::get('days/{businessDay}/picking-list', [DayDocumentController::class, 'pickingList'])->name('days.picking-list');
+                Route::get('days/{businessDay}/orders/export', [DayDocumentController::class, 'export'])->name('days.orders.export');
+                Route::get('days/{businessDay}/monitoring', [DayMonitoringController::class, 'show'])->name('days.monitoring');
+            });
 
             // Centre de notifications (EF-NOT-01).
             Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
@@ -163,6 +188,15 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
                 Route::get('audit-logs', [AuditLogController::class, 'index'])
                     ->middleware('can:audit.view')
                     ->name('audit-logs.index');
+
+                // Motifs (EF-ADM-05, lot 6) : pas de suppression, on désactive.
+                Route::middleware('can:settings.manage')->group(function () {
+                    Route::get('reason-codes', [AdminReasonCodeController::class, 'index'])->name('reason-codes.index');
+                    Route::post('reason-codes', [AdminReasonCodeController::class, 'store'])->name('reason-codes.store');
+                    Route::patch('reason-codes/{reasonCode}', [AdminReasonCodeController::class, 'update'])
+                        ->whereNumber('reasonCode')
+                        ->name('reason-codes.update');
+                });
             });
         });
     });

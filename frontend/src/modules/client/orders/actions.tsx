@@ -4,14 +4,14 @@ import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router'
 import { ApiError } from '../../../shared/api/client'
 import type { ClientToday, Order } from '../../../shared/api/types'
-import { formatDate } from '../../../shared/format'
+import { formatDate, formatQuantity } from '../../../shared/format'
 import { Alert, Button, ErrorAlert } from '../../../shared/ui'
 import { Dialog } from '../../../shared/ui/Dialog'
 import { clientKey } from '../api'
 import { useCart } from '../cart/store'
 import { fetchProposedDay, useCancelOrder } from './api'
 import { hasChanges, planReorder, type ReorderBlock, type ReorderPlan, reorderBlock } from './reorder'
-import { type Feedback, formatQuantity, weekdayOf } from './view'
+import { type Feedback, weekdayOf } from './view'
 
 // Actions du client sur une commande (RG-C05, EF-CLT-05) — contrat : docs/lot-5-contrat-api.md §6.
 

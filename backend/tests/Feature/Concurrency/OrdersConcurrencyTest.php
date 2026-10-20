@@ -289,7 +289,8 @@ afterEach(function () {
     }
 
     // Base de test seulement (Schema::getTables sans schéma lirait toutes les bases du compte).
-    $kept = ['migrations', 'roles', 'permissions', 'role_has_permissions'];
+    // Motifs : insérés par leur migration (lot 6), gardés pour les tests suivants.
+    $kept = ['migrations', 'roles', 'permissions', 'role_has_permissions', 'reason_codes'];
     DB::statement('SET FOREIGN_KEY_CHECKS = 0');
     foreach (Schema::getTableListing(DB::getDatabaseName(), false) as $table) {
         if (! in_array($table, $kept, true)) {

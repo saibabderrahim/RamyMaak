@@ -1,10 +1,11 @@
 import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Order, OrderHistoryEntry, OrderLine, OrderStatus } from '../../../shared/api/types'
-import { formatAmount, formatDateTime } from '../../../shared/format'
+import { formatAmount, formatDateTime, formatQuantity } from '../../../shared/format'
+import { reasonLabel } from '../../../shared/reasons/labels'
 import { ProductImage } from '../../../shared/ui/ProductImage'
 import { type StepState, timelineSteps } from './timeline'
-import { formatQuantity, historyLabelKey, reasonLabel, STATUS_CLASSES } from './view'
+import { historyLabelKey, STATUS_CLASSES } from './view'
 
 // Éléments du détail d'une commande du client (EF-CLT-04) — contrat : docs/lot-5-contrat-api.md §3 et §6.
 

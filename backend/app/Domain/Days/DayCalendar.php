@@ -139,7 +139,11 @@ final class DayCalendar
                 throw ValidationException::withMessages(['cutoffs.closing' => [__('days.closing_in_past')]]);
             }
             $lateOverride = $day->regionDays()
-                ->where(fn ($q) => $q->where('distribution_cutoff_override_at', '>', $closing)->orWhere('ordering_cutoff_override_at', '>', $closing))
+                ->where(function ($q) use ($closing): void {
+                    foreach (CutoffKind::extendable() as $kind) {
+                        $q->orWhere($kind->overrideColumn(), '>', $closing);
+                    }
+                })
                 ->exists();
             if ($lateOverride) {
                 throw ValidationException::withMessages(['cutoffs.closing' => [__('days.override_after_closing')]]);
@@ -153,7 +157,7 @@ final class DayCalendar
             }
             $day->save();
             // Prolongation dépassée par la nouvelle heure de la journée : sans objet.
-            foreach ([CutoffKind::Distribution, CutoffKind::Ordering] as $kind) {
+            foreach (CutoffKind::extendable() as $kind) {
                 $day->regionDays()
                     ->where($kind->overrideColumn(), '<=', $moments[$kind->value])
                     ->update([$kind->overrideColumn() => null, 'updated_at' => now()]);
@@ -174,8 +178,9 @@ final class DayCalendar
     }
 
     /**
-     * Prolonge l'heure limite de répartition ou de commande d'une région
-     * (RG-A05) ; tracée, et les acteurs concernés sont prévenus.
+     * Prolonge l'heure limite de répartition, de commande ou de validation
+     * d'une région (RG-A05, I-71) ; tracée, et les acteurs concernés sont
+     * prévenus.
      */
     public function extendCutoff(RegionDay $regionDay, CutoffKind $kind, string $time, User $by): RegionDay
     {

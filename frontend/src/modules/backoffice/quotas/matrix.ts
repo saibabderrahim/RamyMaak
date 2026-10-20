@@ -49,13 +49,6 @@ export function groupByFamily(products: readonly QuotaMatrixProduct[]): FamilyGr
   return groups
 }
 
-const quantityFormat = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 })
-
-/** Quantité affichée « 1 200 » (espace insécable comme séparateur de milliers, ENF-13). */
-export function formatQuantity(value: number): string {
-  return quantityFormat.format(value).replace(/[\u202f\u00a0]/g, '\u00a0')
-}
-
 // Espaces tolérés comme séparateurs de milliers (Excel, saisie à la main).
 const SEPARATORS = /[\s\u00a0\u202f]/g
 

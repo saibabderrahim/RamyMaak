@@ -7,6 +7,9 @@ import DayDetailPage from '../backoffice/days/DayDetailPage'
 import DaysPage from '../backoffice/days/DaysPage'
 import ImportDetailPage from '../backoffice/imports/ImportDetailPage'
 import ImportsPage from '../backoffice/imports/ImportsPage'
+import DayMonitoringPage from '../backoffice/monitoring/DayMonitoringPage'
+import OrderPage from '../backoffice/orders/OrderPage'
+import OrdersQueuePage from '../backoffice/orders/OrdersQueuePage'
 import ProductCreatePage from '../backoffice/products/ProductCreatePage'
 import ProductDetailPage from '../backoffice/products/ProductDetailPage'
 import ProductsPage from '../backoffice/products/ProductsPage'
@@ -32,6 +35,7 @@ export default function AdvModule() {
       <Route path="journees" element={<DaysPage />} />
       <Route path="journees/:day" element={<DayDetailPage />} />
       <Route path="journees/:day/quotas" element={<QuotaMatrixPage />} />
+      <Route path="journees/:day/suivi" element={<DayMonitoringPage />} />
       <Route
         path="journees/:day/repartition/:regionId"
         element={
@@ -40,6 +44,9 @@ export default function AdvModule() {
           </Suspense>
         }
       />
+      {/* Commandes validées et suivantes (lot 6) : file, détail, expédition, annulation. */}
+      <Route path="commandes" element={<OrdersQueuePage />} />
+      <Route path="commandes/:id" element={<OrderPage />} />
       <Route path="regions" element={<RegionsPage />} />
       <Route path="regions/:id" element={<RegionDetailPage />} />
       <Route path="clients" element={<ClientsPage />} />

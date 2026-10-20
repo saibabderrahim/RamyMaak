@@ -1,4 +1,6 @@
 import i18n from '../../../shared/i18n'
+// Statuts et motifs des commandes (clé « orders ») : partagés avec la PWA, utilisés par la file ADV et le suivi.
+import '../../../shared/i18n/orders'
 import backoffice from './fr'
 
 // Enregistre les libellés back-office (clé « backoffice ») au chargement des

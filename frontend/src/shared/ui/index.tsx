@@ -1,4 +1,12 @@
-import { type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, forwardRef, useId } from 'react'
+import {
+  type ButtonHTMLAttributes,
+  type InputHTMLAttributes,
+  type ReactNode,
+  type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
+  forwardRef,
+  useId,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import { useErrorMessage } from './useErrorMessage'
 
@@ -80,6 +88,18 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
   ref,
 ) {
   return <select ref={ref} className={cx(INPUT_CLASSES, className)} {...props} />
+})
+
+const TEXTAREA_CLASSES =
+  'min-h-24 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base text-slate-900 shadow-xs ' +
+  'focus:border-brand-600 focus:outline-2 focus:outline-brand-600/30 aria-[invalid=true]:border-red-600 disabled:bg-slate-100'
+
+/** Zone de texte (motif, commentaire) : mêmes repères que `Input`. */
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(function Textarea(
+  { className, ...props },
+  ref,
+) {
+  return <textarea ref={ref} className={cx(TEXTAREA_CLASSES, className)} {...props} />
 })
 
 export const Checkbox = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { label: string }>(

@@ -30,7 +30,7 @@ return [
     'cutoff_order' => 'Les heures limites doivent se suivre : répartition, commande, validation, puis clôture.',
     'closing_in_past' => 'L\'heure de clôture doit être à venir.',
     'override_after_closing' => 'Une prolongation accordée à une région dépasse cette heure de clôture.',
-    'not_extendable' => 'Seules les heures limites de répartition et de commande se prolongent par région.',
+    'not_extendable' => 'Seules les heures limites de répartition, de commande et de validation se prolongent par région.',
     'extension_not_later' => 'La prolongation doit être postérieure à l\'heure limite actuelle (:current).',
     'extension_after_closing' => 'La prolongation ne peut pas dépasser l\'heure de clôture (:closing).',
     'audit' => [

@@ -16,9 +16,11 @@ return [
     // RG-A05
     'cutoff_extended' => [
         'title' => 'Heure limite prolongée — région :region',
+        'validation_title' => 'Heure limite de validation prolongée — région :region',
         'body' => [
             'DISTRIBUTION' => 'Répartition jusqu\'à :time.',
             'ORDERING' => 'Commande jusqu\'à :time.',
+            'VALIDATION' => 'Validez jusqu\'à :time.',
         ],
     ],
     // N-03 (clients)
@@ -65,6 +67,11 @@ return [
             'REJECTED' => 'Votre commande :number est rejetée.',
             'CANCELLED' => 'Votre commande :number est annulée.',
         ],
+    ],
+    // N-09 (clients, lot 6)
+    'order_shipped' => [
+        'title' => 'Commande :number expédiée',
+        'body' => 'Votre commande :number a été expédiée.',
     ],
     // N-14 (clients)
     'order_expired' => [

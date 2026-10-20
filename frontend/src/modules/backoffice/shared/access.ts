@@ -13,6 +13,12 @@ export type BackofficePermission =
   | 'day.manage'
   | 'day.extend-cutoff'
   | 'limit.view'
+  // Lot 6 : commandes (lecture ADV et Admin, traitement et annulation ADV), suivi et exports, motifs (Admin).
+  | 'order.view'
+  | 'order.process'
+  | 'order.cancel-validated'
+  | 'dashboard.view'
+  | 'settings.manage'
 
 /**
  * Contexte des écrans back-office partagés entre l'Admin et l'ADV : chemin

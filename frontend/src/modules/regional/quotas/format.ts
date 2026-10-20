@@ -40,13 +40,6 @@ export function formatTime(instant: string | number): string {
   return timeFormat.format(new Date(instant))
 }
 
-const quantityFormat = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 })
-
-/** Quantité en unités de vente, espace insécable comme séparateur de milliers (ENF-13). */
-export function formatQuantity(value: number): string {
-  return quantityFormat.format(value).replace(/[\u202f\u00a0]/g, '\u00a0')
-}
-
 export type FamilyGroup = { family: RegionalQuota['product']['family']; quotas: RegionalQuota[] }
 
 /** Quotas groupés par famille, dans l'ordre reçu (celui de la matrice ADV). */

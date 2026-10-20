@@ -3,8 +3,12 @@
 use App\Domain\Access\Role;
 use App\Domain\Days\DayCalendar;
 use App\Domain\Limits\LimitBook;
+use App\Domain\Orders\OrderDecisions;
 use App\Domain\Quotas\QuotaBook;
+use App\Domain\Referentials\AssignmentKind;
 use App\Models\BusinessDay;
+use App\Models\Order;
+use App\Models\OrderLine;
 use App\Models\ProductPrice;
 use App\Models\Region;
 use App\Models\RegionAssignment;
@@ -81,4 +85,36 @@ function openOrderingDay(string $date, Region $region, array $quotas, array $lim
     $limitBook->publish($regionDay, $regional);
 
     return $regionDay->fresh(['businessDay', 'region']);
+}
+
+/**
+ * Validation par un régional de la région de la commande (lot 6), au
+ * travers d'OrderDecisions : V(r,p) et V(c,p) réels, historique, journal
+ * et événements. `$quantities` : identifiant produit → quantité validée ;
+ * une ligne absente est validée en entier, une ligne réduite reçoit le motif
+ * QUOTA_INSUFFISANT. `$by` : par défaut le titulaire ou un suppléant de la
+ * région, sinon un nouveau titulaire.
+ *
+ * @param  array<int, int>  $quantities
+ */
+function validateOrder(Order $order, array $quantities = [], ?User $by = null): Order
+{
+    $order->refresh();
+    $by ??= RegionAssignment::query()
+        ->where('region_id', $order->region_id)
+        ->whereIn('kind', [AssignmentKind::Titular->value, AssignmentKind::Deputy->value])
+        ->first()?->user
+        ?? tap(userWithRole(Role::Regional), fn (User $user) => RegionAssignment::factory()->create(['region_id' => $order->region_id, 'user_id' => $user->id]));
+
+    $lines = $order->lines()->get()->map(function (OrderLine $line) use ($quantities): array {
+        $quantity = $quantities[$line->product_id] ?? $line->requested_qty;
+
+        return [
+            'product_id' => $line->product_id,
+            'validated_qty' => $quantity,
+            'reason_code' => $quantity < $line->requested_qty ? 'QUOTA_INSUFFISANT' : null,
+        ];
+    })->all();
+
+    return app(OrderDecisions::class)->validate($by, $order, $order->version, $lines);
 }

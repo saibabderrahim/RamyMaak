@@ -1,4 +1,4 @@
-import { API_BASE, ApiError, NetworkError } from '../../../shared/api/client'
+import { ApiError, buildUrl, NetworkError } from '../../../shared/api/client'
 
 /**
  * Téléchargement de fichiers produits par l'API (PDF, classeurs…) :
@@ -9,7 +9,8 @@ import { API_BASE, ApiError, NetworkError } from '../../../shared/api/client'
 
 export type DownloadedFile = { blob: Blob; filename: string | null; headers: Headers }
 
-type FileRequest = { method?: 'GET' | 'POST'; body?: unknown }
+/** `query` : paramètres de l'adresse (`format`, `group`, `filter[status]`…), vides ignorés comme dans `api.get`. */
+type FileRequest = { method?: 'GET' | 'POST'; body?: unknown; query?: Record<string, string | number | boolean | null | undefined> }
 
 function readCookie(name: string): string | null {
   const match = document.cookie.split('; ').find((row) => row.startsWith(`${name}=`))
@@ -21,14 +22,14 @@ async function ensureCsrfCookie(force = false): Promise<void> {
   await fetch('/sanctum/csrf-cookie', { credentials: 'include', headers: { Accept: 'application/json' } })
 }
 
-async function send(path: string, { method = 'GET', body }: FileRequest): Promise<Response> {
+async function send(path: string, { method = 'GET', body, query }: FileRequest): Promise<Response> {
   const headers: Record<string, string> = { Accept: '*/*' }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
   const xsrf = readCookie('XSRF-TOKEN')
   if (xsrf) headers['X-XSRF-TOKEN'] = xsrf
 
   try {
-    return await fetch(`${API_BASE}${path}`, {
+    return await fetch(buildUrl(path, query), {
       method,
       credentials: 'include',
       headers,

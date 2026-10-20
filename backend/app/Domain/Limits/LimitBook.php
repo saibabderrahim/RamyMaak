@@ -109,6 +109,11 @@ final class LimitBook
         }
 
         return DB::transaction(function () use ($regionDay, $cells, $by): int {
+            // I-67 : clients des cellules d'abord, en partagé, par identifiant
+            // croissant. Le contrôle de clé étrangère d'une borne insérée les
+            // verrouillerait sinon après la journée régionale, à l'inverse de
+            // la validation (client, puis journée régionale) : interblocage.
+            Client::query()->whereKey(array_unique(array_column($cells, 'client_id')))->orderBy('id')->sharedLock()->pluck('id');
             $regionDay = $this->lockForWriting($regionDay, $by);
             $quotas = $this->availableQuotas($regionDay);
             $clientIds = $this->clientsQuery($regionDay)

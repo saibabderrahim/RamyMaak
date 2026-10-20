@@ -13,6 +13,7 @@ import {
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { DistributionGrid as Grid, DistributionGridClient, DistributionGridProduct, LimitCell, NoLimitPolicy } from '../../shared/api/types'
+import { formatQuantity } from '../../shared/format'
 import { Badge } from '../../shared/ui'
 import {
   belowEngaged,
@@ -24,7 +25,6 @@ import {
   displayedLimit,
   type EditsByClient,
   editableText,
-  formatQuantity,
   type GridSelection,
   groupByFamily,
   hasDraft,

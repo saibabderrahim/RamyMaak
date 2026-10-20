@@ -17,6 +17,7 @@ enum NotificationType: string
     case OrderSubmitted = 'ORDER_SUBMITTED';
     case OrderChanged = 'ORDER_CHANGED';
     case OrderDecided = 'ORDER_DECIDED';
+    case OrderShipped = 'ORDER_SHIPPED';
     case OrderExpired = 'ORDER_EXPIRED';
 
     /** Code de la spécification (§7.8), null pour une notification sans code. */
@@ -34,6 +35,8 @@ enum NotificationType: string
             self::OrderChanged => 'N-06',
             // Validée, ajustée, rejetée ou annulée (décisions du lot 6).
             self::OrderDecided => 'N-07',
+            // Commande expédiée par l'ADV (lot 6).
+            self::OrderShipped => 'N-09',
             self::OrderExpired => 'N-14',
         };
     }

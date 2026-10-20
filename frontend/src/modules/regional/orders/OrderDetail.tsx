@@ -1,11 +1,11 @@
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import type { OrderHistoryEntry, RegionalOrder } from '../../../shared/api/types'
-import { formatAmount, formatDate, formatDateTime } from '../../../shared/format'
+import { formatAmount, formatDate, formatDateTime, formatQuantity } from '../../../shared/format'
 import { Badge, Card } from '../../../shared/ui'
 import { ProductImage } from '../../../shared/ui/ProductImage'
 import { CallLink } from '../clients/components'
-import { formatQuantity, weekdayOf } from '../quotas/format'
+import { weekdayOf } from '../quotas/format'
 import { BlockedBadge, OrderStatusBadge } from './components'
 import { historyEvent } from './model'
 

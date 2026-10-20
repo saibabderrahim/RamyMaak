@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { DistributionGrid } from '../../shared/api/types'
-import { buildChange, type CellChange, type EditsByClient, formatQuantity, type LimitMessages } from './model'
+import { formatQuantity } from '../../shared/format'
+import { buildChange, type CellChange, type EditsByClient, type LimitMessages } from './model'
 
 /** Grille PC et tablette à partir de 768 px (EF-REG-02), vue pivot en dessous (EF-REG-03). */
 export const WIDE_SCREEN = '(min-width: 768px)'

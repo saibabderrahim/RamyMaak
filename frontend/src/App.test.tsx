@@ -38,7 +38,8 @@ describe('navigation and session', () => {
     await user.click(screen.getByLabelText('Rester connecté sur cet appareil'))
     await user.click(screen.getByRole('button', { name: 'Se connecter' }))
 
-    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(home))
+    // Module du rôle chargé à la demande : la navigation aboutit une fois son code chargé.
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(home), { timeout: 5000 })
     expect(calls.find((c) => c.path === '/api/v1/auth/login')?.body).toEqual({ username: 'someone', password: 'Secret123', remember: true })
   })
 
@@ -132,6 +133,37 @@ describe('navigation and session', () => {
 
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/connexion'))
     expect(screen.getByText('Votre session a expiré. Reconnectez-vous.')).toBeInTheDocument()
+  })
+
+  // Écrans du lot 6 (contrat §8) : routes et entrées de menu ; modules chargés à la demande.
+  it.each([
+    ['regional', '/regional', 'Ma journée'],
+    ['adv', '/adv/commandes', 'Commandes'],
+    ['adv', '/adv/commandes/01JA2Z6K8QW3X9M4T7RBN5CDEF', 'Commandes'],
+    ['adv', '/adv/journees/2026-10-08/suivi', 'Suivi de la journée'],
+    ['admin', '/admin/commandes', 'Commandes'],
+    ['admin', '/admin/commandes/01JA2Z6K8QW3X9M4T7RBN5CDEF', 'Commandes'],
+    ['admin', '/admin/journees/2026-10-08/suivi', 'Suivi de la journée'],
+    ['admin', '/admin/motifs', 'Motifs'],
+  ] as const)('opens the lot 6 screen of a %s at %s', async (role, path, title) => {
+    mockApi({ 'GET /api/v1/auth/me': () => json(makeUser(role)) })
+    renderApp(path)
+    expect(await screen.findByRole('heading', { level: 1, name: title }, { timeout: 5000 })).toBeInTheDocument()
+  })
+
+  it.each([
+    ['regional', [['Ma journée', '/regional']]],
+    ['adv', [['Commandes', '/adv/commandes']]],
+    ['admin', [['Commandes', '/admin/commandes'], ['Motifs', '/admin/motifs']]],
+  ] as const)('links the lot 6 screens in the menu of a %s', async (role, links) => {
+    mockApi({ 'GET /api/v1/auth/me': () => json(makeUser(role)) })
+    renderApp('/profil')
+    await screen.findByRole('heading', { level: 1 }, { timeout: 5000 })
+    for (const [name, href] of links) {
+      const items = screen.getAllByRole('link', { name })
+      expect(items.length).toBeGreaterThan(0)
+      items.forEach((item) => expect(item).toHaveAttribute('href', href))
+    }
   })
 
   it('prepares right-to-left display for Arabic (ENF-12)', () => {

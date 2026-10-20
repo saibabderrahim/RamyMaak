@@ -8,6 +8,7 @@ use App\Events\CutoffExtended;
 use App\Events\QuotasPublished;
 use App\Listeners\NotifyCutoffExtended;
 use App\Listeners\NotifyQuotasPublished;
+use App\Models\Client;
 use App\Models\Product;
 use App\Models\Region;
 use App\Models\RegionAssignment;
@@ -145,6 +146,25 @@ it('notifies the regionals of the region when a cutoff is extended (RG-A05)', fu
         ->and($notifications->pluck('data.body')->all())->toBe(['Répartition jusqu\'à 11:15.', 'Commande jusqu\'à 13:30.', 'Répartition jusqu\'à 11:45.'])
         ->and(($this->notificationsOf)($this->titular))->toHaveCount(3)
         ->and(($this->notificationsOf)($other))->toBeEmpty();
+});
+
+it('notifies only the regionals of the region when the validation cutoff is extended, linking to their orders (I-71)', function () {
+    $client = userWithRole(Role::Client, ['client_id' => Client::factory()->create(['region_id' => $this->centre->id])->id]);
+
+    ($this->extend)(CutoffKind::Validation, '16:30');
+
+    $expected = ($this->content)('CUTOFF_EXTENDED', [
+        'type' => 'CUTOFF_EXTENDED',
+        'code' => null,
+        'title' => 'Heure limite de validation prolongée — région Centre',
+        'body' => 'Validez jusqu\'à 16:30.',
+        'url' => '/regional/commandes',
+    ]);
+    foreach ([$this->titular, $this->deputy] as $recipient) {
+        expect(($this->notificationsOf)($recipient)->map(fn (DatabaseNotification $n) => ($this->contentOf)($n))->all())->toBe([$expected]);
+    }
+    expect(($this->notificationsOf)($client))->toBeEmpty()
+        ->and(DatabaseNotification::query()->count())->toBe(2);
 });
 
 it('never sends the same notification twice when an event or a job is replayed (§9.7)', function () {

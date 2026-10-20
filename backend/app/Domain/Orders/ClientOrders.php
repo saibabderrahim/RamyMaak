@@ -13,7 +13,6 @@ use App\Models\BusinessDay;
 use App\Models\Client;
 use App\Models\Order;
 use App\Models\OrderLine;
-use App\Models\OrderStatusHistory;
 use App\Models\RegionDay;
 use App\Models\User;
 use App\Support\Money;
@@ -29,11 +28,11 @@ use Illuminate\Support\Facades\DB;
  * verrouiller le client (FOR UPDATE) : les envois d'un même client depuis
  * plusieurs appareils sont sérialisés et E(c,p) est relu après le verrou.
  *
- * Ordre des verrous, le même partout : client → journée (partagé) →
- * commande → numéro du jour (pris en dernier, juste avant le commit). La
- * clôture verrouille la journée puis les commandes, jamais le client : pas
- * de cycle. Tout écrivain d'une commande envoyée (lot 6 compris) prend la
- * journée en partagé avant la commande.
+ * Ordre des verrous, le même partout (OrderLocks, I-61, I-67) : client →
+ * journée (partagé) → commande → numéro du jour (pris en dernier, juste
+ * avant le commit). La clôture verrouille la journée puis les commandes,
+ * jamais le client : pas de cycle. Tout écrivain d'une commande envoyée
+ * (lot 6 compris) prend la journée en partagé avant la commande.
  */
 final class ClientOrders
 {
@@ -46,6 +45,9 @@ final class ClientOrders
         private readonly OrderNumbers $numbers,
         private readonly OrderWorkflow $workflow,
         private readonly Settings $settings,
+        private readonly OrderLocks $locks,
+        private readonly OrderVersion $versions,
+        private readonly OrderHistory $history,
     ) {}
 
     /**
@@ -105,12 +107,10 @@ final class ClientOrders
                     'submitted_at' => now(),
                     'submitted_by' => $by->id,
                     'client_comment' => $this->comment($comment),
-                    'total_ht' => Money::amount($totals['ht']),
-                    'total_vat' => Money::amount($totals['vat']),
-                    'total_ttc' => Money::amount($totals['ht'] + $totals['vat']),
+                    ...OrderTotals::columns($totals),
                 ]);
                 $this->insertLines($order, $priced);
-                $this->history($order, null, OrderStatus::Submitted, $by->id);
+                $this->history->record($order, null, OrderStatus::Submitted, OrderActor::Client, $by->id);
                 // Numéro en dernier : la ligne du jour, commune à tous les envois, est tenue le moins longtemps possible.
                 $order->forceFill(['number' => $this->numbers->next($businessDay)])->save();
 
@@ -156,14 +156,14 @@ final class ClientOrders
      */
     public function modify(User $by, string $publicId, int $version, array $lines, ?string $comment): Order
     {
-        $dayId = $this->orderDay($by, $publicId);
+        ['id' => $orderId, 'day' => $dayId] = $this->orderOf($by, $publicId);
 
-        return DB::transaction(function () use ($by, $publicId, $dayId, $version, $lines, $comment): Order {
+        return DB::transaction(function () use ($by, $orderId, $dayId, $version, $lines, $comment): Order {
             $client = $this->lockClient($by);
-            $businessDay = $this->lockDay($dayId);
-            $order = $this->lockOrder($client, $publicId);
+            $businessDay = $this->locks->day($dayId);
+            $order = $this->lockOrder($orderId);
             $this->workflow->assertCan($order->status, OrderStatus::Submitted, OrderActor::Client);
-            $this->assertVersion($order, $version);
+            $this->versions->assert($order, $version);
             $this->assertActive($client);
             $state = $this->window->forRegion($businessDay, $order->region_id);
             $this->window->assertOpen($state);
@@ -184,11 +184,9 @@ final class ClientOrders
                 return $order;
             }
 
-            $this->bump($order, $version, OrderStatus::Submitted, [
+            $this->versions->bump($order, $version, OrderStatus::Submitted, OrderStatus::Submitted, [
                 'client_comment' => $comment,
-                'total_ht' => Money::amount($totals['ht']),
-                'total_vat' => Money::amount($totals['vat']),
-                'total_ttc' => Money::amount($totals['ht'] + $totals['vat']),
+                ...OrderTotals::columns($totals),
             ]);
             foreach ($priced as $line) {
                 $existing = $current->get($line['product_id']);
@@ -202,7 +200,7 @@ final class ClientOrders
             if ($removed !== []) {
                 OrderLine::query()->where('order_id', $order->id)->whereIn('product_id', $removed)->delete();
             }
-            $this->history($order, OrderStatus::Submitted, OrderStatus::Submitted, $by->id);
+            $this->history->record($order, OrderStatus::Submitted, OrderStatus::Submitted, OrderActor::Client, $by->id);
 
             activity('orders')
                 ->performedOn($order)
@@ -231,18 +229,18 @@ final class ClientOrders
      */
     public function cancel(User $by, string $publicId, int $version): Order
     {
-        $dayId = $this->orderDay($by, $publicId);
+        ['id' => $orderId, 'day' => $dayId] = $this->orderOf($by, $publicId);
 
-        return DB::transaction(function () use ($by, $publicId, $dayId, $version): Order {
+        return DB::transaction(function () use ($by, $orderId, $dayId, $version): Order {
             $client = $this->lockClient($by);
-            $businessDay = $this->lockDay($dayId);
-            $order = $this->lockOrder($client, $publicId);
+            $businessDay = $this->locks->day($dayId);
+            $order = $this->lockOrder($orderId);
             $this->workflow->assertCan($order->status, OrderStatus::Cancelled, OrderActor::Client);
-            $this->assertVersion($order, $version);
+            $this->versions->assert($order, $version);
             $this->window->assertOpen($this->window->forRegion($businessDay, $order->region_id));
 
-            $this->bump($order, $version, OrderStatus::Cancelled);
-            $this->history($order, OrderStatus::Submitted, OrderStatus::Cancelled, $by->id);
+            $this->versions->bump($order, $version, OrderStatus::Submitted, OrderStatus::Cancelled);
+            $this->history->record($order, OrderStatus::Submitted, OrderStatus::Cancelled, OrderActor::Client, $by->id);
 
             activity('orders')
                 ->performedOn($order)
@@ -264,7 +262,7 @@ final class ClientOrders
      */
     private function lockClient(User $by): Client
     {
-        $client = $by->client_id === null ? null : Client::query()->lockForUpdate()->find($by->client_id);
+        $client = $by->client_id === null ? null : $this->locks->client($by->client_id);
         if ($client === null) {
             throw new ApiException(ErrorCode::Forbidden, __('errors.FORBIDDEN'));
         }
@@ -273,54 +271,38 @@ final class ClientOrders
     }
 
     /**
-     * Journée de la commande du client (sinon 403 ou 404), lue hors de la
-     * transaction : elle ne change jamais, et la transaction peut alors
+     * Commande du client et sa journée (sinon 403 ou 404), lues hors de la
+     * transaction : elles ne changent jamais, et la transaction peut alors
      * verrouiller la journée avant la commande, dans l'ordre de la clôture
      * (journée → commandes), sans ouvrir son instantané avant les verrous.
+     *
+     * @return array{id: int, day: int}
      */
-    private function orderDay(User $by, string $publicId): int
+    private function orderOf(User $by, string $publicId): array
     {
         if ($by->client_id === null) {
             throw new ApiException(ErrorCode::Forbidden, __('errors.FORBIDDEN'));
         }
-        $dayId = Order::isPublicId($publicId)
-            ? Order::query()->where('client_id', $by->client_id)->where('public_id', strtoupper($publicId))->value('business_day_id')
+        $row = Order::isPublicId($publicId)
+            ? Order::query()->where('client_id', $by->client_id)->where('public_id', strtoupper($publicId))->first(['id', 'business_day_id'])
             : null;
-        if ($dayId === null) {
+        if ($row === null) {
             throw new ApiException(ErrorCode::NotFound, __('orders.not_found'));
         }
 
-        return (int) $dayId;
+        return ['id' => $row->id, 'day' => $row->business_day_id];
     }
 
-    /** Journée verrouillée en partagé : la clôture attend la fin de l'écriture. */
-    private function lockDay(int $dayId): BusinessDay
+    /** Commande du client (sinon 404), verrouillée après la journée. */
+    private function lockOrder(int $orderId): Order
     {
-        return BusinessDay::query()->sharedLock()->findOrFail($dayId);
-    }
-
-    /** Commande du client (sinon 404), verrouillée. */
-    private function lockOrder(Client $client, string $publicId): Order
-    {
-        $order = Order::query()->where('client_id', $client->id)->where('public_id', strtoupper($publicId))->lockForUpdate()->first();
-        if ($order === null) {
-            throw new ApiException(ErrorCode::NotFound, __('orders.not_found'));
-        }
-
-        return $order;
+        return $this->locks->order($orderId) ?? throw new ApiException(ErrorCode::NotFound, __('orders.not_found'));
     }
 
     private function assertActive(Client $client): void
     {
         if ($client->status !== ClientStatus::Active) {
             throw new ApiException(ErrorCode::ClientBlocked, __('orders.client_blocked'));
-        }
-    }
-
-    private function assertVersion(Order $order, int $version): void
-    {
-        if ($order->version !== $version) {
-            throw new ApiException(ErrorCode::VersionConflict, __('orders.version_conflict'), ['version' => $order->version]);
         }
     }
 
@@ -391,23 +373,18 @@ final class ClientOrders
     }
 
     /**
-     * Totaux en centimes (RG-P04) : HT par ligne exact, TVA par ligne
-     * arrondie au centime, totaux = somme des lignes.
+     * Totaux en centimes sur les quantités demandées (RG-P04, OrderTotals).
      *
      * @param  list<array{requested_qty: int, unit_price_ht: string, vat_rate: string}>  $lines
-     * @return array{ht: int, vat: int}
+     * @return array{ht: int, vat: int, ttc: int}
      */
     private function totals(array $lines): array
     {
-        $ht = 0;
-        $vat = 0;
-        foreach ($lines as $line) {
-            $lineHt = Money::cents($line['unit_price_ht']) * $line['requested_qty'];
-            $ht += $lineHt;
-            $vat += Money::vatCents($lineHt, Money::basisPoints($line['vat_rate']));
-        }
-
-        return ['ht' => $ht, 'vat' => $vat];
+        return OrderTotals::of(array_map(fn (array $line) => [
+            'unit_price_ht' => $line['unit_price_ht'],
+            'vat_rate' => $line['vat_rate'],
+            'qty' => $line['requested_qty'],
+        ], $lines));
     }
 
     /** Montant minimum de commande HT (RG-C06), désactivé par défaut. */
@@ -424,42 +401,6 @@ final class ClientOrders
                 'total' => number_format(Money::amount($htCents), 2, ',', ' '),
             ]), ['min_amount_ht' => Money::amount($minimumCents), 'total_ht' => Money::amount($htCents)]);
         }
-    }
-
-    /**
-     * Nouvelle version, conditionnelle (§5.8) : statut toujours « Envoyée »
-     * et version attendue, sinon VERSION_CONFLICT.
-     *
-     * @param  array<string, mixed>  $attributes
-     */
-    private function bump(Order $order, int $version, OrderStatus $to, array $attributes = []): void
-    {
-        $updated = Order::query()
-            ->whereKey($order->id)
-            ->where('status', OrderStatus::Submitted->value)
-            ->where('version', $version)
-            ->update([...$attributes, 'status' => $to->value, 'version' => $version + 1, 'updated_at' => now()]);
-        if ($updated === 0) {
-            throw new ApiException(ErrorCode::VersionConflict, __('orders.version_conflict'), [
-                'version' => (int) Order::query()->whereKey($order->id)->value('version'),
-            ]);
-        }
-        $order->forceFill([...$attributes, 'status' => $to, 'version' => $version + 1]);
-    }
-
-    /** Transition faite par un compte du client (envoi, modification, annulation). */
-    private function history(Order $order, ?OrderStatus $from, OrderStatus $to, ?int $userId, ?string $comment = null): void
-    {
-        OrderStatusHistory::create([
-            'order_id' => $order->id,
-            'from_status' => $from,
-            'to_status' => $to,
-            'version' => $order->version,
-            'user_id' => $userId,
-            'actor' => OrderActor::Client,
-            'comment' => $comment,
-            'created_at' => now(),
-        ]);
     }
 
     private function comment(?string $comment): ?string

@@ -34,23 +34,6 @@ export function weekdayOf(day: string): string {
   return weekdayFormat.format(new Date(`${day.slice(0, 10)}T00:00:00Z`))
 }
 
-const quantityFormat = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 })
-
-/** Quantité en unités de vente, espace insécable comme séparateur de milliers. */
-export function formatQuantity(value: number): string {
-  return quantityFormat.format(value).replace(/[  ]/g, ' ')
-}
-
-/**
- * Motif (rejet, ajustement, annulation) : les listes de motifs
- * paramétrables arrivent au lot 6 (EF-ADM-05) ; d'ici là, le code est
- * rendu lisible (« QUOTA_INSUFFISANT » → « Quota insuffisant »).
- */
-export function reasonLabel(code: string): string {
-  const text = code.replace(/[_-]+/g, ' ').trim().toLowerCase()
-  return text === '' ? code : text.charAt(0).toUpperCase() + text.slice(1)
-}
-
 /**
  * Clé du libellé d'une entrée de l'historique (§6.3) : envoi, modification
  * par le client (Envoyée → Envoyée, nouvelle version) ou changement de statut.

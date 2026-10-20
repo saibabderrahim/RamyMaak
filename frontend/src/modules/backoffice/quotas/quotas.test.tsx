@@ -17,9 +17,9 @@ import type {
   SaveQuotasResult,
 } from '../../../shared/api/types'
 import { meQueryKey } from '../../../shared/auth/session'
+import { formatQuantity } from '../../../shared/format'
 import { json, makeUser, mockApi, problem, renderApp } from '../../../test/utils'
 import { daysKey } from '../days/api'
-import { formatQuantity } from './matrix'
 import QuotaMatrixPage from './QuotaMatrixPage'
 
 const DAY = '2026-10-08'

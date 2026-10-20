@@ -93,6 +93,51 @@ final class Perimeter
         return $query;
     }
 
+    /**
+     * Commandes visibles par l'utilisateur, périmètre jugé **à la journée de
+     * chaque commande** (I-12, RG-S05) et sur la région figée à l'envoi
+     * (RG-S04) : file ADV sur plusieurs journées, résolution des commandes
+     * d'un traitement en masse. Sans effet pour l'Admin et pour un ADV jamais
+     * affecté ; sinon une affectation active ce jour-là (ADV : affectation
+     * ADV ; régional : titulaire ou suppléant) sur la région de la commande,
+     * même règle que regionIds(). Client : ses commandes.
+     *
+     * @template TModel of \Illuminate\Database\Eloquent\Model
+     *
+     * @param  Builder<TModel>  $query  requête sur `orders`
+     * @return Builder<TModel>
+     */
+    public function constrainOrders(Builder $query, User $user): Builder
+    {
+        $table = $query->getModel()->getTable();
+        $kinds = match ($user->appRole()) {
+            Role::Admin => null,
+            Role::Adv => $this->isRestrictedAdv($user) ? [AssignmentKind::Adv] : null,
+            Role::Regional => [AssignmentKind::Titular, AssignmentKind::Deputy],
+            Role::Client => [],
+            null => [],
+        };
+        if ($kinds === null) {
+            return $query;
+        }
+        if ($kinds === []) {
+            return $user->appRole() === Role::Client && $user->client_id !== null
+                ? $query->where("{$table}.client_id", $user->client_id)
+                : $query->whereRaw('1 = 0');
+        }
+
+        return $query->whereExists(fn ($exists) => $exists
+            ->selectRaw('1')
+            ->from('region_assignments')
+            ->join('business_days', 'business_days.id', '=', "{$table}.business_day_id")
+            ->whereColumn('region_assignments.region_id', "{$table}.region_id")
+            ->where('region_assignments.user_id', $user->id)
+            ->whereIn('region_assignments.kind', array_map(fn (AssignmentKind $kind) => $kind->value, $kinds))
+            ->whereNull('region_assignments.revoked_at')
+            ->whereColumn('region_assignments.starts_on', '<=', 'business_days.day')
+            ->where(fn ($q) => $q->whereNull('region_assignments.ends_on')->orWhereColumn('region_assignments.ends_on', '>=', 'business_days.day')));
+    }
+
     public function canAccessClient(User $user, Client $client, ?CarbonInterface $day = null): bool
     {
         $day ??= BusinessClock::today();
@@ -124,12 +169,16 @@ final class Perimeter
      */
     private function advRegionIds(User $user, CarbonInterface $day): ?array
     {
-        $restricted = RegionAssignment::query()
+        return $this->isRestrictedAdv($user) ? $this->assignedRegionIds($user, [AssignmentKind::Adv], $day) : null;
+    }
+
+    /** ADV affecté au moins une fois à une région (RG-S05), quelle que soit la date. */
+    private function isRestrictedAdv(User $user): bool
+    {
+        return RegionAssignment::query()
             ->where('user_id', $user->id)
             ->where('kind', AssignmentKind::Adv->value)
             ->exists();
-
-        return $restricted ? $this->assignedRegionIds($user, [AssignmentKind::Adv], $day) : null;
     }
 
     /**

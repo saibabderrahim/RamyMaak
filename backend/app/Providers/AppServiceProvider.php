@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Domain\Limits\ClientUsage;
 use App\Domain\Orders\OrderUsage;
+use App\Domain\Reasons\ReasonCodes;
 use App\Domain\Settings\Settings;
 use App\Models\AuditLog;
 use App\Models\BusinessDay;
@@ -16,6 +17,7 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductFamily;
 use App\Models\ProductPrice;
+use App\Models\ReasonCode;
 use App\Models\Region;
 use App\Models\RegionAssignment;
 use App\Models\RegionDay;
@@ -38,6 +40,8 @@ class AppServiceProvider extends ServiceProvider
         // Réinitialisé entre deux requêtes ou deux tâches de fond : un worker
         // ne garde pas de paramètres périmés.
         $this->app->scoped(Settings::class);
+        // Motifs lus une fois par requête ou par tâche (libellés, contrôles).
+        $this->app->scoped(ReasonCodes::class);
         // Consommation des clients (S, V) : fournie par les commandes à partir du lot 5.
         // S(c,p) et V(c,p) lus sur les commandes (lot 5).
         $this->app->bind(ClientUsage::class, OrderUsage::class);
@@ -67,6 +71,7 @@ class AppServiceProvider extends ServiceProvider
             'region_quota' => RegionQuota::class,
             'client_limit' => ClientLimit::class,
             'order' => Order::class,
+            'reason_code' => ReasonCode::class,
         ]);
 
         // Journée désignée par sa date « AAAA-MM-JJ » dans les URL (§11.1) ;

@@ -20,17 +20,21 @@ function useNavItems(role: Role, permissions: readonly string[]): NavItem[] {
       return [
         { to: '/admin/comptes', label: t('nav.users') },
         { to: '/admin/journees', label: t('nav.days') },
+        { to: '/admin/commandes', label: t('nav.orders') },
         { to: '/admin/regions', label: t('nav.regions') },
         { to: '/admin/clients', label: t('nav.clients') },
         { to: '/admin/produits', label: t('nav.products') },
         { to: '/admin/imports', label: t('nav.imports') },
         { to: '/admin/journal', label: t('nav.audit') },
+        { to: '/admin/motifs', label: t('nav.reasons') },
         { to: '/admin/parametres', label: t('nav.settings') },
         profile,
       ]
     case 'adv':
       return [
         { to: '/adv', label: t('nav.home'), end: true },
+        // Commandes validées à préparer (EF-ADV-04) ; pastille N-08 au lot de travail des écrans ADV.
+        { to: '/adv/commandes', label: t('nav.orders') },
         { to: '/adv/journees', label: t('nav.days') },
         { to: '/adv/regions', label: t('nav.regions') },
         { to: '/adv/clients', label: t('nav.clients') },
@@ -43,7 +47,8 @@ function useNavItems(role: Role, permissions: readonly string[]): NavItem[] {
       ]
     case 'regional':
       return [
-        { to: '/regional', label: t('nav.home'), end: true },
+        // « Ma journée » (EF-REG-01) : page d'accueil du régional depuis le lot 6.
+        { to: '/regional', label: t('nav.myDay'), end: true },
         { to: '/regional/quotas', label: t('nav.quotas') },
         { to: '/regional/repartition', label: t('nav.distribution') },
         { to: '/regional/commandes', label: t('nav.orders') },
@@ -155,7 +160,7 @@ export function AppShell() {
           <div className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-2 py-1 sm:px-4">
             {items.map((item) => (
               <NavLink key={item.to} to={item.to} end={item.end} className={linkClass}>
-                {item.label}
+                <NavLabel item={item} />
               </NavLink>
             ))}
           </div>

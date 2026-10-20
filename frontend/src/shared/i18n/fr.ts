@@ -92,6 +92,8 @@ const fr = {
     cart: 'Panier',
     withCount: '{{label}} ({{count}})',
     orders: 'Commandes',
+    myDay: 'Ma journée',
+    reasons: 'Motifs',
     notifications: 'Notifications',
     menu: 'Menu principal',
   },

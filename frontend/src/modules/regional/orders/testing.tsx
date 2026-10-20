@@ -37,7 +37,7 @@ export const orderUrl = (id: string) => `GET /api/v1/regional/orders/${id}`
 export const CENTRE: RegionRef = { id: 3, code: 'CENTRE', name: 'Centre' }
 export const EST: RegionRef = { id: 4, code: 'EST', name: 'Est' }
 
-export const regional = (overrides: Partial<CurrentUser> = {}) => makeUser('regional', { id: 7, permissions: ['order.view', 'quota.view'], ...overrides })
+export const regional = (overrides: Partial<CurrentUser> = {}) => makeUser('regional', { id: 7, permissions: ['order.view', 'order.validate', 'quota.view', 'dashboard.view'], ...overrides })
 
 const regionEntry = (region: RegionRef): RegionalQuotaRegion => ({
   region,
@@ -74,6 +74,8 @@ export function summary(overrides: Partial<RegionalOrderSummary> = {}): Regional
     lines_count: 2,
     total_ht: 58500,
     is_adjusted: false,
+    decided_at: null,
+    decided_by: null,
     ...overrides,
   }
 }
@@ -113,6 +115,7 @@ const context = (extra: Partial<RegionalOrderLineContext> = {}): RegionalOrderLi
   region_quota: 1500,
   region_validated: 0,
   region_remaining: 1500,
+  max_validatable: 40,
   ...extra,
 })
 
@@ -130,6 +133,8 @@ const line = (extra: Partial<OrderLine>, lineContext: RegionalOrderLineContext):
   vat_rate: 19,
   amount_ht: 36000,
   adjustment_reason_code: null,
+  adjustment_reason: null,
+  adjustment_comment: null,
   ...extra,
   context: lineContext,
 })
@@ -151,7 +156,9 @@ export function makeOrder(overrides: Partial<RegionalOrder> = {}): RegionalOrder
     comment: 'Livraison avant 10 h',
     total_vat: 11115,
     decided_at: null,
+    decided_by: null,
     decision_reason_code: null,
+    decision_reason: null,
     decision_comment: null,
     client: { id: 12, code: 'C0012', name: 'Superette El Baraka', status: 'ACTIVE', phone: '0550 12 34 56', phone2: '0770112233' },
     region: CENTRE,
@@ -169,14 +176,17 @@ export function makeOrder(overrides: Partial<RegionalOrder> = {}): RegionalOrder
           unit_price_ht: 18,
           amount_ht: 22500,
         },
-        context({ limit: null, client_validated: 30, region_quota: 800, region_validated: 80, region_remaining: 720 }),
+        context({ limit: null, client_validated: 30, region_quota: 800, region_validated: 80, region_remaining: 720, max_validatable: 720 }),
       ),
     ],
     history: [
       { from: null, to: 'SUBMITTED', version: 1, at: '2026-10-08T08:40:00+00:00', actor: 'CLIENT', by_name: 'Gérant C0012', comment: null },
       { from: 'SUBMITTED', to: 'SUBMITTED', version: 2, at: '2026-10-08T09:12:00+00:00', actor: 'CLIENT', by_name: 'Gérant C0012', comment: null },
     ],
+    validation: { cutoff: '15:00', cutoff_at: '2026-10-08T14:00:00+00:00', extended: false, blocking: false, passed: false },
     can_validate: false,
+    can_reject: false,
+    blocked_reason: null,
     ...overrides,
   }
 }

@@ -221,6 +221,7 @@ describe('GET /client/orders/{id}', function () {
                 'requested_qty' => 20, 'validated_qty' => 15, 'shipped_qty' => null,
                 // Montant sur la quantité validée (RG-P04).
                 'unit_price_ht' => 900.0, 'vat_rate' => 19.0, 'amount_ht' => 13500.0, 'adjustment_reason_code' => 'QUOTA_INSUFFISANT',
+                'adjustment_reason' => ['code' => 'QUOTA_INSUFFISANT', 'label' => 'Quota insuffisant'], 'adjustment_comment' => null, 'shipping_gap_reason' => null,
             ]],
             'history' => [
                 ['from' => null, 'to' => 'SUBMITTED', 'version' => 1, 'at' => '2026-10-07T09:00:00+00:00', 'actor' => 'CLIENT', 'by_name' => 'Vendeur C0012', 'comment' => null],

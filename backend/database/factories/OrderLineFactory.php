@@ -28,4 +28,10 @@ class OrderLineFactory extends Factory
     {
         return $this->state(fn () => ['validated_qty' => $quantity]);
     }
+
+    /** Quantité expédiée (lot 6), au plus la quantité validée ; motif d'écart si elle est inférieure. */
+    public function shippedQty(int $quantity, ?string $gapReason = null): static
+    {
+        return $this->state(fn () => ['shipped_qty' => $quantity, 'shipping_gap_reason_code' => $gapReason]);
+    }
 }

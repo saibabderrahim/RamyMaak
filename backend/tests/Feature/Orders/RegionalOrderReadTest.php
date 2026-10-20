@@ -297,14 +297,14 @@ describe('GET /regional/orders/{id}', function () {
                 [
                     'product_id' => $this->orange->id, 'sku' => 'P0042', 'name' => 'Jus orange 1 L', 'short_name' => 'Orange 1 L',
                     'sales_unit_label' => 'Fardeau 6 × 1 L', 'photo' => null, 'requested_qty' => 45, 'validated_qty' => null, 'shipped_qty' => null,
-                    'unit_price_ht' => 900.0, 'vat_rate' => 19.0, 'amount_ht' => 40500.0, 'adjustment_reason_code' => null,
+                    'unit_price_ht' => 900.0, 'vat_rate' => 19.0, 'amount_ht' => 40500.0, 'adjustment_reason_code' => null, 'adjustment_reason' => null, 'adjustment_comment' => null, 'shipping_gap_reason' => null,
                     // Borne publiée (le brouillon à 60 est ignoré), V(c,p) de la commande validée, Q, V(r,p) et R.
                     'context' => ['limit' => 50, 'client_validated' => 15, 'region_quota' => 500, 'region_validated' => 15, 'region_remaining' => 485],
                 ],
                 [
                     'product_id' => $this->pomme->id, 'sku' => 'P0057', 'name' => 'Jus pomme 1 L', 'short_name' => 'Pomme 1 L',
                     'sales_unit_label' => 'Fardeau 6 × 1 L', 'photo' => null, 'requested_qty' => 2, 'validated_qty' => null, 'shipped_qty' => null,
-                    'unit_price_ht' => 850.5, 'vat_rate' => 19.0, 'amount_ht' => 1701.0, 'adjustment_reason_code' => null,
+                    'unit_price_ht' => 850.5, 'vat_rate' => 19.0, 'amount_ht' => 1701.0, 'adjustment_reason_code' => null, 'adjustment_reason' => null, 'adjustment_comment' => null, 'shipping_gap_reason' => null,
                     // Pas de borne publiée : le brouillon à 10 n'en est pas une.
                     'context' => ['limit' => null, 'client_validated' => 0, 'region_quota' => 300, 'region_validated' => 0, 'region_remaining' => 300],
                 ],

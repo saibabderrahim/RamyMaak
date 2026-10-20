@@ -10,7 +10,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * Ligne de commande (§10.2) : un produit au plus une fois par commande
  * (RG-C02), prix HT et taux de TVA figés à l'envoi (RG-P03). Le montant
- * de la ligne n'est pas stocké : App\Support\Money le calcule.
+ * de la ligne n'est pas stocké : App\Support\Money le calcule. Quantité
+ * validée, motif et commentaire d'ajustement écrits par OrderDecisions ;
+ * quantité expédiée et motif d'écart par AdvOrders (lot 6).
  *
  * @property int $id
  * @property int $order_id
@@ -21,6 +23,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $unit_price_ht
  * @property string $vat_rate
  * @property ?string $adjustment_reason_code
+ * @property ?string $adjustment_comment commentaire de l'ajustement, visible du client (I-73)
  * @property ?string $shipping_gap_reason_code
  */
 class OrderLine extends Model
@@ -28,7 +31,10 @@ class OrderLine extends Model
     /** @use HasFactory<OrderLineFactory> */
     use HasFactory;
 
-    protected $fillable = ['order_id', 'product_id', 'requested_qty', 'validated_qty', 'shipped_qty', 'unit_price_ht', 'vat_rate'];
+    protected $fillable = [
+        'order_id', 'product_id', 'requested_qty', 'validated_qty', 'shipped_qty', 'unit_price_ht', 'vat_rate',
+        'adjustment_reason_code', 'adjustment_comment', 'shipping_gap_reason_code',
+    ];
 
     protected function casts(): array
     {

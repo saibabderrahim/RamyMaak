@@ -143,13 +143,12 @@ it('validates the kind and the time', function (array $body, string $field, stri
 
     expectProblem($response, 422, 'VALIDATION_FAILED');
     $response->assertJsonPath("errors.{$field}.0", $message);
-    expect(($this->regionDay)($this->centre)->only(['distribution_cutoff_override_at', 'ordering_cutoff_override_at']))
-        ->toBe(['distribution_cutoff_override_at' => null, 'ordering_cutoff_override_at' => null]);
+    expect(($this->regionDay)($this->centre)->only(['distribution_cutoff_override_at', 'ordering_cutoff_override_at', 'validation_cutoff_override_at']))
+        ->toBe(['distribution_cutoff_override_at' => null, 'ordering_cutoff_override_at' => null, 'validation_cutoff_override_at' => null]);
 })->with([
     'missing kind' => [['until' => '11:00'], 'kind', 'Le champ heure limite à prolonger est obligatoire.'],
-    'validation cutoff' => [['kind' => 'VALIDATION', 'until' => '16:00'], 'kind', 'Seules les heures limites de répartition et de commande se prolongent par région.'],
-    'closing' => [['kind' => 'CLOSING', 'until' => '23:30'], 'kind', 'Seules les heures limites de répartition et de commande se prolongent par région.'],
-    'lowercase kind' => [['kind' => 'distribution', 'until' => '11:00'], 'kind', 'Seules les heures limites de répartition et de commande se prolongent par région.'],
+    'closing' => [['kind' => 'CLOSING', 'until' => '23:30'], 'kind', 'Seules les heures limites de répartition, de commande et de validation se prolongent par région.'],
+    'lowercase kind' => [['kind' => 'distribution', 'until' => '11:00'], 'kind', 'Seules les heures limites de répartition, de commande et de validation se prolongent par région.'],
     'missing time' => [['kind' => 'DISTRIBUTION'], 'until', 'Le champ nouvelle heure limite est obligatoire.'],
     'malformed time' => [['kind' => 'DISTRIBUTION', 'until' => '11h15'], 'until', 'Heure attendue au format HH:MM (ex. 10:30).'],
     'hour out of range' => [['kind' => 'DISTRIBUTION', 'until' => '24:00'], 'until', 'Heure attendue au format HH:MM (ex. 10:30).'],
@@ -193,6 +192,24 @@ it('keeps an extension that stays later than the new day cutoff', function () {
         ->assertJsonPath('regions.0.cutoffs.ordering', '14:00')
         ->assertJsonPath('regions.0.extended.ordering', true)
         ->assertJsonPath('regions.1.cutoffs.ordering', '13:30');
+});
+
+it('extends the validation cutoff of one region, cleared when the day cutoff passes it (RG-V08, I-71)', function () {
+    ($this->extend)($this->centre, ['kind' => 'VALIDATION', 'until' => '16:30'])->assertOk();
+
+    $regionDay = ($this->regionDay)($this->centre);
+    expect(BusinessClock::toLocal($regionDay->validation_cutoff_override_at)->format('H:i'))->toBe('16:30')
+        ->and(BusinessClock::toLocal($regionDay->effectiveCutoff(CutoffKind::Validation))->format('H:i'))->toBe('16:30')
+        ->and($regionDay->isExtended(CutoffKind::Validation))->toBeTrue()
+        ->and(($this->regionDay)($this->est)->validation_cutoff_override_at)->toBeNull()
+        ->and(AuditLog::query()->where('event', 'cutoff.extended')->sole()->properties['kind'])->toBe('VALIDATION');
+    Event::assertDispatched(CutoffExtended::class, fn (CutoffExtended $event) => $event->kind === CutoffKind::Validation && $event->regionDayId === $regionDay->id);
+
+    // Une clôture avant la prolongation est refusée ; une heure de journée plus tardive l'efface.
+    $response = $this->patchJson('/api/v1/adv/days/2026-10-08', ['cutoffs' => ['closing' => '16:00']])->assertUnprocessable();
+    expect($response->json('errors')['cutoffs.closing'])->toBe(['Une prolongation accordée à une région dépasse cette heure de clôture.']);
+    $this->patchJson('/api/v1/adv/days/2026-10-08', ['cutoffs' => ['validation' => '17:00']])->assertOk();
+    expect(($this->regionDay)($this->centre)->validation_cutoff_override_at)->toBeNull();
 });
 
 it('reads back a region day created at the same time by another request instead of failing', function () {

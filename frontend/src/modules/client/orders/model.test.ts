@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { OrderHistoryEntry } from '../../../shared/api/types'
+import { formatQuantity } from '../../../shared/format'
+import { reasonLabel } from '../../../shared/reasons/labels'
 import { MAX_LINE_QUANTITY } from '../../../shared/ui/QuantityStepper'
 import { hasChanges, planReorder, reorderBlock } from './reorder'
 import { closedOrder, fraise, lbenLine, makeLine, makeOrder, makeProduct, makeToday, orange, orangeLine, pomme, pommeLine } from './testing'
 import { timelineSteps } from './timeline'
-import { formatQuantity, formatTime, historyLabelKey, locationNotice, pageParam, reasonLabel } from './view'
+import { formatTime, historyLabelKey, locationNotice, pageParam } from './view'
 
 const entry = (from: OrderHistoryEntry['from'], to: OrderHistoryEntry['to'], at: string, version = 1): OrderHistoryEntry => ({
   from,

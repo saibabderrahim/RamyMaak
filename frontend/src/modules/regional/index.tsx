@@ -1,9 +1,9 @@
 import { Route, Routes } from 'react-router'
 import '../../shared/i18n/orders'
 import RegionalDistributionPage from '../distribution/RegionalDistributionPage'
-import { RoleHome } from '../home/RoleHome'
 import MyClientPage from './clients/MyClientPage'
 import MyClientsPage from './clients/MyClientsPage'
+import MyDayPage from './home/MyDayPage'
 import RegionalOrderPage from './orders/RegionalOrderPage'
 import RegionalOrdersPage from './orders/RegionalOrdersPage'
 import RegionalQuotasPage from './quotas/RegionalQuotasPage'
@@ -13,7 +13,8 @@ import { NotFound } from '../../shared/layout/NotFound'
 export default function RegionalModule() {
   return (
     <Routes>
-      <Route index element={<RoleHome role="regional" />} />
+      {/* « Ma journée » (EF-REG-01, lot 6) remplace l'accueil du lot 3. */}
+      <Route index element={<MyDayPage />} />
       <Route path="quotas" element={<RegionalQuotasPage />} />
       <Route path="repartition" element={<RegionalDistributionPage />} />
       <Route path="commandes" element={<RegionalOrdersPage />} />

@@ -30,6 +30,13 @@ export function formatDate(day: string | null | undefined): string {
   return dateFormat.format(new Date(`${day.slice(0, 10)}T00:00:00Z`))
 }
 
+const quantityFormat = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 })
+
+/** Quantité en unités de vente « 1 200 », espace insécable comme séparateur de milliers (ENF-13). */
+export function formatQuantity(value: number): string {
+  return quantityFormat.format(value).replace(/[\u202f\u00a0]/g, '\u00a0')
+}
+
 const amountFormat = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 /** Montant en dinars : 2 décimales, espace comme séparateur de milliers (ENF-13). */

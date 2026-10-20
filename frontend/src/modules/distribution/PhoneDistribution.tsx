@@ -1,6 +1,7 @@
 import { type KeyboardEvent, memo, useCallback, useDeferredValue, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { DistributionGrid as Grid, DistributionGridClient, DistributionGridProduct, LimitCell } from '../../shared/api/types'
+import { formatQuantity } from '../../shared/format'
 import { Badge, Input, Select } from '../../shared/ui'
 import {
   belowEngaged,
@@ -11,7 +12,6 @@ import {
   type EditsByClient,
   editableText,
   filterClients,
-  formatQuantity,
   groupByFamily,
   hasDraft,
   type Highlights,

@@ -10,7 +10,9 @@ use Carbon\CarbonImmutable;
 /**
  * Heure limite prolongée pour la région (RG-A05 : « les acteurs concernés
  * sont notifiés »). « Heure limite prolongée — région Centre » /
- * « Répartition jusqu'à 11:15. » ou « Commande jusqu'à 13:30. »
+ * « Répartition jusqu'à 11:15. » ou « Commande jusqu'à 13:30. » ;
+ * validation (I-71) : « Heure limite de validation prolongée — région
+ * Centre » / « Validez jusqu'à 15:30. », un appui ouvre les commandes reçues.
  */
 final class CutoffExtendedNotification extends RegionDayNotification
 {
@@ -30,12 +32,20 @@ final class CutoffExtendedNotification extends RegionDayNotification
 
     public function title(): string
     {
-        return __('notifications.cutoff_extended.title', ['region' => $this->regionName]);
+        $key = $this->kind === CutoffKind::Validation ? 'validation_title' : 'title';
+
+        return __('notifications.cutoff_extended.'.$key, ['region' => $this->regionName]);
     }
 
     public function body(): string
     {
         return __('notifications.cutoff_extended.body.'.$this->kind->value, ['time' => BusinessClock::toLocal($this->until)->format('H:i')]);
+    }
+
+    /** Validation : la liste des commandes reçues ; sinon les quotas du jour. */
+    public function url(): ?string
+    {
+        return $this->kind === CutoffKind::Validation ? '/regional/commandes' : parent::url();
     }
 
     /** Une notification par nouvelle heure : deux prolongations successives se notifient chacune. */

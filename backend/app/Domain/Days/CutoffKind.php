@@ -38,14 +38,29 @@ enum CutoffKind: string
         };
     }
 
-    /** Colonne de prolongation par région (RG-A05), pour les heures qui en admettent. */
+    /**
+     * Colonne de prolongation par région (RG-A05), pour les heures qui en
+     * admettent : répartition, commande et validation (I-71) ; jamais la
+     * clôture, commune à toute la journée.
+     */
     public function overrideColumn(): ?string
     {
         return match ($this) {
             self::Distribution => 'distribution_cutoff_override_at',
             self::Ordering => 'ordering_cutoff_override_at',
-            default => null,
+            self::Validation => 'validation_cutoff_override_at',
+            self::Closing => null,
         };
+    }
+
+    /**
+     * Heures limites prolongeables par région (RG-A05).
+     *
+     * @return list<self>
+     */
+    public static function extendable(): array
+    {
+        return [self::Distribution, self::Ordering, self::Validation];
     }
 
     /**

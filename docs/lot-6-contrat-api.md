@@ -34,6 +34,8 @@ Celles des lots 2 à 5 s'appliquent (contrats précédents, §1, et décisions I
 
 Jamais de verrou de journée après un verrou de commande. Paramètres et motifs sont lus **avant** la transaction (instantané REPEATABLE READ). Chaque écriture est rejouée jusqu'à 3 fois sur interblocage.
 
+Une insertion vérifie ses clés étrangères en posant un verrou partagé sur la ligne parente : une relecture de l'ordre des verrous doit les compter. Ainsi `LimitBook::saveDrafts` verrouille en partagé les clients des cellules, par identifiant croissant, **avant** la journée régionale (une borne insérée pointe vers son client), sinon il s'interbloquerait avec une validation (client, puis journée régionale).
+
 **Validation d'une commande** (§5.8), une transaction : verrous ci-dessus → version conditionnelle (statut Envoyée et version transmise) → pour chaque produit, dans l'ordre croissant, contrôle de la borne puis mise à jour conditionnelle du compteur région (`validated_qty + q <= quantity`) → lignes, totaux, historique, journal → événements **après** le commit. Une ligne validée à 0 ne touche pas le compteur.
 
 **Événements de domaine** (`ShouldDispatchAfterCommit`) :
@@ -71,7 +73,7 @@ Journal `reasons` : création et modification des motifs.
 | `POST /adv/orders/bulk-status` ; `PATCH /adv/orders/{id}/shipping` ; `GET /adv/orders/{id}/pdf` ; `GET /adv/days/{day}/picking-list` | `order.process`, ADV | RG-S05 |
 | `POST /adv/orders/{id}/cancel` | `order.cancel-validated`, ADV | RG-S05 |
 | `GET /adv/days/{day}/orders/export` ; `GET /adv/days/{day}/monitoring` | `dashboard.view`, ADV ou Admin | RG-S05 |
-| `POST /adv/days/{day}/regions/{r}/extend-cutoff` avec `kind: VALIDATION` | `day.extend-cutoff` (existant) | existant |
+| `POST /adv/days/{day}/regions/{r}/extend-cutoff` avec `kind: VALIDATION` | `day.extend-cutoff` (existant) | existant ; les régions de la journée (`GET /adv/days/{day}`, lot 3) portent désormais `cutoffs.validation` et `extended.validation` (I-98) |
 
 Les points d'accès `/regional/orders*` restent refusés (403) à l'ADV et à l'Admin.
 
@@ -139,7 +141,7 @@ Refus de quota ou de borne (toutes les lignes en cause) :
 ### « Ma journée » : `GET /regional/dashboard?day=AAAA-MM-JJ` (aujourd'hui par défaut)
 
 ```json
-{ "data": { "day": "2026-10-08", "opened": true, "status": "OPEN",
+{ "day": "2026-10-08", "opened": true, "status": "OPEN",
   "cutoffs": { "distribution": "10:00", "ordering": "13:00", "validation": "15:00", "closing": "23:00" },
   "validation_blocking": false,
   "regions": [ { "region": { "id": 3, "code": "CENTRE", "name": "Centre" },
@@ -151,16 +153,17 @@ Refus de quota ou de borne (toutes les lignes en cause) :
      "oldest_submitted_at": "…",
      "clients": { "notified": 40, "ordered": 17, "without_order": 23 } } ],
   "clients_without_order": [ { "id": 12, "code": "C0012", "name": "…", "status": "ACTIVE",
-                               "region_id": 3, "phone": "…", "phone2": null } ] } }
+                               "region_id": 3, "phone": "…", "phone2": null } ] }
 ```
 
+- Réponse sans enveloppe `data`, comme les autres ressources uniques de l'API (I-96).
 - Journée non ouverte : `opened: false`, listes vides.
 - **notifiés** : destinataires de N-03 une fois la répartition envoyée (`LimitBook::openingRecipients`), sinon 0 ; **ont commandé** : clients distincts ayant une commande comptée (Envoyée ou Validée et suivantes) ; **sans commande** : notifiés actifs moins ceux qui ont commandé (une commande seulement rejetée, annulée ou expirée ne compte pas).
 - `?region=` hors périmètre → 404. Nombre de requêtes indépendant du nombre de commandes.
 
 ## 4. Motifs (EF-ADM-05)
 
-Types : `REJECTION`, `ADJUSTMENT`, `SHIPPING_GAP`, `CANCELLATION`. Les motifs par défaut sont insérés par la migration (I-82) ; `AUTRE` exige un commentaire dans chaque type.
+Types : `REJECTION`, `ADJUSTMENT`, `SHIPPING_GAP`, `CANCELLATION`. Les motifs par défaut sont insérés par la migration (I-82) ; `AUTRE` exige un commentaire, sauf pour un écart d'expédition, qui n'en garde pas (I-95 : un motif SHIPPING_GAP ne peut pas exiger de commentaire).
 
 - `GET /reason-codes?type=ADJUSTMENT[,REJECTION]` → `{"data": [{"type", "code", "label", "requires_comment", "sort_order"}]}` : motifs actifs, non paginés, par type, puis `sort_order`, puis libellé.
 - `GET /admin/reason-codes?filter[type]=` → mêmes éléments avec `id`, `is_active`, `created_at`, `updated_at`, motifs désactivés compris.
@@ -220,7 +223,7 @@ Le résumé, plus :
 
 - `lines` facultatif, partiel ; `delivery_note_ref` facultatif, nullable, ≤ 50.
 - Quantités modifiables en IN_PREPARATION et PREPARED ; en SHIPPED, seul le bon de livraison change.
-- `0 ≤ shipped_qty ≤ validated_qty` ; motif SHIPPING_GAP obligatoire si et seulement si `shipped_qty < validated_qty`. Le quota n'est jamais touché (RG-A03, Q-16).
+- `0 ≤ shipped_qty ≤ validated_qty` ; motif SHIPPING_GAP obligatoire si et seulement si `shipped_qty < validated_qty`, sans commentaire (I-95). Le quota n'est jamais touché (RG-A03, Q-16).
 - 200 → détail ADV. Erreurs : 403, 404, 422, 409 `INVALID_TRANSITION`, 409 `VERSION_CONFLICT`. Version incrémentée, pas de ligne d'historique (I-79).
 
 ### Annulation exceptionnelle : `POST /adv/orders/{id}/cancel`
@@ -243,7 +246,7 @@ Téléchargements synchrones, en flux, jamais écrits sur le disque, `Cache-Cont
 - **Suivi de la journée** (EF-ADV-03) : `GET /adv/days/{day}/monitoring`
 
 ```json
-{ "data": { "day": "…", "status": "OPEN", "cutoffs": { "distribution": "10:00", "ordering": "13:00", "validation": "15:00", "closing": "23:00" }, "generated_at": "…",
+{ "day": "…", "status": "OPEN", "cutoffs": { "distribution": "10:00", "ordering": "13:00", "validation": "15:00", "closing": "23:00" }, "generated_at": "…",
   "totals": { "orders": { "SUBMITTED": 0, "VALIDATED": 0, "IN_PREPARATION": 0, "PREPARED": 0, "SHIPPED": 0, "REJECTED": 0, "CANCELLED": 0, "EXPIRED": 0 },
               "clients": { "notified": 0, "ordered": 0 } },
   "regions": [ { "region": { "id": 3, "code": "…", "name": "…", "depot": null }, "status": "…", "status_label": "…",
@@ -253,7 +256,7 @@ Téléchargements synchrones, en flux, jamais écrits sur le disque, `Cache-Cont
      "alerts": ["DISTRIBUTION_LATE", "VALIDATION_LATE"] } ],
   "products": [ { "product_id": 42, "sku": "…", "short_name": "…", "family": { "id": 1, "name": "…" },
      "quota": 0, "validated": 0, "pending": 0, "remaining": 0, "sold_out_regions": [3] } ],
-  "cells": { "3": { "42": { "quota": 300, "validated": 290, "pending": 25 } } } } }
+  "cells": { "3": { "42": { "quota": 300, "validated": 290, "pending": 25 } } } }
 ```
 
   - `DISTRIBUTION_LATE` : quotas publiés, répartition non envoyée, heure limite de répartition dépassée. `VALIDATION_LATE` : commandes Envoyées et heure limite de validation dépassée. Épuisé : Q > 0 et R = 0. Alertes visuelles seulement (N-13 au lot 7).
@@ -274,9 +277,11 @@ Temps réel (identifiants seulement) :
 
 | Canal | Événement | Contenu |
 |---|---|---|
-| `region-day.{r}.{day}` | `OrderValidated`, `OrderRejected`, `OrdersProcessed`, `OrderCancelledByAdv` | `{ id, number, status, version, day, client_id }` (un par commande) |
+| `region-day.{r}.{day}` | `OrderValidated`, `OrderRejected`, `OrderCancelledByAdv` | `{ id, number, status, version, day, client_id }` (un par commande) |
+| `region-day.{r}.{day}` | `OrdersProcessed` | `{ day, status, count }` : un seul par journée régionale et par changement de statut en masse (I-97) |
 | `client.{c}` | `OrderStatusChanged` | `{ id, number, status, version, day }` à chaque décision, statut de traitement ou annulation ADV |
-| `adv.{day}` | `OrderValidated`, `OrdersProcessed`, `OrderShippingUpdated`, `OrderCancelledByAdv` | `{ id, status, version, day }` (sans région ni client, I-81) |
+| `adv.{day}` | `OrderValidated`, `OrderShippingUpdated`, `OrderCancelledByAdv` | `{ id, status, version, day }` (sans région ni client, I-81) |
+| `adv.{day}` | `OrdersProcessed` | `{ day, status, count }`, un seul par journée et par changement en masse |
 
 Les écrans qui montrent V se relisent sur ces événements : grille de répartition (régional, ADV, Admin), quotas du jour du régional, matrice de l'ADV, suivi de la journée, « Ma journée », commandes reçues, file ADV.
 
@@ -316,7 +321,19 @@ Les écrans qui montrent V se relisent sur ces événements : grille de réparti
 
 ## 9. Répartition du travail (fichiers possédés)
 
-Complétée à la fin du socle (§9 de ce contrat, mis à jour avant le lancement des volets).
+Le socle (commits du lot 6) fournit migrations, modèles, `Domain/Orders/{OrderDecisions, AdvOrders, ValidationWindow, DecisionRights, OrderTotals, OrderHistory, OrderVersion, OrderLocks}`, `Domain/Quotas/QuotaLedger`, `Domain/Reasons/*`, `Rules/ActiveReasonCode`, événements, routes (contrôleurs provisoires à remplacer, mêmes noms de classes et de méthodes), `OrderPresenter` (motifs avec libellé), types et bundles PWA, pages provisoires et navigation.
+
+| Volet | Contenu | Fichiers |
+|---|---|---|
+| A | Décision du régional, « Ma journée », motifs (API) | contrôleurs `Regional/RegionalOrderDecisionController`, `Regional/RegionalDashboardController`, `ReasonCodeController`, `Admin/ReasonCodeController` ; requêtes et ressources associées ; `RegionalOrderResource`, `RegionalOrderSummaryResource` ; lecture « Ma journée » ; leurs tests |
+| B | File ADV, statuts, expédition, annulation, suivi (API) | `Adv/AdvOrderController` (dont `pdf()` qui délègue au volet C), `Adv/DayMonitoringController` ; requêtes et ressources ADV ; lecture du suivi ; `RegionDayResource` (heure limite de validation) ; leurs tests |
+| C | Documents et exports | `Adv/DayDocumentController`, `Domain/Documents/*` (bon de commande, bon de préparation, export), vues PDF ; leurs tests |
+| D | Notifications, temps réel, réconciliation | écouteurs N-07 et N-09, notification N-09, relais `BroadcastOrderActivity`, événements temps réel, commande `ramymaak:reconcile-quotas` et sa planification ; leurs tests |
+| E | Concurrence MySQL | `tests/Feature/Concurrency/*` (outillage commun extrait) |
+| F | PWA régional | `modules/regional/orders/**`, `modules/regional/home/**`, `modules/regional/quotas/**`, bundles `orders.decision` et `orders.myDay` |
+| G | PWA ADV (back-office) | `modules/backoffice/orders/**`, `modules/backoffice/monitoring/**`, `modules/backoffice/days/**`, listes d'événements des écrans back-office, compteur du menu « Commandes », bundles back-office des commandes, du suivi et des documents |
+| H | Motifs (Admin) et affichage client | `modules/backoffice/reasons/**`, `modules/client/orders/**`, `ClientOrderResource`, bundles des motifs et de « Mes commandes » |
+
 
 ## 10. Décisions proposées
 
@@ -350,3 +367,7 @@ Complétée à la fin du socle (§9 de ce contrat, mis à jour avant le lancemen
 | I-92 | Renvoi d'une décision déjà appliquée (même auteur, version suivante) : 200 avec l'état actuel, sans effet |
 | I-93 | Réconciliation : 7 dernières journées, chaque nuit, rapport seul (journal d'erreur et code de sortie 1) |
 | I-94 | Après un rejet ou une annulation ADV, le client peut renvoyer une commande avant l'heure limite de commande (RG-C01, RG-C04) |
+| I-95 | Écart d'expédition : motif sans commentaire ; un motif SHIPPING_GAP ne peut pas exiger de commentaire |
+| I-96 | « Ma journée » et suivi de la journée : réponses sans enveloppe `data` |
+| I-97 | Changement de statut en masse : un seul événement `OrdersProcessed` par journée régionale et par journée, pour ne pas relire chaque écran cent fois |
+| I-98 | Heure limite de validation prolongeable par région ; la fiche de la journée de l'ADV l'affiche avec les autres |

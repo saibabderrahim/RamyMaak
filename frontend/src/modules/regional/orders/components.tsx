@@ -3,10 +3,9 @@ import { type KeyboardEvent, useEffect, useId, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import type { OrderStatus, RegionalOrderSummary, RegionRef } from '../../../shared/api/types'
-import { formatAmount, formatDate } from '../../../shared/format'
+import { formatAmount, formatDate, formatQuantity } from '../../../shared/format'
 import { useLiveRefresh } from '../../../shared/realtime'
 import { Badge, Select } from '../../../shared/ui'
-import { formatQuantity } from '../quotas/format'
 import { type OrderCounts, ORDER_TABS, type OrderTab, orderPath, submissionTime } from './model'
 
 const STATUS_TONES: Record<OrderStatus, 'warning' | 'success' | 'danger' | 'neutral'> = {

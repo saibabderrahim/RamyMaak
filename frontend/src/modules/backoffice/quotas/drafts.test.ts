@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, NetworkError } from '../../../shared/api/client'
 import type { QuotaCellInput, QuotaMatrix, SaveQuotasResult } from '../../../shared/api/types'
+import { formatQuantity } from '../../../shared/format'
 import { mergeSavedCells } from './api'
 import { type CellChange, DraftQueue } from './drafts'
-import { formatQuantity, groupByFamily, isBlock, parseClipboard, parseQuantity, serverValue } from './matrix'
+import { groupByFamily, isBlock, parseClipboard, parseQuantity, serverValue } from './matrix'
 
 const valid = (productId: number, regionId: number, value: number): CellChange => ({
   productId,

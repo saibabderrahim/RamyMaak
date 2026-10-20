@@ -13,9 +13,10 @@ import {
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { QuotaCell, QuotaMatrix, QuotaMatrixProduct, QuotaMatrixRegion } from '../../../shared/api/types'
+import { formatQuantity } from '../../../shared/format'
 import { Badge } from '../../../shared/ui'
 import type { CellChange, LocalEdit } from './drafts'
-import { formatQuantity, groupByFamily, isBlock, parseClipboard, parseQuantity, serverValue } from './matrix'
+import { groupByFamily, isBlock, parseClipboard, parseQuantity, serverValue } from './matrix'
 import { RegionStatusBadge } from './components'
 
 /**

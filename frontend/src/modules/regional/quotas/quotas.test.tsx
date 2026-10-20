@@ -2,10 +2,10 @@ import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CurrentUser, NotificationsPage, RegionalQuotaRegion, RegionalQuotas } from '../../../shared/api/types'
-import { businessToday } from '../../../shared/format'
+import { businessToday, formatQuantity } from '../../../shared/format'
 import { disconnectRealtime, NOTIFICATION_EVENT } from '../../../shared/realtime'
 import { json, makeUser, mockApi, problem, renderApp } from '../../../test/utils'
-import { formatQuantity, groupByFamily, isDayKey, nextDay, weekdayOf } from './format'
+import { groupByFamily, isDayKey, nextDay, weekdayOf } from './format'
 
 // Temps réel simulé (même principe que shared/realtime/realtime.test.tsx).
 const fake = vi.hoisted(() => ({

@@ -3,6 +3,9 @@
 namespace App\Http\Resources\Orders;
 
 use App\Domain\Orders\OrderActor;
+use App\Domain\Orders\OrderStatus;
+use App\Domain\Reasons\ReasonCodes;
+use App\Domain\Reasons\ReasonType;
 use App\Domain\Referentials\ProductPhotos;
 use App\Models\Order;
 use App\Models\OrderLine;
@@ -44,13 +47,17 @@ final class OrderPresenter
 
     /**
      * Lignes : prix HT et TVA figés, montant HT = prix × quantité (validée
-     * dès la décision, sinon demandée), photo principale du produit.
+     * dès la décision, sinon demandée), photo principale du produit, motifs
+     * avec leur libellé (lot 6). `$shipping` faux : quantités expédiées et
+     * écarts masqués (vue du client avant l'expédition, I-79).
      *
      * @return list<array<string, mixed>>
      */
-    public static function lines(Order $order): array
+    public static function lines(Order $order, bool $shipping = true): array
     {
-        return $order->lines->map(function (OrderLine $line): array {
+        $reasons = app(ReasonCodes::class);
+
+        return $order->lines->map(function (OrderLine $line) use ($reasons, $shipping): array {
             $product = $line->product;
             $quantity = $line->validated_qty ?? $line->requested_qty;
 
@@ -63,13 +70,33 @@ final class OrderPresenter
                 'photo' => self::photo($product),
                 'requested_qty' => $line->requested_qty,
                 'validated_qty' => $line->validated_qty,
-                'shipped_qty' => $line->shipped_qty,
+                'shipped_qty' => $shipping ? $line->shipped_qty : null,
                 'unit_price_ht' => Money::amount(Money::cents($line->unit_price_ht)),
                 'vat_rate' => (float) $line->vat_rate,
                 'amount_ht' => Money::amount(Money::cents($line->unit_price_ht) * $quantity),
                 'adjustment_reason_code' => $line->adjustment_reason_code,
+                'adjustment_reason' => $reasons->ref(ReasonType::Adjustment, $line->adjustment_reason_code),
+                'adjustment_comment' => $line->adjustment_comment,
+                'shipping_gap_reason' => $shipping ? $reasons->ref(ReasonType::ShippingGap, $line->shipping_gap_reason_code) : null,
             ];
         })->values()->all();
+    }
+
+    /**
+     * Motif de la décision avec son libellé : rejet du régional ou
+     * annulation exceptionnelle de l'ADV (I-75) ; null sinon.
+     *
+     * @return array{code: string, label: string}|null
+     */
+    public static function decisionReason(Order $order): ?array
+    {
+        $type = match ($order->status) {
+            OrderStatus::Rejected => ReasonType::Rejection,
+            OrderStatus::Cancelled => ReasonType::Cancellation,
+            default => null,
+        };
+
+        return $type === null ? null : app(ReasonCodes::class)->ref($type, $order->decision_reason_code);
     }
 
     /**

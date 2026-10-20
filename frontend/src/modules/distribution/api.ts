@@ -1,6 +1,6 @@
 import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError, buildUrl, csrfHeaders, NetworkError } from '../../shared/api/client'
-import { FALLBACK_REFRESH_MS } from '../../shared/realtime'
+import { FALLBACK_REFRESH_MS, REGION_DAY_DECISION_EVENTS } from '../../shared/realtime'
 import type {
   CopyMode,
   CopyPreviousResult,
@@ -24,7 +24,8 @@ export const backOfficeGridKey = (day: string, regionId: number) => ['distributi
 /**
  * Événements du canal `region-day.{regionId}.{day}` qui imposent de relire la
  * grille (§9.6) ; ceux des commandes tiennent S à jour en direct (contrat du
- * lot 5, §5).
+ * lot 5, §5), les décisions et l'annulation ADV tiennent S et V à jour
+ * (contrat du lot 6, §7). Toujours un sur-ensemble de ORDER_EVENTS.
  */
 export const GRID_EVENTS = [
   'DistributionPublished',
@@ -34,6 +35,7 @@ export const GRID_EVENTS = [
   'OrderUpdated',
   'OrderCancelled',
   'OrdersExpired',
+  ...REGION_DAY_DECISION_EVENTS,
 ] as const
 
 /**

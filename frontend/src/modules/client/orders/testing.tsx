@@ -56,6 +56,8 @@ export function makeLine(overrides: Partial<OrderLine> & Pick<OrderLine, 'produc
     vat_rate: 19,
     amount_ht: 900 * (overrides.validated_qty ?? requested),
     adjustment_reason_code: null,
+    adjustment_reason: null,
+    adjustment_comment: null,
     ...overrides,
   }
 }
@@ -100,6 +102,7 @@ export function makeOrder(overrides: Partial<Order> = {}): Order {
     total_vat: 11221.95,
     decided_at: null,
     decision_reason_code: null,
+    decision_reason: null,
     decision_comment: null,
     modifiable_until: '2026-10-08T12:00:00+00:00',
     lines: [orangeLine, pommeLine, lbenLine],

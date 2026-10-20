@@ -13,9 +13,9 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 /**
- * Prolongation de l'heure limite de répartition ou de commande d'une région
- * (RG-A05) : `kind` (DISTRIBUTION ou ORDERING) et `until` (« HH:MM », fuseau
- * métier), une heure à venir. DayCalendar::extendCutoff vérifie qu'elle suit
+ * Prolongation de l'heure limite de répartition, de commande ou de validation
+ * d'une région (RG-A05, I-71) : `kind` (DISTRIBUTION, ORDERING ou VALIDATION)
+ * et `until` (« HH:MM », fuseau métier), une heure à venir. DayCalendar::extendCutoff vérifie qu'elle suit
  * l'heure limite actuelle et ne dépasse pas la clôture.
  */
 class ExtendCutoffRequest extends FormRequest
@@ -33,7 +33,7 @@ class ExtendCutoffRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'kind' => ['required', 'string', Rule::in([CutoffKind::Distribution->value, CutoffKind::Ordering->value])],
+            'kind' => ['required', 'string', Rule::in(array_map(fn (CutoffKind $kind) => $kind->value, CutoffKind::extendable()))],
             'until' => ['required', 'date_format:H:i'],
         ];
     }

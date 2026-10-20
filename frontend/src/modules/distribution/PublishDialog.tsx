@@ -2,10 +2,10 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ApiError } from '../../shared/api/client'
 import type { DistributionResult, LimitViolation, NoLimitPolicy, PublicationPreview } from '../../shared/api/types'
+import { formatQuantity } from '../../shared/format'
 import { Alert, Button, ErrorAlert } from '../../shared/ui'
 import { usePublishDistribution } from './api'
 import { Dialog } from '../../shared/ui/Dialog'
-import { formatQuantity } from './model'
 
 const ignore = () => undefined
 

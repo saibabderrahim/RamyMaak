@@ -2,10 +2,10 @@ import { type FormEvent, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ApiError } from '../../../shared/api/client'
 import type { PublicationResult, QuotaMatrixRegion, QuotaViolation } from '../../../shared/api/types'
+import { formatQuantity } from '../../../shared/format'
 import { Alert, Button, ErrorAlert } from '../../../shared/ui'
 import { Dialog } from '../shared/ui'
 import { usePublishQuotas } from './api'
-import { formatQuantity } from './matrix'
 
 type Props = {
   day: string

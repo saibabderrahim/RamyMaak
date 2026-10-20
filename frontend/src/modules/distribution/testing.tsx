@@ -14,9 +14,9 @@ import type {
   SaveLimitsResult,
 } from '../../shared/api/types'
 import { meQueryKey } from '../../shared/auth/session'
+import { formatQuantity } from '../../shared/format'
 import { json, makeUser, mockApi } from '../../test/utils'
 import { draftStorageKey } from './drafts'
-import { formatQuantity } from './model'
 import RegionalDistributionPage from './RegionalDistributionPage'
 import { TestLocation } from './TestLocation'
 

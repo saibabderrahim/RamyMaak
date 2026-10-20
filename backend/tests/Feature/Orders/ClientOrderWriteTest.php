@@ -116,13 +116,13 @@ describe('POST /client/orders', function () {
                     'sales_unit_label' => 'Fardeau 6 × 1 L',
                     'photo' => ['thumb' => "/media/{$photo->id}/conversions/p0042-thumb.webp", 'medium' => "/media/{$photo->id}/conversions/p0042-medium.webp"],
                     'requested_qty' => 40, 'validated_qty' => null, 'shipped_qty' => null,
-                    'unit_price_ht' => 900.0, 'vat_rate' => 19.0, 'amount_ht' => 36000.0, 'adjustment_reason_code' => null,
+                    'unit_price_ht' => 900.0, 'vat_rate' => 19.0, 'amount_ht' => 36000.0, 'adjustment_reason_code' => null, 'adjustment_reason' => null, 'adjustment_comment' => null, 'shipping_gap_reason' => null,
                 ],
                 [
                     'product_id' => $this->pomme->id, 'sku' => 'P0057', 'name' => 'Jus pomme 1 L', 'short_name' => $this->pomme->short_name,
                     'sales_unit_label' => $this->pomme->sales_unit_label, 'photo' => null,
                     'requested_qty' => 3, 'validated_qty' => null, 'shipped_qty' => null,
-                    'unit_price_ht' => 850.5, 'vat_rate' => 19.0, 'amount_ht' => 2551.5, 'adjustment_reason_code' => null,
+                    'unit_price_ht' => 850.5, 'vat_rate' => 19.0, 'amount_ht' => 2551.5, 'adjustment_reason_code' => null, 'adjustment_reason' => null, 'adjustment_comment' => null, 'shipping_gap_reason' => null,
                 ],
             ],
             'history' => [

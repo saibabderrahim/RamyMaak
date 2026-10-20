@@ -18,9 +18,10 @@ use Illuminate\Database\Eloquent\Builder;
 
 /**
  * Heure limite prolongée pour une région (RG-A05) : les régionaux de la
- * région ce jour-là sont prévenus de la nouvelle heure. Prolongation de la
- * commande, répartition envoyée : les comptes des clients actifs de la
- * région le sont aussi (I-59). Tâche de fond (EF-NOT-06), destinataires
+ * région ce jour-là sont prévenus de la nouvelle heure, quelle qu'elle soit
+ * (répartition, commande ou validation, I-71). Prolongation de la commande,
+ * répartition envoyée : les comptes des clients actifs de la région le sont
+ * aussi (I-59) ; la validation ne concerne que les régionaux. Tâche de fond (EF-NOT-06), destinataires
  * clients lus par paquets, rejouable sans double envoi (§9.7).
  */
 final class NotifyCutoffExtended implements ShouldQueue

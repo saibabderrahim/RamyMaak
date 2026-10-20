@@ -2,10 +2,11 @@ import { useEffect, useId, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import type { DayCutoffs, RegionalQuota, RegionalQuotaRegion, RegionDayStatus } from '../../../shared/api/types'
+import { formatQuantity } from '../../../shared/format'
 import { useLiveRefresh } from '../../../shared/realtime'
 import { Badge } from '../../../shared/ui'
 import { regionalQuotasKey } from './api'
-import { distributionPath, formatDayMonth, formatQuantity, formatTime, groupByFamily } from './format'
+import { distributionPath, formatDayMonth, formatTime, groupByFamily } from './format'
 
 // Répartition en cours : pas encore envoyée aux clients, d'où l'ambre.
 const STATUS_TONES: Record<RegionDayStatus, 'neutral' | 'success' | 'warning' | 'brand'> = {

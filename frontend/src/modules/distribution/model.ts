@@ -279,13 +279,6 @@ export function filterClients(clients: readonly DistributionGridClient[], search
   )
 }
 
-const quantityFormat = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 })
-
-/** Quantité affichée « 1 200 » (espace insécable comme séparateur de milliers, ENF-13). */
-export function formatQuantity(value: number): string {
-  return quantityFormat.format(value).replace(/[  ]/g, ' ')
-}
-
 /** Valeur proposée à la modification (F2) : chiffres seuls, vide pour « pas de borne ». */
 export function editableText(value: number | null): string {
   return value === null ? '' : String(value)

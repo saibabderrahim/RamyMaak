@@ -2,6 +2,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { useCallback, useState } from 'react'
 import { api } from '../../../shared/api/client'
 import type { RegionalOrder, RegionalOrdersPage } from '../../../shared/api/types'
+import { REGION_DAY_DECISION_EVENTS } from '../../../shared/realtime'
 import { type Intervals, type OrderTab, type OrderTabKey, refreshInterval } from './model'
 
 /**
@@ -18,8 +19,11 @@ export const regionalOrdersListKey = (day: string, region: number | null, tab: O
 
 export const regionalOrderKey = (id: string) => ['regional', 'order', id] as const
 
-/** Événements du canal `region-day.{regionId}.{day}` qui changent les commandes reçues (§5). */
-export const ORDER_EVENTS = ['OrderSubmitted', 'OrderUpdated', 'OrderCancelled', 'OrdersExpired'] as const
+/**
+ * Événements du canal `region-day.{regionId}.{day}` qui changent les commandes reçues : ceux du client
+ * (contrat du lot 5, §5), puis les décisions et le traitement ADV (contrat du lot 6, §7).
+ */
+export const ORDER_EVENTS = ['OrderSubmitted', 'OrderUpdated', 'OrderCancelled', 'OrdersExpired', ...REGION_DAY_DECISION_EVENTS] as const
 
 /**
  * Événements qui changent le détail d'une commande : la commande elle-même,

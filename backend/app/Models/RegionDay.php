@@ -27,6 +27,7 @@ use Illuminate\Support\Carbon;
  * @property ?int $distribution_published_by
  * @property ?Carbon $distribution_cutoff_override_at
  * @property ?Carbon $ordering_cutoff_override_at
+ * @property ?Carbon $validation_cutoff_override_at
  */
 class RegionDay extends Model
 {
@@ -56,6 +57,7 @@ class RegionDay extends Model
             'distribution_published_by' => 'integer',
             'distribution_cutoff_override_at' => 'datetime',
             'ordering_cutoff_override_at' => 'datetime',
+            'validation_cutoff_override_at' => 'datetime',
         ];
     }
 

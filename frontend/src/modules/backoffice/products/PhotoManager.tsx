@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { ApiError } from '../../../shared/api/client'
 import type { Product } from '../../../shared/api/types'
 import { Alert, Badge, Button, Card, ErrorAlert } from '../../../shared/ui'
-import { ConfirmDialog } from '../shared/ui'
+import { ConfirmDialog } from '../../../shared/ui/ConfirmDialog'
 import { useDeletePhoto, useMakeMainPhoto, useUploadPhoto } from './api'
 
 /** 1 principale + 4 secondaires (EF-PRD-02). */

@@ -1,6 +1,6 @@
 import { act, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { disconnectRealtime } from '../../../shared/realtime'
+import { disconnectRealtime, REGION_DAY_DECISION_EVENTS } from '../../../shared/realtime'
 import { json } from '../../../test/utils'
 import { GRID_EVENTS } from '../../distribution/api'
 import { cellOf, DAY, findGrid, GRID_URL, makeGrid, regional, renderDistribution } from '../../distribution/testing'
@@ -47,6 +47,8 @@ describe('distribution grid — orders in real time', () => {
   it('listens to the order events of the region', () => {
     expect(GRID_EVENTS).toEqual(expect.arrayContaining([...ORDER_EVENTS]))
     expect(GRID_EVENTS).toEqual(expect.arrayContaining(['DistributionPublished', 'LimitDraftsUpdated', 'QuotaPublished']))
+    // Contrat du lot 6, §7 : décisions du régional et traitement ADV (S et V changent).
+    expect(ORDER_EVENTS).toEqual(expect.arrayContaining([...REGION_DAY_DECISION_EVENTS]))
   })
 
   it('rereads the pending quantities (S) when a client submits, changes or cancels an order, or when orders expire', async () => {

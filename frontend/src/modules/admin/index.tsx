@@ -8,11 +8,15 @@ import DayDetailPage from '../backoffice/days/DayDetailPage'
 import DaysPage from '../backoffice/days/DaysPage'
 import ImportDetailPage from '../backoffice/imports/ImportDetailPage'
 import ImportsPage from '../backoffice/imports/ImportsPage'
+import DayMonitoringPage from '../backoffice/monitoring/DayMonitoringPage'
+import OrderPage from '../backoffice/orders/OrderPage'
+import OrdersQueuePage from '../backoffice/orders/OrdersQueuePage'
 import ProductCreatePage from '../backoffice/products/ProductCreatePage'
 import ProductDetailPage from '../backoffice/products/ProductDetailPage'
 import ProductsPage from '../backoffice/products/ProductsPage'
 import QuotaMatrixPage from '../backoffice/quotas/QuotaMatrixPage'
 import RegionDetailPage from '../backoffice/regions/RegionDetailPage'
+import ReasonCodesPage from '../backoffice/reasons/ReasonCodesPage'
 import RegionsPage from '../backoffice/regions/RegionsPage'
 import AuditLogPage from './AuditLogPage'
 import SettingsPage from './SettingsPage'
@@ -48,6 +52,7 @@ export default function AdminModule() {
       <Route path="journees" element={<DaysPage />} />
       <Route path="journees/:day" element={<DayDetailPage />} />
       <Route path="journees/:day/quotas" element={<QuotaMatrixPage />} />
+      <Route path="journees/:day/suivi" element={<DayMonitoringPage />} />
       <Route
         path="journees/:day/repartition/:regionId"
         element={
@@ -56,9 +61,13 @@ export default function AdminModule() {
           </Suspense>
         }
       />
+      {/* Commandes et suivi en lecture (lot 6, I-87) : les actions dépendent des permissions. */}
+      <Route path="commandes" element={<OrdersQueuePage />} />
+      <Route path="commandes/:id" element={<OrderPage />} />
       <Route path="imports" element={<ImportsPage />} />
       <Route path="imports/:id" element={<ImportDetailPage />} />
       <Route path="journal" element={<AuditLogPage />} />
+      <Route path="motifs" element={<ReasonCodesPage />} />
       <Route path="parametres" element={<SettingsPage />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
