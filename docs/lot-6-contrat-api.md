@@ -371,3 +371,34 @@ Le socle (commits du lot 6) fournit migrations, modèles, `Domain/Orders/{OrderD
 | I-96 | « Ma journée » et suivi de la journée : réponses sans enveloppe `data` |
 | I-97 | Changement de statut en masse : un seul événement `OrdersProcessed` par journée régionale et par journée, pour ne pas relire chaque écran cent fois |
 | I-98 | Heure limite de validation prolongeable par région ; la fiche de la journée de l'ADV l'affiche avec les autres |
+
+## 11. Précisions (implémentation de l'API)
+
+Ce que les volets de l'API ont retenu ; la PWA s'y conforme.
+
+**Régional**
+- « Ma journée » et le suivi de la journée sont **sans enveloppe `data`** (I-96) : `api.get<RegionalDashboard>` et `api.get<DayMonitoring>`.
+- Journée non ouverte : `opened: false`, `status` et `cutoffs` à null, listes vides ; `validation_blocking` porte la valeur réelle du paramètre.
+- `clients_without_order[].region_id` est la région du jour (la région effective), pas forcément celle de la fiche du client si un changement est programmé. `ordered` peut dépasser `notified` si la politique « borne obligatoire » a changé depuis l'envoi.
+- `GET /reason-codes` et la liste Admin : groupes par code de type dans l'ordre alphabétique (ADJUSTMENT, CANCELLATION, REJECTION, SHIPPING_GAP), puis `sort_order`, puis libellé, quel que soit l'ordre de `?type=`.
+- Le rejet vérifie dès la forme que `reason_code` est un motif REJECTION actif ; le commentaire exigé par le motif (AUTRE) est contrôlé par le service, après les 409.
+- Rejouer une décision dont le motif a été désactivé entre-temps répond 422 (la forme est contrôlée avant le rejeu) et non 200 : cas limite accepté.
+
+**ADV**
+- Détail, expédition, annulation et bon de commande répondent **404** pour une commande hors du dossier de l'ADV (envoyée, rejetée, expirée, annulée par le client), pour l'ADV comme pour l'Admin.
+- `filter[status]` n'admet que Validée et suivantes, plus Annulée (422 sinon) ; `meta.counts` a exactement 5 clés (VALIDATED, IN_PREPARATION, PREPARED, SHIPPED, CANCELLED).
+- Statuts en masse : un identifiant mal formé ou en double répond 422 sur `orders.N.id` ; un identifiant inconnu ou hors périmètre est refusé `NOT_FOUND` dans le résultat.
+- Filtres région et dépôt hors périmètre → 404. Avec `filter[day]`, le périmètre est celui de ce jour ; sans journée, un ADV restreint voit les régions de ses affectations non révoquées, quelle que soit la date, et chaque commande reste jugée à sa journée.
+- Suivi : alertes seulement sur une journée ouverte et une région non clôturée, seuil atteint (`>=`) ; `VALIDATION_LATE` ignore le caractère bloquant ; `cells` contient une clé par région visible (objet vide sans cellule) et une cellule n'existe que si quota > 0 ou en attente > 0 ; `last_validated_at` ignore les rejets.
+- Bon de préparation et export : clés de requête `format`, `group`, `status`, `region` (bon) et `format`, `filter[status]`, `filter[region]` (export) ; le nom du fichier est dans `Content-Disposition` ; une erreur 4xx arrive en JSON (Problem Details), jamais comme un fichier. Une journée inconnue répond 404 avant les contrôles de droits.
+- La colonne « Dépôt » est celle d'aujourd'hui de la région, pas figée sur la commande.
+- Vitesse de l'export Excel : environ 3 600 lignes par seconde (une journée de 45 000 lignes ≈ 12 s) ; la file d'attente reste le repli si les tests de charge du lot 8 le demandent.
+
+**Temps réel**
+- `OrderRejected` n'est pas relayé sur `adv.{day}`.
+- Sur `adv.{day}`, `OrderValidated`, `OrderCancelledByAdv` et `OrderShippingUpdated` portent `{ id, status, version, day }` sans numéro ; `OrdersProcessed` porte `{ day, status, count }`, un seul par journée. Le statut de `OrderShippingUpdated` est lu au moment du relais.
+- `OrderStatusChanged` sur `client.{c}` porte le numéro de la commande.
+
+**Réconciliation** : période par défaut = les 7 dernières journées ouvertes jusqu'à aujourd'hui (heure d'Alger) ; les dépassements I-1 et I-2 sont des avertissements (`Log::warning`) sans effet sur le code de sortie ; options invalides → code 2 ; planification chaque nuit à 02:10 avec `withoutOverlapping(30)`.
+
+**Motifs** : `SHIPPING_GAP` + `AUTRE` n'exige pas de commentaire (I-95).
