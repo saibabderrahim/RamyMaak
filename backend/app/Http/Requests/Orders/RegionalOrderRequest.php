@@ -24,11 +24,17 @@ abstract class RegionalOrderRequest extends FormRequest
     {
         /** @var User $user */
         $user = $this->user();
-        if (! $user->hasAppRole(Role::Regional) || ! $user->can(Permission::OrderView->value)) {
+        if (! $user->hasAppRole(Role::Regional) || ! $user->can($this->permission()->value)) {
             return Response::deny();
         }
 
         return $this->authorizeTarget($user);
+    }
+
+    /** Permission exigée en plus du rôle : lecture des commandes par défaut ; décisions et « Ma journée » la remplacent (lot 6). */
+    protected function permission(): Permission
+    {
+        return Permission::OrderView;
     }
 
     /** Région ou commande désignée : 404 hors périmètre, après le contrôle des droits. */

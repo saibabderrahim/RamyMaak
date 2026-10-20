@@ -70,6 +70,10 @@ final class DecisionRights
     public function evaluate(User $user, Order $order, ?RegionDay $regionDay = null, ?CarbonInterface $now = null): DecisionState
     {
         $order->loadMissing(['businessDay', 'client:id,status']);
+        // Journée chargée en partie (OrderPresenter::RELATIONS : id et jour) : les heures limites manquent, on la relit.
+        if (! array_key_exists('validation_cutoff_at', $order->businessDay->getAttributes())) {
+            $order->setRelation('businessDay', $order->businessDay()->getResults());
+        }
         $day = $order->businessDay;
         $regionDay ??= $this->regionDayOf($order);
         $validation = $this->window->state($day, $regionDay, now: $now);

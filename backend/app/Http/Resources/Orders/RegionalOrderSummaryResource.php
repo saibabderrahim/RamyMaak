@@ -11,16 +11,17 @@ use Illuminate\Support\Arr;
 
 /**
  * Commande reçue, dans la liste du régional (`RegionalOrderSummary`,
- * contrat du lot 5, §4) : OrderPresenter::summary sans le TTC, date de
- * dernière écriture, client et région (figée à l'envoi). Aucun droit
- * d'action au lot 5. À charger : RELATIONS, `businessDay` et `lines_count`.
+ * contrats des lots 5 et 6, §4 et §3) : OrderPresenter::summary sans le
+ * TTC, date de dernière écriture, client et région (figée à l'envoi), date
+ * et auteur de la décision (lot 6). Les droits de décision ne sont donnés
+ * que par le détail. À charger : RELATIONS, `businessDay` et `lines_count`.
  *
  * @mixin Order
  */
 class RegionalOrderSummaryResource extends JsonResource
 {
     /** Relations lues par la ressource (la journée, commune à la liste, est posée par le contrôleur). */
-    public const RELATIONS = ['client:id,code,name,status', 'region:id,code,name'];
+    public const RELATIONS = ['client:id,code,name,status', 'region:id,code,name', 'decidedBy:id,name'];
 
     /**
      * @return array<string, mixed>
@@ -34,12 +35,24 @@ class RegionalOrderSummaryResource extends JsonResource
         return [
             ...Arr::only($summary, ['id', 'number', 'day', 'status', 'status_label', 'version', 'submitted_at']),
             'updated_at' => $order->updated_at?->toIso8601String(),
+            'decided_at' => $order->decided_at?->toIso8601String(),
+            'decided_by' => self::decider($order),
             'client' => self::client($order->client),
             'region' => self::region($order->region),
             'lines_count' => $summary['lines_count'],
             'total_ht' => $summary['total_ht'],
             'is_adjusted' => $summary['is_adjusted'],
         ];
+    }
+
+    /**
+     * Auteur de la décision (le régional qui a validé ou rejeté), null avant.
+     *
+     * @return array{id: int, name: string}|null
+     */
+    public static function decider(Order $order): ?array
+    {
+        return $order->decidedBy === null ? null : ['id' => $order->decidedBy->id, 'name' => $order->decidedBy->name];
     }
 
     /**

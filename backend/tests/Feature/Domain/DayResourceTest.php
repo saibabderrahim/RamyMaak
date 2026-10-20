@@ -50,8 +50,8 @@ it('exposes local cutoffs, UTC instants, drafts and extensions per region', func
             'status' => 'QUOTA_DRAFT',
             'quota_version' => 0,
             'pending_drafts' => 1,
-            'cutoffs' => ['distribution' => '11:15', 'ordering' => '13:00'],
-            'extended' => ['distribution' => true, 'ordering' => false],
+            'cutoffs' => ['distribution' => '11:15', 'ordering' => '13:00', 'validation' => '15:00'],
+            'extended' => ['distribution' => true, 'ordering' => false, 'validation' => false],
         ])
         ->and($regions[1]['pending_drafts'])->toBe(0);
 });

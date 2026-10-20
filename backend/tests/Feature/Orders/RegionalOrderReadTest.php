@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Access\Permission;
 use App\Domain\Access\Role;
 use App\Domain\Limits\LimitBook;
 use App\Domain\Orders\ClientOrders;
@@ -22,6 +23,7 @@ use App\Models\OrderLine;
 use App\Models\OrderStatusHistory;
 use App\Models\Product;
 use App\Models\ProductPrice;
+use App\Models\ReasonCode;
 use App\Models\Region;
 use App\Models\RegionAssignment;
 use App\Models\RegionQuota;
@@ -31,6 +33,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
+use Spatie\Permission\Models\Role as SpatieRole;
 
 // Commandes reçues : GET /regional/orders et GET /regional/orders/{id}
 // (EF-REG-04 ; contrat du lot 5, §4) — commandes de la journée dans les
@@ -142,6 +145,8 @@ beforeEach(function () {
             'id' => $order->public_id, 'number' => $order->number, 'day' => $order->businessDay->dayKey(),
             'status' => $order->status->value, 'status_label' => $order->status->label(), 'version' => $order->version,
             'submitted_at' => $order->submitted_at->toIso8601String(), 'updated_at' => $order->updated_at->toIso8601String(),
+            'decided_at' => $order->decided_at?->toIso8601String(),
+            'decided_by' => $order->decidedBy === null ? null : ['id' => $order->decidedBy->id, 'name' => $order->decidedBy->name],
             'client' => ['id' => $order->client->id, 'code' => $order->client->code, 'name' => $order->client->name, 'status' => $order->client->status->value],
             'region' => ['id' => $order->region->id, 'code' => $order->region->code, 'name' => $order->region->name],
             'lines_count' => $order->lines()->count(),
@@ -173,6 +178,8 @@ describe('GET /regional/orders', function () {
             'version' => 2,
             'submitted_at' => '2026-10-08T07:50:00+00:00',
             'updated_at' => '2026-10-08T08:10:00+00:00',
+            'decided_at' => null,
+            'decided_by' => null,
             'client' => ['id' => $this->a->id, 'code' => 'C0012', 'name' => 'Superette El Baraka', 'status' => 'ACTIVE'],
             'region' => ['id' => $this->centre->id, 'code' => 'CENTRE', 'name' => 'Centre'],
             'lines_count' => 2,
@@ -289,8 +296,15 @@ describe('GET /regional/orders/{id}', function () {
             'comment' => 'Livraison avant 10 h',
             'total_vat' => 8018.19,
             'decided_at' => null,
+            'decided_by' => null,
+            'decision_reason' => null,
             'decision_reason_code' => null,
             'decision_comment' => null,
+            // Heure limite de validation de la journée (15:00 à Alger), non bloquante par défaut (RG-V08).
+            'validation' => ['cutoff' => '15:00', 'cutoff_at' => '2026-10-08T14:00:00+00:00', 'extended' => false, 'blocking' => false, 'passed' => false],
+            'can_validate' => true,
+            'can_reject' => true,
+            'blocked_reason' => null,
             'client' => ['id' => $this->a->id, 'code' => 'C0012', 'name' => 'Superette El Baraka', 'status' => 'ACTIVE', 'phone' => '0550123456', 'phone2' => null],
             'region' => ['id' => $this->centre->id, 'code' => 'CENTRE', 'name' => 'Centre'],
             'lines' => [
@@ -299,21 +313,21 @@ describe('GET /regional/orders/{id}', function () {
                     'sales_unit_label' => 'Fardeau 6 × 1 L', 'photo' => null, 'requested_qty' => 45, 'validated_qty' => null, 'shipped_qty' => null,
                     'unit_price_ht' => 900.0, 'vat_rate' => 19.0, 'amount_ht' => 40500.0, 'adjustment_reason_code' => null, 'adjustment_reason' => null, 'adjustment_comment' => null, 'shipping_gap_reason' => null,
                     // Borne publiée (le brouillon à 60 est ignoré), V(c,p) de la commande validée, Q, V(r,p) et R.
-                    'context' => ['limit' => 50, 'client_validated' => 15, 'region_quota' => 500, 'region_validated' => 15, 'region_remaining' => 485],
+                    // Validable : min(45 demandés, R = 485, B − V(c,p) = 35) (« Ajuster au maximum possible »).
+                    'context' => ['limit' => 50, 'client_validated' => 15, 'region_quota' => 500, 'region_validated' => 15, 'region_remaining' => 485, 'max_validatable' => 35],
                 ],
                 [
                     'product_id' => $this->pomme->id, 'sku' => 'P0057', 'name' => 'Jus pomme 1 L', 'short_name' => 'Pomme 1 L',
                     'sales_unit_label' => 'Fardeau 6 × 1 L', 'photo' => null, 'requested_qty' => 2, 'validated_qty' => null, 'shipped_qty' => null,
                     'unit_price_ht' => 850.5, 'vat_rate' => 19.0, 'amount_ht' => 1701.0, 'adjustment_reason_code' => null, 'adjustment_reason' => null, 'adjustment_comment' => null, 'shipping_gap_reason' => null,
                     // Pas de borne publiée : le brouillon à 10 n'en est pas une.
-                    'context' => ['limit' => null, 'client_validated' => 0, 'region_quota' => 300, 'region_validated' => 0, 'region_remaining' => 300],
+                    'context' => ['limit' => null, 'client_validated' => 0, 'region_quota' => 300, 'region_validated' => 0, 'region_remaining' => 300, 'max_validatable' => 2],
                 ],
             ],
             'history' => [
                 ['from' => null, 'to' => 'SUBMITTED', 'version' => 1, 'at' => '2026-10-08T07:50:00+00:00', 'actor' => 'CLIENT', 'by_name' => 'Gérant C0012', 'comment' => null],
                 ['from' => 'SUBMITTED', 'to' => 'SUBMITTED', 'version' => 2, 'at' => '2026-10-08T08:10:00+00:00', 'actor' => 'CLIENT', 'by_name' => 'Vendeur C0012', 'comment' => null],
             ],
-            'can_validate' => false,
         ]);
     });
 
@@ -322,16 +336,27 @@ describe('GET /regional/orders/{id}', function () {
             ->assertJsonPath('status', 'VALIDATED')
             ->assertJsonPath('is_adjusted', true)
             ->assertJsonPath('decided_at', '2026-10-08T08:20:00+00:00')
+            ->assertJsonPath('decided_by', ['id' => $this->regional->id, 'name' => 'Karim Régional'])
+            // Le motif de décision n'existe que pour un rejet ou une annulation (I-75).
+            ->assertJsonPath('decision_reason', null)
             ->assertJsonPath('decision_comment', 'Quota limité')
             ->assertJsonPath('lines.0.validated_qty', 15)
             ->assertJsonPath('lines.0.amount_ht', 13500)
             ->assertJsonPath('lines.0.adjustment_reason_code', 'QUOTA_INSUFFISANT')
-            ->assertJsonPath('lines.0.context', ['limit' => 50, 'client_validated' => 15, 'region_quota' => 500, 'region_validated' => 15, 'region_remaining' => 485])
+            ->assertJsonPath('lines.0.adjustment_reason', ['code' => 'QUOTA_INSUFFISANT', 'label' => 'Quota insuffisant'])
+            ->assertJsonPath('lines.0.adjustment_comment', null)
+            // Validable : sa propre quantité validée (15) ne compte pas contre elle-même.
+            ->assertJsonPath('lines.0.context', [
+                'limit' => 50, 'client_validated' => 15, 'region_quota' => 500, 'region_validated' => 15, 'region_remaining' => 485, 'max_validatable' => 20,
+            ])
             ->assertJsonPath('history.1', [
                 'from' => 'SUBMITTED', 'to' => 'VALIDATED', 'version' => 2, 'at' => '2026-10-08T08:20:00+00:00',
                 'actor' => 'REGIONAL', 'by_name' => 'Karim Régional', 'comment' => 'Quota limité',
             ])
-            ->assertJsonPath('can_validate', false);
+            // Plus de décision possible une fois la commande décidée.
+            ->assertJsonPath('can_validate', false)
+            ->assertJsonPath('can_reject', false)
+            ->assertJsonPath('blocked_reason', null);
 
         expect($response->json())->not->toHaveKeys(['can_modify', 'can_cancel', 'modifiable_until']);
     });
@@ -342,7 +367,92 @@ describe('GET /regional/orders/{id}', function () {
         ($this->show)($this->yesterday)->assertOk()
             ->assertJsonPath('day', '2026-10-07')
             ->assertJsonPath('client', ['id' => $this->b->id, 'code' => 'C0047', 'name' => 'Alimentation Nour', 'status' => 'BLOCKED', 'phone' => null, 'phone2' => '0660987654'])
-            ->assertJsonPath('lines.0.context', ['limit' => null, 'client_validated' => 0, 'region_quota' => 500, 'region_validated' => 0, 'region_remaining' => 500]);
+            ->assertJsonPath('lines.0.context', ['limit' => null, 'client_validated' => 0, 'region_quota' => 500, 'region_validated' => 0, 'region_remaining' => 500, 'max_validatable' => 1])
+            // Un client bloqué : rejet possible, validation non (I-70).
+            ->assertJsonPath('can_validate', false)
+            ->assertJsonPath('can_reject', true)
+            ->assertJsonPath('blocked_reason', 'CLIENT_BLOCKED');
+    });
+
+    it('names the author and the date of a decision in the list and the detail, with the label of the reason of a rejection or an ADV cancellation', function () {
+        $this->rejected->forceFill([
+            'decided_at' => CarbonImmutable::parse('2026-10-08 08:45', 'Africa/Algiers')->utc(), 'decided_by' => $this->regional->id,
+            'decision_reason_code' => 'DOUBLON', 'decision_comment' => 'Déjà reçue',
+        ])->save();
+        $this->preparing->forceFill([
+            'status' => OrderStatus::Cancelled, 'decided_at' => CarbonImmutable::parse('2026-10-08 08:30', 'Africa/Algiers')->utc(), 'decided_by' => $this->regional->id,
+            'decision_reason_code' => 'RUPTURE',
+        ])->save();
+
+        ($this->index)('?filter[status]=REJECTED,CANCELLED')->assertOk()
+            ->assertJsonPath('data.0.id', $this->preparing->public_id)
+            ->assertJsonPath('data.0.decided_at', '2026-10-08T07:30:00+00:00')
+            ->assertJsonPath('data.0.decided_by', ['id' => $this->regional->id, 'name' => 'Karim Régional'])
+            ->assertJsonPath('data.1.id', $this->rejected->public_id)
+            ->assertJsonPath('data.1.decided_at', '2026-10-08T07:45:00+00:00')
+            ->assertJsonPath('data.1.decided_by', ['id' => $this->regional->id, 'name' => 'Karim Régional']);
+        ($this->show)($this->rejected)->assertOk()
+            ->assertJsonPath('decided_by', ['id' => $this->regional->id, 'name' => 'Karim Régional'])
+            ->assertJsonPath('decision_reason', ['code' => 'DOUBLON', 'label' => 'Commande en double'])
+            ->assertJsonPath('decision_reason_code', 'DOUBLON')
+            ->assertJsonPath('decision_comment', 'Déjà reçue')
+            ->assertJsonPath('can_validate', false)
+            ->assertJsonPath('can_reject', false);
+        // Annulation exceptionnelle de l'ADV : le motif est de type annulation, la validation reste dans decided_*.
+        ($this->show)($this->preparing)->assertOk()
+            ->assertJsonPath('status', 'CANCELLED')
+            ->assertJsonPath('decision_reason', ['code' => 'RUPTURE', 'label' => 'Rupture de stock']);
+    });
+
+    it('keeps the label of a deactivated reason on a decided order (I-82)', function () {
+        $this->rejected->forceFill(['decided_by' => $this->regional->id, 'decision_reason_code' => 'DOUBLON'])->save();
+        ReasonCode::query()->where('type', 'REJECTION')->where('code', 'DOUBLON')->update(['is_active' => false]);
+        OrderLine::factory()->for($this->rejected)->create(['product_id' => $this->pomme->id, 'adjustment_reason_code' => 'ANCIEN_CODE', 'adjustment_comment' => 'Reste limité']);
+
+        ($this->show)($this->rejected)->assertOk()
+            ->assertJsonPath('decision_reason', ['code' => 'DOUBLON', 'label' => 'Commande en double'])
+            // Code inconnu : le code lui-même fait office de libellé.
+            ->assertJsonPath('lines.0.adjustment_reason', ['code' => 'ANCIEN_CODE', 'label' => 'ANCIEN_CODE'])
+            ->assertJsonPath('lines.0.adjustment_comment', 'Reste limité');
+    });
+
+    it('gives the validation window and the rights of the regional: blocking cutoff, per-region extension, closed day, deputy and permission (RG-V08, I-71)', function () {
+        $cutoff = fn (string $time) => CarbonImmutable::parse("2026-10-08 {$time}", 'Africa/Algiers');
+        $detail = fn () => ($this->show)($this->first)->assertOk();
+
+        // Heure limite bloquante mais pas encore atteinte à 09:30.
+        app(Settings::class)->update(['cutoffs' => ['validation_blocking' => true]], null);
+        $detail()->assertJsonPath('validation', ['cutoff' => '15:00', 'cutoff_at' => '2026-10-08T14:00:00+00:00', 'extended' => false, 'blocking' => true, 'passed' => false])
+            ->assertJsonPath('can_validate', true)->assertJsonPath('blocked_reason', null);
+
+        // Atteinte : la validation est bloquée, pas le rejet.
+        $this->travelTo($cutoff('15:01'));
+        $detail()->assertJsonPath('validation.passed', true)
+            ->assertJsonPath('can_validate', false)->assertJsonPath('can_reject', true)->assertJsonPath('blocked_reason', 'CUTOFF_PASSED');
+
+        // Prolongée par l'ADV pour la région : de nouveau possible.
+        $this->regionDay->forceFill(['validation_cutoff_override_at' => $cutoff('15:30')->utc()])->save();
+        $detail()->assertJsonPath('validation', ['cutoff' => '15:30', 'cutoff_at' => '2026-10-08T14:30:00+00:00', 'extended' => true, 'blocking' => true, 'passed' => false])
+            ->assertJsonPath('can_validate', true)->assertJsonPath('blocked_reason', null);
+
+        // Non bloquante : l'heure dépassée ne bloque plus.
+        $this->travelTo($cutoff('16:00'));
+        app(Settings::class)->update(['cutoffs' => ['validation_blocking' => false]], null);
+        $detail()->assertJsonPath('validation.blocking', false)->assertJsonPath('validation.passed', true)
+            ->assertJsonPath('can_validate', true)->assertJsonPath('blocked_reason', null);
+
+        // Journée clôturée : ni validation ni rejet.
+        $this->regionDay->businessDay->forceFill(['status' => 'CLOSED'])->save();
+        $detail()->assertJsonPath('can_validate', false)->assertJsonPath('can_reject', false)->assertJsonPath('blocked_reason', 'DAY_NOT_OPEN');
+    });
+
+    it('follows the order.validate permission of the regional role for the rights of decision', function () {
+        SpatieRole::findByName(Role::Regional->value)->revokePermissionTo(Permission::OrderValidate->value);
+
+        ($this->show)($this->first)->assertOk()
+            ->assertJsonPath('can_validate', false)
+            ->assertJsonPath('can_reject', false)
+            ->assertJsonPath('blocked_reason', null);
     });
 
     it('reads a bounded number of queries, whatever the number of lines', function () {
@@ -362,7 +472,7 @@ describe('GET /regional/orders/{id}', function () {
 
         expect($queries($many))->toBe($one)
             ->and(($this->show)($many)->json('lines.7.context'))->toBe([
-                'limit' => null, 'client_validated' => 0, 'region_quota' => 0, 'region_validated' => 0, 'region_remaining' => 0,
+                'limit' => null, 'client_validated' => 0, 'region_quota' => 0, 'region_validated' => 0, 'region_remaining' => 0, 'max_validatable' => 0,
             ]);
     });
 });

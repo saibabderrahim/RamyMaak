@@ -10,7 +10,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
  * Une région pour une journée (§6.1) : statut, version des quotas, heures
- * limites applicables, prolongation comprise (RG-A05). `pending_drafts` :
+ * limites applicables (répartition, commande, validation), prolongation
+ * comprise (RG-A05, I-98). `pending_drafts` :
  * cellules en brouillon non publié (attribut `pending_drafts_count`, chargé
  * par DayResource::visibleRegionDays). `distribution_version` : 0 tant que
  * la répartition n'a pas été envoyée aux clients (lot 4).
@@ -26,7 +27,7 @@ class RegionDayResource extends JsonResource
     {
         $cutoffs = [];
         $extended = [];
-        foreach ([CutoffKind::Distribution, CutoffKind::Ordering] as $kind) {
+        foreach ([CutoffKind::Distribution, CutoffKind::Ordering, CutoffKind::Validation] as $kind) {
             $key = strtolower($kind->value);
             $cutoffs[$key] = BusinessClock::toLocal($this->effectiveCutoff($kind))->format('H:i');
             $extended[$key] = $this->isExtended($kind);

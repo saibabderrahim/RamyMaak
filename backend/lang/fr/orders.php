@@ -79,6 +79,38 @@ return [
             'comment' => 'commentaire',
         ],
     ],
+    // Requêtes de décision du régional (lot 6, volet A, contrat §3).
+    'regional_decision' => [
+        'quantity_format' => 'La quantité validée doit être un nombre entier de 0 à :max.',
+        'lines_format' => 'Les lignes sont une liste de 1 à :max produits.',
+        'duplicate_line' => 'Ce produit figure deux fois.',
+        'version_format' => 'La version est un nombre entier d\'au moins 1.',
+    ],
+    // « Ma journée » du régional (lot 6, volet A, contrat §3).
+    'dashboard' => [
+        'attributes' => [
+            'day' => 'journée',
+            'region' => 'région',
+        ],
+    ],
+    // File ADV : paramètres de liste et corps des requêtes (lot 6, contrat §5).
+    'adv_request' => [
+        'status_not_allowed' => 'Statut non admis dans la file : Validée et suivantes, ou Annulée après validation.',
+        'depot_format' => 'Dépôt attendu : un identifiant, ou « none » pour les régions sans dépôt.',
+        'order_id_format' => 'Identifiant de commande invalide.',
+        'duplicate_order' => 'Cette commande figure deux fois.',
+        'attributes' => [
+            'filter' => 'filtre',
+            'filter.status' => 'statut',
+            'filter.day' => 'journée',
+            'filter.region' => 'région',
+            'filter.depot' => 'dépôt',
+            'filter.client' => 'client',
+            'filter.product' => 'produit',
+            'filter.search' => 'recherche',
+            'sort' => 'tri',
+        ],
+    ],
     // Points d'accès du client (contrat du lot 5, §3).
     'client' => [
         'attributes' => [

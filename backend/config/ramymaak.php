@@ -9,6 +9,14 @@ return [
     'business_timezone' => env('BUSINESS_TIMEZONE', 'Africa/Algiers'),
 
     /*
+    | Documents et exports (lot 6) : dossier de travail des fichiers Excel
+    | (celui du système par défaut ; les tests en parallèle en isolent un).
+    */
+    'documents' => [
+        'temp_dir' => env('DOCUMENTS_TEMP_DIR'),
+    ],
+
+    /*
     | Limitation de débit (§11.1).
     */
     'rate_limits' => [

@@ -26,3 +26,11 @@ Schedule::command('ramymaak:apply-product-deactivations')
     ->dailyAt('00:01')
     ->timezone(config('ramymaak.business_timezone'))
     ->withoutOverlapping(30);
+
+// Réconciliation nocturne des quotas validés (§5.8, §9.7, I-93) : rapport seul,
+// journal d'erreur et code de sortie 1 en cas d'écart, jamais de correction.
+// Après la clôture (23:00) et avant la purge du journal d'audit.
+Schedule::command('ramymaak:reconcile-quotas')
+    ->dailyAt('02:10')
+    ->timezone(config('ramymaak.business_timezone'))
+    ->withoutOverlapping(30);

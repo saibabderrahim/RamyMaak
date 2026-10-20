@@ -117,3 +117,13 @@ it('uses the day cutoff when the region day does not exist', function () {
         'cutoff' => '15:00', 'cutoff_at' => '2026-10-09T14:00:00+00:00', 'extended' => false, 'blocking' => false, 'passed' => false,
     ]);
 });
+
+it('rereads a day loaded in part, as OrderPresenter does, instead of failing on missing cutoffs', function () {
+    $order = ($this->submit)($this->a, [[$this->orange, 40]]);
+    $partial = Order::query()->with('businessDay:id,day')->findOrFail($order->id);
+
+    $state = app(DecisionRights::class)->evaluate($this->regional, $partial)->toArray();
+
+    expect($state['validation'])->toMatchArray(['cutoff' => '15:00', 'passed' => false])
+        ->and($state['can_validate'])->toBeTrue();
+});

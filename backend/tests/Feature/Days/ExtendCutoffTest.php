@@ -50,8 +50,8 @@ it('extends the distribution cutoff of one region and returns its region day', f
             'distribution_version' => 0,
             'distribution_published_at' => null,
             'pending_drafts' => 1,
-            'cutoffs' => ['distribution' => '11:15', 'ordering' => '13:00'],
-            'extended' => ['distribution' => true, 'ordering' => false],
+            'cutoffs' => ['distribution' => '11:15', 'ordering' => '13:00', 'validation' => '15:00'],
+            'extended' => ['distribution' => true, 'ordering' => false, 'validation' => false],
         ]);
 
     expect(BusinessClock::toLocal(($this->regionDay)($this->centre)->distribution_cutoff_override_at)->format('H:i'))->toBe('11:15')
@@ -70,8 +70,8 @@ it('extends the distribution cutoff of one region and returns its region day', f
 it('extends the ordering cutoff, again later if needed, and notifies through CutoffExtended', function () {
     ($this->extend)($this->est, ['kind' => 'ORDERING', 'until' => '14:00'])
         ->assertOk()
-        ->assertJsonPath('cutoffs', ['distribution' => '10:00', 'ordering' => '14:00'])
-        ->assertJsonPath('extended', ['distribution' => false, 'ordering' => true]);
+        ->assertJsonPath('cutoffs', ['distribution' => '10:00', 'ordering' => '14:00', 'validation' => '15:00'])
+        ->assertJsonPath('extended', ['distribution' => false, 'ordering' => true, 'validation' => false]);
     ($this->extend)($this->est, ['kind' => 'ORDERING', 'until' => '16:30'])
         ->assertOk()
         ->assertJsonPath('cutoffs.ordering', '16:30');
@@ -195,7 +195,16 @@ it('keeps an extension that stays later than the new day cutoff', function () {
 });
 
 it('extends the validation cutoff of one region, cleared when the day cutoff passes it (RG-V08, I-71)', function () {
-    ($this->extend)($this->centre, ['kind' => 'VALIDATION', 'until' => '16:30'])->assertOk();
+    // La région prolongée et la fiche de la journée de l'ADV l'affichent avec les autres heures (I-98).
+    ($this->extend)($this->centre, ['kind' => 'VALIDATION', 'until' => '16:30'])->assertOk()
+        ->assertJsonPath('cutoffs', ['distribution' => '10:00', 'ordering' => '13:00', 'validation' => '16:30'])
+        ->assertJsonPath('extended', ['distribution' => false, 'ordering' => false, 'validation' => true]);
+    $this->getJson('/api/v1/adv/days/2026-10-08')->assertOk()
+        ->assertJsonPath('cutoffs.validation', '15:00')
+        ->assertJsonPath('regions.0.cutoffs.validation', '16:30')
+        ->assertJsonPath('regions.0.extended.validation', true)
+        ->assertJsonPath('regions.1.cutoffs.validation', '15:00')
+        ->assertJsonPath('regions.1.extended.validation', false);
 
     $regionDay = ($this->regionDay)($this->centre);
     expect(BusinessClock::toLocal($regionDay->validation_cutoff_override_at)->format('H:i'))->toBe('16:30')
