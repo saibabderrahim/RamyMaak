@@ -10,3 +10,14 @@
 
 - Le travail est poussé sur la branche `claude/new-session-lhmuq1` ; `main` est en retard.
 - Procédure : [docs/deploiement.md](docs/deploiement.md), « Livraisons suivantes » ; une note de livraison par lot dans `docs/lot-N-*.md`, un contrat d'API et d'écrans par lot dans `docs/lot-N-contrat-api.md`.
+
+
+## UI Engineering
+
+For any UI implementation, redesign or frontend refactoring:
+
+- Read `DESIGN.md`.
+- Apply the `/erp-ui-design` skill when relevant.
+- Prefer domain-specific layouts over generic dashboard templates.
+- Never claim visual verification without inspecting the rendered page.
+- Preserve existing business logic and functionality.
