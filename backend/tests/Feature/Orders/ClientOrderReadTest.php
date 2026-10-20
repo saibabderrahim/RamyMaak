@@ -2,18 +2,26 @@
 
 use App\Domain\Access\Role;
 use App\Domain\Days\DayCalendar;
+use App\Domain\Orders\AdvOrders;
 use App\Domain\Orders\ClientOrders;
 use App\Domain\Orders\OrderActor;
+use App\Domain\Orders\OrderDecisions;
 use App\Domain\Orders\OrderStatus;
+use App\Domain\Reasons\ReasonCodes;
 use App\Domain\Settings\Settings;
 use App\Events\CutoffExtended;
 use App\Events\DayClosed;
 use App\Events\DistributionPublished;
 use App\Events\LimitDraftsSaved;
 use App\Events\OrderCancelled;
+use App\Events\OrderCancelledByAdv;
+use App\Events\OrderRejected;
 use App\Events\OrdersExpired;
+use App\Events\OrderShippingUpdated;
+use App\Events\OrdersProcessed;
 use App\Events\OrderSubmitted;
 use App\Events\OrderUpdated;
+use App\Events\OrderValidated;
 use App\Events\QuotaDraftsSaved;
 use App\Events\QuotasPublished;
 use App\Models\Client;
@@ -21,6 +29,7 @@ use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\OrderStatusHistory;
 use App\Models\Product;
+use App\Models\ReasonCode;
 use App\Models\Region;
 use App\Models\RegionAssignment;
 use App\Models\User;
@@ -34,12 +43,16 @@ use Illuminate\Support\Str;
 // (EF-CLT-04 ; contrat du lot 5, §3) — commandes du client, tous ses
 // comptes, toutes journées, plus récentes d'abord, filtres et pagination ;
 // détail avec lignes, décision, historique (comptes du personnel non
-// nommés) et droits d'action.
+// nommés) et droits d'action. Lot 6 : motifs avec libellé, ajustement et son
+// commentaire, rejet, annulation de l'ADV, expédition (quantités, écart, bon
+// de livraison visibles une fois la commande expédiée seulement, I-79) ;
+// RG-C09 : jamais Q, R ni V(r,p).
 
 beforeEach(function () {
     Event::fake([
         QuotasPublished::class, QuotaDraftsSaved::class, LimitDraftsSaved::class, DistributionPublished::class, CutoffExtended::class,
         DayClosed::class, OrderSubmitted::class, OrderUpdated::class, OrderCancelled::class, OrdersExpired::class,
+        OrderValidated::class, OrderRejected::class, OrderCancelledByAdv::class, OrdersProcessed::class, OrderShippingUpdated::class,
     ]);
     $this->centre = Region::factory()->create(['code' => 'CENTRE']);
     $this->a = Client::factory()->create(['code' => 'C0012', 'region_id' => $this->centre->id]);
@@ -213,6 +226,7 @@ describe('GET /client/orders/{id}', function () {
             'total_vat' => 2565.0,
             'decided_at' => '2026-10-07T10:00:00+00:00',
             'decision_reason_code' => null,
+            'decision_reason' => null,
             'decision_comment' => 'Quota limité',
             'modifiable_until' => null,
             'lines' => [[
@@ -266,5 +280,223 @@ describe('GET /client/orders/{id}', function () {
         $this->actingAs($this->second)->getJson("/api/v1/client/orders/{$this->submitted->public_id}")->assertOk()
             ->assertJsonPath('submitted_by.name', 'Gérant C0012');
         expectProblem($this->actingAs($this->accountB)->getJson("/api/v1/client/orders/{$this->submitted->public_id}"), 404, 'NOT_FOUND');
+    });
+});
+
+describe('decisions and shipping as the client sees them (lot 6)', function () {
+    beforeEach(function () {
+        $this->adv = userWithRole(Role::Adv);
+        // Décision du régional sur la commande envoyée du jeudi 8 (version courante).
+        $this->validate = fn (Order $order, array $lines): Order => app(OrderDecisions::class)->validate($this->regional, $order, $order->fresh()->version, $lines);
+        $this->validateAll = fn (Order $order): Order => ($this->validate)($order, [
+            ['product_id' => $this->orange->id, 'validated_qty' => 5],
+            ['product_id' => $this->pomme->id, 'validated_qty' => 2],
+        ]);
+        $this->process = fn (OrderStatus $to, Order $order) => app(AdvOrders::class)->transition($this->adv, $to, [['id' => $order->public_id, 'version' => $order->fresh()->version]]);
+        // Date d'expédition et bon de livraison : clés absentes avant l'expédition.
+        $this->hasShipping = fn (array $json): bool => array_key_exists('shipped_at', $json) || array_key_exists('delivery_note_ref', $json);
+        // RG-C09 : ni quota, ni reste, ni borne, ni validé de la région, ni nom du personnel.
+        $this->noQuotaLeak = function (array $json): void {
+            $forbidden = ['context', 'limit', 'client_validated', 'region_quota', 'region_validated', 'region_remaining', 'max_validatable', 'quota', 'remaining', 'decided_by'];
+            $walk = function (array $node) use (&$walk, $forbidden): void {
+                foreach ($node as $key => $value) {
+                    expect(in_array($key, $forbidden, true))->toBeFalse("clé interdite au client : {$key}");
+                    if (is_array($value)) {
+                        $walk($value);
+                    }
+                }
+            };
+            $walk($json);
+            expect(json_encode($json))->not->toContain('Karim');
+        };
+    });
+
+    it('shows an adjusted validation: reduced quantity, reason with its label and the comment of the regional (I-72, I-73)', function () {
+        $order = ($this->validate)($this->submitted, [
+            ['product_id' => $this->orange->id, 'validated_qty' => 3, 'reason_code' => 'QUOTA_INSUFFISANT', 'comment' => 'Reste région limité'],
+            ['product_id' => $this->pomme->id, 'validated_qty' => 2],
+        ]);
+
+        $response = ($this->show)($order)->assertOk();
+
+        expect($response->json())->toMatchArray([
+            'status' => 'VALIDATED', 'status_label' => 'Validée', 'version' => 2, 'is_adjusted' => true,
+            // Totaux recalculés sur les quantités validées : (3 + 2) × 900 DA HT, TVA 19 %.
+            'total_ht' => 4500.0, 'total_vat' => 855.0, 'total_ttc' => 5355.0,
+            'decision_reason' => null, 'decision_reason_code' => null, 'can_modify' => false, 'can_cancel' => false,
+        ])
+            // Rien n'est expédié : ni date, ni bon de livraison (I-79).
+            ->and(($this->hasShipping)($response->json()))->toBeFalse()
+            ->and($response->json('lines.0'))->toMatchArray([
+                'sku' => 'P0042', 'requested_qty' => 5, 'validated_qty' => 3, 'shipped_qty' => null, 'amount_ht' => 2700.0,
+                'adjustment_reason_code' => 'QUOTA_INSUFFISANT',
+                'adjustment_reason' => ['code' => 'QUOTA_INSUFFISANT', 'label' => 'Quota insuffisant'],
+                'adjustment_comment' => 'Reste région limité', 'shipping_gap_reason' => null,
+            ])
+            ->and($response->json('lines.1'))->toMatchArray([
+                'sku' => 'P0057', 'requested_qty' => 2, 'validated_qty' => 2, 'amount_ht' => 1800.0,
+                'adjustment_reason_code' => null, 'adjustment_reason' => null, 'adjustment_comment' => null,
+            ])
+            ->and($response->json('history.1'))->toMatchArray(['from' => 'SUBMITTED', 'to' => 'VALIDATED', 'actor' => 'REGIONAL', 'by_name' => null]);
+        ($this->noQuotaLeak)($response->json());
+    });
+
+    it('keeps the label of a reason deactivated since, and the code itself when the reason is unknown', function () {
+        $order = ($this->validate)($this->submitted, [
+            ['product_id' => $this->orange->id, 'validated_qty' => 3, 'reason_code' => 'BORNE_ATTEINTE'],
+            ['product_id' => $this->pomme->id, 'validated_qty' => 2],
+        ]);
+        ReasonCode::query()->where('type', 'ADJUSTMENT')->where('code', 'BORNE_ATTEINTE')->update(['is_active' => false]);
+        app(ReasonCodes::class)->flush();
+
+        ($this->show)($order)->assertOk()
+            ->assertJsonPath('lines.0.adjustment_reason', ['code' => 'BORNE_ATTEINTE', 'label' => 'Borne du client atteinte']);
+
+        // Un code absent du référentiel reste lisible : le code, jamais une erreur.
+        OrderLine::query()->where('order_id', $order->id)->where('product_id', $this->orange->id)->update(['adjustment_reason_code' => 'ANCIEN_CODE']);
+        ($this->show)($order)->assertOk()
+            ->assertJsonPath('lines.0.adjustment_reason_code', 'ANCIEN_CODE')
+            ->assertJsonPath('lines.0.adjustment_reason', ['code' => 'ANCIEN_CODE', 'label' => 'ANCIEN_CODE']);
+    });
+
+    it('shows a rejection with its reason label and comment, nothing validated, and lets the client order again (I-94)', function () {
+        $order = app(OrderDecisions::class)->reject($this->regional, $this->submitted, 1, 'QUOTA_EPUISE', 'Plus de quota cette semaine');
+
+        $response = ($this->show)($order)->assertOk();
+
+        expect($response->json())->toMatchArray([
+            'status' => 'REJECTED', 'status_label' => 'Rejetée', 'version' => 2, 'is_adjusted' => false,
+            'decision_reason_code' => 'QUOTA_EPUISE', 'decision_reason' => ['code' => 'QUOTA_EPUISE', 'label' => 'Quota épuisé'],
+            'decision_comment' => 'Plus de quota cette semaine', 'can_modify' => false, 'can_cancel' => false,
+            // Rejet : totaux inchangés sur les quantités demandées (I-74).
+            'total_ht' => 5 * 900.0 + 2 * 900.0,
+        ])
+            ->and($response->json('decided_at'))->not->toBeNull()
+            ->and($response->json('lines.*.validated_qty'))->toBe([null, null])
+            ->and($response->json('lines.*.shipped_qty'))->toBe([null, null])
+            ->and($response->json('history.1'))->toMatchArray(['to' => 'REJECTED', 'actor' => 'REGIONAL', 'by_name' => null, 'comment' => 'Plus de quota cette semaine']);
+        ($this->noQuotaLeak)($response->json());
+
+        // Le rejet libère la commande du jour : le client peut renvoyer avant l'heure limite (RG-C01, RG-C04).
+        app(Settings::class)->update(['orders' => ['max_per_day' => 1]], null);
+        $this->actingAs($this->account)->getJson('/api/v1/client/today')->assertOk()->assertJsonPath('can_submit', true);
+        $again = ($this->submit)($this->account, [[$this->orange, 2]]);
+        expect($again->status)->toBe(OrderStatus::Submitted);
+    });
+
+    it('shows an exceptional cancellation by the ADV with its reason label, the validated quantities and the ADV in the history (I-75)', function () {
+        $validated = ($this->validateAll)($this->submitted);
+        $order = app(AdvOrders::class)->cancel($this->adv, $validated, $validated->fresh()->version, 'RUPTURE', 'Produit indisponible en dépôt');
+
+        $response = ($this->show)($order)->assertOk();
+
+        expect($response->json())->toMatchArray([
+            'status' => 'CANCELLED', 'status_label' => 'Annulée', 'version' => 3, 'is_adjusted' => false,
+            // Les quantités et les totaux validés sont gardés (I-74) ; le motif de l'annulation remplace celui de la décision.
+            'total_ht' => 6300.0,
+            'decision_reason_code' => 'RUPTURE', 'decision_reason' => ['code' => 'RUPTURE', 'label' => 'Rupture de stock'],
+            'decision_comment' => 'Produit indisponible en dépôt', 'can_modify' => false, 'can_cancel' => false,
+        ])
+            ->and($response->json('decided_at'))->not->toBeNull()
+            ->and($response->json('lines.*.validated_qty'))->toBe([5, 2])
+            ->and($response->json('history.2'))->toMatchArray([
+                'from' => 'VALIDATED', 'to' => 'CANCELLED', 'actor' => 'ADV', 'by_name' => null, 'comment' => 'Produit indisponible en dépôt',
+            ]);
+        ($this->noQuotaLeak)($response->json());
+    });
+
+    it('does not label a cancellation by the client itself', function () {
+        ($this->show)($this->cancelled)->assertOk()
+            ->assertJsonPath('status', 'CANCELLED')
+            ->assertJsonPath('decision_reason', null)
+            ->assertJsonPath('decision_reason_code', null)
+            ->assertJsonPath('history.1.actor', 'CLIENT');
+    });
+
+    it('hides the shipped quantities, the gaps, the delivery note and the date until the order is shipped (I-79)', function () {
+        $order = ($this->validateAll)($this->submitted);
+        ($this->process)(OrderStatus::InPreparation, $order);
+        // L'ADV saisit un écart et le bon de livraison pendant la préparation : le client ne le voit pas encore.
+        app(AdvOrders::class)->updateShipping(
+            $this->adv,
+            $order,
+            $order->fresh()->version,
+            [['product_id' => $this->pomme->id, 'shipped_qty' => 1, 'reason_code' => 'CASSE']],
+            'BL-0042',
+            true,
+        );
+        $hidden = function (string $status) use ($order): void {
+            $response = ($this->show)($order)->assertOk();
+            expect($response->json('status'))->toBe($status)
+                ->and(($this->hasShipping)($response->json()))->toBeFalse()
+                ->and($response->json('lines.*.shipped_qty'))->toBe([null, null])
+                ->and($response->json('lines.*.shipping_gap_reason'))->toBe([null, null])
+                ->and($response->json('lines.*.validated_qty'))->toBe([5, 2]);
+            ($this->noQuotaLeak)($response->json());
+        };
+        $hidden('IN_PREPARATION');
+        ($this->process)(OrderStatus::Prepared, $order);
+        $hidden('PREPARED');
+
+        $this->travel(5)->minutes();
+        ($this->process)(OrderStatus::Shipped, $order);
+        $response = ($this->show)($order)->assertOk();
+
+        expect($response->json())->toMatchArray([
+            'status' => 'SHIPPED', 'status_label' => 'Expédiée', 'version' => 6,
+            'shipped_at' => now()->toIso8601String(), 'delivery_note_ref' => 'BL-0042',
+            'can_modify' => false, 'can_cancel' => false,
+        ])
+            ->and($response->json('lines.*.shipped_qty'))->toBe([5, 1])
+            ->and($response->json('lines.*.validated_qty'))->toBe([5, 2])
+            ->and($response->json('lines.0.shipping_gap_reason'))->toBeNull()
+            ->and($response->json('lines.1.shipping_gap_reason'))->toBe(['code' => 'CASSE', 'label' => 'Casse'])
+            // Chronologie réelle : préparation, préparée, expédiée ; l'ADV n'est pas nommé.
+            ->and($response->json('history.*.to'))->toBe(['SUBMITTED', 'VALIDATED', 'IN_PREPARATION', 'PREPARED', 'SHIPPED'])
+            ->and($response->json('history.*.actor'))->toBe(['CLIENT', 'REGIONAL', 'ADV', 'ADV', 'ADV'])
+            ->and($response->json('history.*.by_name'))->toBe(['Gérant C0012', null, null, null, null]);
+        ($this->noQuotaLeak)($response->json());
+    });
+
+    it('keeps the shipping visible once the order is delivered', function () {
+        $order = Order::factory()->shipped('BL-0099')->status(OrderStatus::Delivered)->withLines([[$this->orange, 10, 10]])->create([
+            'business_day_id' => $this->regionDay->business_day_id, 'region_id' => $this->centre->id, 'client_id' => $this->a->id,
+        ]);
+
+        ($this->show)($order)->assertOk()
+            ->assertJsonPath('status', 'DELIVERED')
+            ->assertJsonPath('delivery_note_ref', 'BL-0099')
+            ->assertJsonPath('shipped_at', $order->shipped_at->toIso8601String())
+            ->assertJsonPath('lines.0.shipped_qty', 10);
+    });
+
+    it('lists decided orders with the same summary, whatever their lines (no shipping, no reason)', function () {
+        $order = ($this->validateAll)($this->submitted);
+        ($this->process)(OrderStatus::InPreparation, $order);
+
+        $row = collect(($this->index)()->assertOk()->json('data'))->firstWhere('id', $order->public_id);
+
+        expect($row)->toBe(($this->summary)($order, false, false))
+            ->and($row['status'])->toBe('IN_PREPARATION');
+    });
+
+    it('reads a shipped order in a bounded number of queries, whatever its lines', function () {
+        $products = Product::factory()->count(8)->create(['vat_rate' => '19.00']);
+        $make = fn (int $count) => Order::factory()->shipped('BL-0001')
+            ->withLines($products->take($count)->map(fn (Product $product) => [$product, 10, 8])->all())
+            ->create(['business_day_id' => $this->regionDay->business_day_id, 'region_id' => $this->centre->id, 'client_id' => $this->a->id]);
+        $few = $make(1);
+        $many = $make(8);
+        $queries = function (Order $order): int {
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            ($this->show)($order)->assertOk();
+            DB::disableQueryLog();
+
+            return count(DB::getQueryLog());
+        };
+        $queries($few); // Réchauffe les caches (permissions, paramètres).
+
+        expect($queries($many))->toBe($queries($few));
     });
 });

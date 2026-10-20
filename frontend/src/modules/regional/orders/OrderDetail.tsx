@@ -1,31 +1,35 @@
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import type { OrderHistoryEntry, RegionalOrder } from '../../../shared/api/types'
-import { formatAmount, formatDate, formatDateTime, formatQuantity } from '../../../shared/format'
+import { formatAmount, formatDate, formatDateTime } from '../../../shared/format'
 import { Badge, Card } from '../../../shared/ui'
-import { ProductImage } from '../../../shared/ui/ProductImage'
 import { CallLink } from '../clients/components'
 import { weekdayOf } from '../quotas/format'
 import { BlockedBadge, OrderStatusBadge } from './components'
+import type { Outcome } from './decision/api'
+import { BlockerAlert } from './decision/banners'
+import { DecisionPanel } from './decision/DecisionPanel'
+import { DecisionSummary } from './decision/DecisionSummary'
+import { LineItem } from './lines'
 import { historyEvent } from './model'
 
 const LINK_CLASSES =
   'inline-flex min-h-11 items-center gap-2 rounded-lg font-medium text-brand-700 hover:underline ' +
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
 
-type Line = RegionalOrder['lines'][number]
-
 /**
- * Détail d'une commande reçue, en lecture seule (EF-REG-04, EF-REG-05 sans
- * décision) : client avec appel en un geste, montants, commentaire, lignes
- * avec leur contexte publié du moment (borne, déjà validé pour ce client,
- * quota et reste de la région, §5.1) et historique, tous les auteurs nommés.
- * Écran pensé pour le téléphone.
+ * Détail d'une commande reçue (EF-REG-04, EF-REG-05) : client avec appel en un
+ * geste, montants, commentaire, décision prise (auteur, motif), lignes avec leur
+ * contexte publié du moment (borne, déjà validé pour ce client, quota et reste de
+ * la région, §5.1) et historique, tous les auteurs nommés. Une commande envoyée
+ * que le régional peut décider (valider, rejeter) montre le panneau de décision à
+ * la place des lignes en lecture seule. Écran pensé pour le téléphone.
  */
-export function OrderDetail({ order }: { order: RegionalOrder }) {
+export function OrderDetail({ order, onOutcome }: { order: RegionalOrder; onOutcome: (outcome: Outcome) => void }) {
   const { t } = useTranslation()
   const submitted = formatDateTime(order.submitted_at)
   const decided = order.decided_at !== null || order.decision_reason_code !== null || order.decision_comment !== null
+  const decidable = order.status === 'SUBMITTED' && (order.can_validate || order.can_reject)
 
   return (
     <>
@@ -56,23 +60,24 @@ export function OrderDetail({ order }: { order: RegionalOrder }) {
         </Card>
       )}
 
-      {decided && (
-        <Card title={t('orders.regional.detail.decision.title')}>
-          <div className="flex flex-col gap-1 text-sm text-slate-800">
-            {order.decided_at && <p>{t('orders.regional.detail.decision.at', { date: formatDateTime(order.decided_at) })}</p>}
-            {order.decision_reason_code && <p>{t('orders.regional.detail.decision.reason', { reason: order.decision_reason_code })}</p>}
-            {order.decision_comment && <p>{t('orders.regional.detail.decision.comment', { comment: order.decision_comment })}</p>}
-          </div>
-        </Card>
+      {decided && <DecisionSummary order={order} />}
+
+      {/* Envoyée mais pas décidable (journée clôturée, droit absent) : lecture seule, et la raison si le serveur la donne. */}
+      {order.status === 'SUBMITTED' && !decidable && order.blocked_reason !== null && (
+        <BlockerAlert blocker={order.blocked_reason} order={order} canReject={false} />
       )}
 
-      <Card title={t('orders.regional.detail.lines.title')}>
-        <ul aria-label={t('orders.regional.detail.lines.title')} className="flex flex-col divide-y divide-slate-100">
-          {order.lines.map((line) => (
-            <LineItem key={line.product_id} line={line} />
-          ))}
-        </ul>
-      </Card>
+      {decidable ? (
+        <DecisionPanel order={order} onOutcome={onOutcome} />
+      ) : (
+        <Card title={t('orders.regional.detail.lines.title')}>
+          <ul aria-label={t('orders.regional.detail.lines.title')} className="flex flex-col divide-y divide-slate-100">
+            {order.lines.map((line) => (
+              <LineItem key={line.product_id} line={line} />
+            ))}
+          </ul>
+        </Card>
+      )}
 
       <Card title={t('orders.regional.detail.history.title')}>
         <ol aria-label={t('orders.regional.detail.history.title')} className="flex flex-col gap-3">
@@ -156,52 +161,6 @@ function TotalsCard({ order }: { order: RegionalOrder }) {
       </dl>
       <p className="mt-3 text-xs text-slate-500">{t('orders.amountsHint')}</p>
     </Card>
-  )
-}
-
-/**
- * Ligne : produit, quantité demandée (puis validée et expédiée dès qu'elles
- * existent), contexte publié — borne B(c,p) ou « Pas de borne », validé
- * V(c,p), quota Q(r,p) et reste R(r,p) de la région —, prix unitaire figé et
- * montant HT.
- */
-function LineItem({ line }: { line: Line }) {
-  const { t } = useTranslation()
-  const { context } = line
-  const quantity = (value: number) => formatQuantity(value)
-  const facts = [
-    line.validated_qty !== null ? t('orders.regional.detail.lines.validated', { value: quantity(line.validated_qty) }) : null,
-    line.shipped_qty !== null ? t('orders.regional.detail.lines.shipped', { value: quantity(line.shipped_qty) }) : null,
-    context.limit === null ? t('orders.regional.detail.lines.noLimit') : t('orders.regional.detail.lines.limit', { value: quantity(context.limit) }),
-    t('orders.regional.detail.lines.clientValidated', { value: quantity(context.client_validated) }),
-    t('orders.regional.detail.lines.regionQuota', { value: quantity(context.region_quota) }),
-    t('orders.regional.detail.lines.regionRemaining', { value: quantity(context.region_remaining) }),
-  ].filter((fact): fact is string => fact !== null)
-
-  return (
-    <li className="flex gap-3 py-3 first:pt-0 last:pb-0">
-      <ProductImage photo={line.photo ? { urls: line.photo } : null} alt={line.name} size={56} className="w-14 shrink-0" />
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4">
-          <p className="font-semibold text-slate-900">{line.name}</p>
-          <p className="text-sm tabular-nums text-slate-900">{t('orders.regional.detail.lines.amount', { amount: formatAmount(line.amount_ht) })}</p>
-        </div>
-        <p className="text-xs text-slate-600">
-          {line.sku} · {line.sales_unit_label} · {t('orders.regional.detail.lines.unitPrice', { amount: formatAmount(line.unit_price_ht) })}
-        </p>
-        <p className="text-base font-semibold text-slate-900">
-          {t('orders.regional.detail.lines.requested', { value: quantity(line.requested_qty) })}
-        </p>
-        <ul
-          aria-label={t('orders.regional.detail.lines.context', { name: line.name })}
-          className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-700"
-        >
-          {facts.map((fact) => (
-            <li key={fact}>{fact}</li>
-          ))}
-        </ul>
-      </div>
-    </li>
   )
 }
 

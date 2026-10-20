@@ -107,7 +107,7 @@ describe('POST /client/orders', function () {
             'comment' => 'Livraison avant 10 h',
             'total_vat' => 7324.79,
             'decided_at' => null,
-            'decision_reason_code' => null,
+            'decision_reason_code' => null, 'decision_reason' => null,
             'decision_comment' => null,
             'modifiable_until' => '2026-10-08T12:00:00+00:00',
             'lines' => [

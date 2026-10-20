@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { purgeSessionStorage } from '../../../shared/storage'
 import { disconnectRealtime, NOTIFICATION_EVENT } from '../../../shared/realtime'
 import { json } from '../../../test/utils'
-import { CLIENT_ID, clientUser, closedOrder, LIST_URL, makeOrder, makePage, makeSummary, ORDER_ID, ORDER_URL, ordersApi, renderOrders, USER_ID } from './testing'
+import { CLIENT_ID, clientUser, closedOrder, LIST_URL, makeLine, makeOrder, makePage, makeSummary, ORDER_ID, ORDER_URL, orangeLine, ordersApi, renderOrders, USER_ID } from './testing'
 
 // Temps réel simulé (même principe que shared/realtime/realtime.test.tsx).
 const fake = vi.hoisted(() => ({ listeners: new Map<string, Set<(payload: unknown) => void>>() }))
@@ -54,6 +54,46 @@ describe('my orders, live (client.{id})', () => {
 
     await waitFor(() => expect(within(overview).getByText('Expirée')).toBeInTheDocument())
     expect(within(overview).queryByRole('button', { name: 'Annuler la commande' })).not.toBeInTheDocument()
+  })
+
+  it('shows the decision, then the shipping, as the order moves on (OrderStatusChanged: validated with adjustment, then shipped)', async () => {
+    let order = makeOrder()
+    ordersApi({ [ORDER_URL]: () => json(order) }, live)
+    renderOrders(`/client/commandes/${ORDER_ID}`, undefined, live)
+    await screen.findByRole('region', { name: 'Commande du jeudi 08/10/2026' })
+    await waitFor(() => expect(fake.listeners.get(`client.${CLIENT_ID}:.OrderStatusChanged`)?.size).toBeGreaterThan(0))
+    expect(screen.queryByRole('region', { name: 'Validée avec ajustement' })).not.toBeInTheDocument()
+
+    order = closedOrder({
+      status: 'VALIDATED',
+      status_label: 'Validée',
+      version: 2,
+      is_adjusted: true,
+      decided_at: '2026-10-08T10:15:00+00:00',
+      lines: [makeLine({ ...orangeLine, validated_qty: 30, adjustment_reason_code: 'QUOTA_INSUFFISANT', adjustment_reason: { code: 'QUOTA_INSUFFISANT', label: 'Quota insuffisant' } })],
+      history: [
+        { from: null, to: 'SUBMITTED', version: 1, at: '2026-10-08T08:40:00+00:00', actor: 'CLIENT', by_name: 'Gérant C0012', comment: null },
+        { from: 'SUBMITTED', to: 'VALIDATED', version: 2, at: '2026-10-08T10:15:00+00:00', actor: 'REGIONAL', by_name: null, comment: null },
+      ],
+    })
+    broadcast('OrderStatusChanged', { id: ORDER_ID, number: order.number, status: 'VALIDATED', version: 2, day: order.day })
+    expect(await screen.findByRole('region', { name: 'Validée avec ajustement' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Expédition' })).not.toBeInTheDocument()
+
+    order = {
+      ...order,
+      status: 'SHIPPED',
+      status_label: 'Expédiée',
+      version: 5,
+      shipped_at: '2026-10-10T07:30:00+00:00',
+      delivery_note_ref: 'BL-0042',
+      lines: [makeLine({ ...orangeLine, validated_qty: 30, shipped_qty: 30, adjustment_reason_code: 'QUOTA_INSUFFISANT', adjustment_reason: { code: 'QUOTA_INSUFFISANT', label: 'Quota insuffisant' } })],
+    }
+    broadcast('OrderStatusChanged', { id: ORDER_ID, number: order.number, status: 'SHIPPED', version: 5, day: order.day })
+
+    const shipping = await screen.findByRole('region', { name: 'Expédition' })
+    expect(shipping).toHaveTextContent('Bon de livraisonBL-0042')
+    expect(screen.getByRole('article', { name: 'Jus orange 1 L' })).toHaveTextContent('Expédiée30')
   })
 
   it('reloads the client data when the ordering cutoff is extended (notification on user.{id}, RG-A05)', async () => {

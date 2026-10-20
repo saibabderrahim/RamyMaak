@@ -1,11 +1,13 @@
-import { QueryClientProvider } from '@tanstack/react-query'
+import { type QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
+import { vi } from 'vitest'
 import '../../../shared/i18n/orders'
 import { createQueryClient } from '../../../shared/api/queryClient'
 import type {
   CurrentUser,
   OrderLine,
+  ReasonOption,
   RegionalOrder,
   RegionalOrderLineContext,
   RegionalOrdersPage as OrdersPage,
@@ -33,11 +35,38 @@ export const ORDERS_URL = 'GET /api/v1/regional/orders'
 export const REGIONS_URL = 'GET /api/v1/regional/quotas'
 export const ORDER_ID = '01JA2Z6K8QW3X9M4T7RBN5CDEF'
 export const orderUrl = (id: string) => `GET /api/v1/regional/orders/${id}`
+export const validateUrl = (id: string) => `POST /api/v1/regional/orders/${id}/validate`
+export const rejectUrl = (id: string) => `POST /api/v1/regional/orders/${id}/reject`
+export const REASONS_URL = 'GET /api/v1/reason-codes'
 
 export const CENTRE: RegionRef = { id: 3, code: 'CENTRE', name: 'Centre' }
 export const EST: RegionRef = { id: 4, code: 'EST', name: 'Est' }
 
 export const regional = (overrides: Partial<CurrentUser> = {}) => makeUser('regional', { id: 7, permissions: ['order.view', 'order.validate', 'quota.view', 'dashboard.view'], ...overrides })
+
+const reason = (type: ReasonOption['type'], code: string, label: string, requiresComment = false, sortOrder = 10): ReasonOption => ({
+  type,
+  code,
+  label,
+  requires_comment: requiresComment,
+  sort_order: sortOrder,
+})
+
+/** Motifs actifs d'ajustement et de rejet (valeurs par défaut de la migration, AUTRE exige un commentaire). */
+export const REASONS: ReasonOption[] = [
+  reason('ADJUSTMENT', 'QUOTA_INSUFFISANT', 'Quota insuffisant', false, 10),
+  reason('ADJUSTMENT', 'BORNE_ATTEINTE', 'Borne atteinte', false, 20),
+  reason('ADJUSTMENT', 'AUTRE', 'Autre', true, 40),
+  reason('REJECTION', 'QUOTA_EPUISE', 'Quota épuisé', false, 10),
+  reason('REJECTION', 'DOUBLON', 'Doublon', false, 30),
+  reason('REJECTION', 'AUTRE', 'Autre', true, 50),
+]
+
+/** `GET /reason-codes?type=A,B` : les motifs actifs des types demandés. */
+export const reasonsRoute = ({ url }: { url: URL }) => {
+  const types = (url.searchParams.get('type') ?? '').split(',')
+  return json({ data: REASONS.filter((entry) => types.includes(entry.type)) })
+}
 
 const regionEntry = (region: RegionRef): RegionalQuotaRegion => ({
   region,
@@ -191,6 +220,9 @@ export function makeOrder(overrides: Partial<RegionalOrder> = {}): RegionalOrder
   }
 }
 
+/** Commande envoyée que le régional peut valider et rejeter. */
+export const decidable = (overrides: Partial<RegionalOrder> = {}) => makeOrder({ can_validate: true, can_reject: true, ...overrides })
+
 type Routes = Parameters<typeof mockApi>[0]
 
 /**
@@ -202,16 +234,19 @@ export function renderOrders({
   path = `/regional/commandes?day=${DAY}`,
   routes = {},
   user = regional(),
-}: { path?: string; routes?: Routes; user?: CurrentUser } = {}) {
+  queryClient = createQueryClient(),
+}: { path?: string; routes?: Routes; user?: CurrentUser; queryClient?: QueryClient } = {}) {
   const mock = mockApi({
     'GET /api/v1/auth/me': () => json(user),
     [REGIONS_URL]: ({ url }) => json(opened(url.searchParams.get('day') ?? DAY)),
     [ORDERS_URL]: () => json(ordersPage([summary(), SECOND])),
     [orderUrl(ORDER_ID)]: () => json(makeOrder()),
+    [REASONS_URL]: reasonsRoute,
     ...routes,
   })
-  const queryClient = createQueryClient()
   queryClient.setQueryData(meQueryKey, user)
+  // jsdom ne défile pas : l'écran d'une commande se replace en haut à l'ouverture.
+  vi.stubGlobal('scrollTo', vi.fn())
   const rendered = render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[path]}>

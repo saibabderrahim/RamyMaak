@@ -9,7 +9,7 @@ import { useClientOrder } from '../api'
 import { ModifyOrderButton } from '../cart/ModifyOrderButton'
 import { useCart } from '../cart/store'
 import { CancelOrderButton, ReorderButton } from './actions'
-import { OrderDecision, OrderHistory, OrderLines, OrderStatusBadge, OrderTotals, StatusTimeline } from './components'
+import { OrderDecision, OrderHistory, OrderLines, OrderShipping, OrderStatusBadge, OrderTotals, StatusTimeline } from './components'
 import { type Feedback, formatTime, locationNotice, weekdayOf } from './view'
 
 const BACK_LINK =
@@ -20,11 +20,14 @@ const CART_LINK =
 
 /**
  * Détail d'une commande (EF-CLT-04) : état et actions (modifier, annuler,
- * Recommander — EF-CLT-05), frise de statut, décision, lignes avec les
- * quantités demandées, validées et expédiées et leurs motifs, commentaire,
- * totaux indicatifs et historique. Tenu à jour en temps réel
+ * Recommander — EF-CLT-05), décision (« Validée avec ajustement », motif du
+ * rejet ou de l'annulation, avec les libellés des motifs), expédition (date
+ * et bon de livraison une fois expédiée), frise de statut, lignes avec les
+ * quantités demandées, validées et expédiées, leurs motifs et commentaires,
+ * commentaire, totaux indicatifs et historique. Tenu à jour en temps réel
  * (useClientLive). Commande inconnue ou d'un autre client : « Commande
- * introuvable ». Contrat : docs/lot-5-contrat-api.md §3 et §6.
+ * introuvable ». Contrats : docs/lot-5-contrat-api.md §3 et §6,
+ * docs/lot-6-contrat-api.md §4 et §8.
  */
 export default function OrderDetailPage() {
   const { id = '' } = useParams()
@@ -88,8 +91,8 @@ function OrderDetail({ id }: { id: string }) {
         notice && <Alert tone="success">{notice}</Alert>
       )}
       <OrderOverview order={order} onFeedback={setFeedback} />
-      {order.is_adjusted && <Alert tone="warning">{t('orders.clientOrders.detail.adjusted')}</Alert>}
       <OrderDecision order={order} />
+      <OrderShipping order={order} />
       <StatusTimeline order={order} />
       <OrderLines lines={order.lines} />
       {order.comment && <OrderComment comment={order.comment} />}

@@ -200,6 +200,29 @@ export function DistributionState({ regionDay }: { regionDay: RegionDay }) {
   )
 }
 
+/**
+ * Lien vers le suivi de la journée (EF-ADV-03) avec dashboard.view (ADV et
+ * Admin), pour une journée ouverte (le suivi répond 404 sinon).
+ */
+export function MonitoringLink({ day, variant = 'button' }: { day: Pick<Day, 'day'>; variant?: 'link' | 'button' }) {
+  const { t } = useTranslation()
+  const { base, can } = useBackoffice()
+  if (!can('dashboard.view')) return null
+  return (
+    <Link
+      to={`${base}/journees/${day.day}/suivi`}
+      aria-label={t('backoffice.monitoring.days.linkLabel', { day: formatDayLong(day.day) })}
+      className={
+        variant === 'button'
+          ? cx(LINK_BUTTON, 'border border-slate-300 bg-white text-slate-800 hover:bg-slate-50')
+          : 'inline-flex min-h-11 items-center font-medium text-brand-700 hover:underline'
+      }
+    >
+      {t('backoffice.monitoring.days.link')}
+    </Link>
+  )
+}
+
 const TEXT_LINK =
   'inline-flex min-h-11 items-center font-medium text-brand-700 hover:underline ' +
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'

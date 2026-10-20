@@ -154,12 +154,36 @@ describe('regional quotas of the day', () => {
     expect(orange).not.toHaveTextContent('Validé')
     expect(apple).toHaveTextContent('Jus pomme 1 L')
     expect(within(apple).getByText('Validé : 120 UV')).toBeInTheDocument()
+    // Reste R = Q − V(r,p), avec le validé seulement (sinon il égale le quota).
+    expect(within(apple).getByTestId('quota-remaining')).toHaveTextContent('Reste : 180 UV')
+    expect(within(orange).queryByTestId('quota-remaining')).not.toBeInTheDocument()
 
     const dairy = within(within(card).getByRole('list', { name: 'Laitiers' })).getAllByRole('listitem')
     expect(dairy).toHaveLength(1)
     expect(dairy[0]).toHaveTextContent('Lben 1 L')
     expect(dairy[0]).toHaveTextContent('P0057 · Caisse 12 × 1 L')
     expect(dairy[0]).toHaveTextContent('800 UV')
+  })
+
+  it('shows the remaining of a product (R = Q − V) as soon as something is validated, « Épuisé » when nothing is left', async () => {
+    const soldOut: RegionalQuotaRegion = {
+      ...centre,
+      quotas: [
+        { ...centre.quotas[0]!, quantity: 500, validated: 499 },
+        { ...centre.quotas[1]!, quantity: 300, validated: 300 },
+        centre.quotas[2]!,
+      ],
+    }
+    quotasApi(makeUser('regional'), (day) => json(opened(day, [soldOut])))
+    renderApp('/regional/quotas')
+
+    const card = await screen.findByRole('region', { name: 'Centre' }, slow)
+    const [orange, apple, lben] = within(card).getAllByRole('listitem') as [HTMLElement, HTMLElement, HTMLElement]
+    expect(within(orange).getByTestId('quota-remaining')).toHaveTextContent('Reste : 1 UV')
+    expect(within(apple).getByTestId('quota-remaining')).toHaveTextContent('Épuisé')
+    expect(within(apple).getByTestId('quota-remaining')).not.toHaveTextContent('Reste')
+    expect(within(apple).getByText('Validé : 300 UV')).toBeInTheDocument()
+    expect(within(lben).queryByTestId('quota-remaining')).not.toBeInTheDocument()
   })
 
   it('shows a region still waiting for its quotas', async () => {
@@ -274,6 +298,36 @@ describe('regional quotas of the day', () => {
 
     expect(await screen.findByText(/Quotas publiés — version 3/)).toBeInTheDocument()
     expect(requestedDays()).toEqual([today, today])
+  })
+
+  it('rereads the remaining of the quotas when an order is validated or cancelled by the ADV, or when orders are processed', async () => {
+    let validated = 120
+    const user = makeUser('regional', { id: 7, realtime: { key: 'app-key' } })
+    const { requestedDays } = quotasApi(user, (day) =>
+      json(opened(day, [{ ...centre, quotas: centre.quotas.map((quota) => (quota.product.id === 43 ? { ...quota, validated } : quota)) }])),
+    )
+    renderApp('/regional/quotas')
+
+    await screen.findByRole('region', { name: 'Centre' }, slow)
+    for (const event of ['OrderValidated', 'OrderCancelledByAdv', 'OrdersProcessed']) {
+      await waitFor(() => expect(fake.listeners.get(`region-day.3.${today}:.${event}`)?.size).toBe(1))
+    }
+    act(() => fake.stateChange?.({ current: 'connected' }))
+    expect(screen.getByTestId('quota-remaining')).toHaveTextContent('Reste : 180 UV')
+
+    // Validation d'une commande (le régional ou son suppléant) : V monte, R baisse.
+    validated = 250
+    broadcast(`region-day.3.${today}:.OrderValidated`, { id: '01JA2Z6K8QW3X9M4T7RBN5CDEF', number: 'RMK-261008-00042', status: 'VALIDATED', version: 3, day: today, client_id: 12 })
+    await waitFor(() => expect(screen.getByTestId('quota-remaining')).toHaveTextContent('Reste : 50 UV'))
+    expect(requestedDays()).toEqual([today, today])
+
+    // Annulation exceptionnelle par l'ADV : V restitué.
+    validated = 200
+    broadcast(`region-day.3.${today}:.OrderCancelledByAdv`, { id: '01JA2Z6K8QW3X9M4T7RBN5CDEF', number: 'RMK-261008-00042', status: 'CANCELLED', version: 4, day: today, client_id: 12 })
+    await waitFor(() => expect(screen.getByTestId('quota-remaining')).toHaveTextContent('Reste : 100 UV'))
+
+    broadcast(`region-day.3.${today}:.OrdersProcessed`, { day: today, status: 'IN_PREPARATION', count: 3 })
+    await waitFor(() => expect(requestedDays()).toHaveLength(4))
   })
 
   it('reloads the quotas when a cutoff extension is notified', async () => {

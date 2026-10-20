@@ -75,18 +75,29 @@ describe('order detail (EF-CLT-04)', () => {
     expect(history()).toEqual(['08/10/2026 09:40Commande envoyéepar Gérant C0012'])
   })
 
-  it('shows the validated and adjusted quantities with their reason, and the shipped ones', async () => {
+  it('shows an adjusted, shipped order: reason labels and comments, shipped quantities, gap reason, delivery note and real timeline', async () => {
     await renderDetail(
       closedOrder({
         status: 'SHIPPED',
         status_label: 'Expédiée',
-        version: 4,
+        version: 6,
         is_adjusted: true,
         decided_at: '2026-10-08T10:15:00+00:00',
+        shipped_at: '2026-10-10T07:30:00+00:00',
+        delivery_note_ref: 'BL-0042',
         total_ht: 49500,
         lines: [
-          makeLine({ ...orangeLine, validated_qty: 30, shipped_qty: 28, amount_ht: 27000, adjustment_reason_code: 'QUOTA_INSUFFISANT' }),
-          makeLine({ ...pommeLine, validated_qty: 25, shipped_qty: 25 }),
+          makeLine({
+            ...orangeLine,
+            validated_qty: 30,
+            shipped_qty: 28,
+            amount_ht: 27000,
+            adjustment_reason_code: 'QUOTA_INSUFFISANT',
+            adjustment_reason: { code: 'QUOTA_INSUFFISANT', label: 'Quota insuffisant' },
+            adjustment_comment: 'Reste région limité',
+            shipping_gap_reason: { code: 'CASSE', label: 'Casse' },
+          }),
+          makeLine({ ...pommeLine, validated_qty: 25, shipped_qty: 25, shipping_gap_reason: null }),
         ],
         history: [
           SENT,
@@ -99,13 +110,24 @@ describe('order detail (EF-CLT-04)', () => {
       }),
     )
 
-    expect(screen.getByText('Des quantités ont été ajustées à la validation : l’écart figure sur chaque ligne concernée.')).toBeInTheDocument()
+    const decision = screen.getByRole('region', { name: 'Validée avec ajustement' })
+    expect(decision).toHaveTextContent('Votre commercial régional a validé votre commande avec des quantités ajustées')
+    expect(decision).toHaveTextContent('1 ligne ajustée sur 2.')
+    expect(decision).toHaveTextContent('Le 08/10/2026 11:15')
     const orange = screen.getByRole('article', { name: 'Jus orange 1 L' })
     expect(orange).toHaveTextContent(plain(`Demandée40Validée30Expédiée28Montant HT${formatAmount(27000)}`))
     expect(orange).toHaveTextContent('Quantité réduite de 40 à 30 · Motif : Quota insuffisant')
+    expect(orange).toHaveTextContent('Commentaire de votre commercial régional : Reste région limité')
+    expect(orange).toHaveTextContent('Expédition partielle : 28 expédiée(s) sur 30 validée(s) · Motif : Casse')
     const pomme = screen.getByRole('article', { name: 'Jus pomme 1 L' })
     expect(pomme).toHaveTextContent('Demandée25Validée25Expédiée25')
     expect(pomme).not.toHaveTextContent('Quantité réduite')
+    expect(pomme).not.toHaveTextContent('Expédition partielle')
+
+    const shipping = screen.getByRole('region', { name: 'Expédition' })
+    expect(shipping).toHaveTextContent('Expédiée le10/10/2026 08:30')
+    expect(shipping).toHaveTextContent('Bon de livraisonBL-0042')
+    expect(shipping).toHaveTextContent('Certaines quantités expédiées sont inférieures aux quantités validées')
 
     expect(timeline()).toEqual({
       labels: ['Envoyée08/10/2026 09:40', 'Validée08/10/2026 11:15', 'En préparation09/10/2026 07:00', 'Préparée09/10/2026 10:00', 'Expédiée10/10/2026 08:30'],
@@ -127,6 +149,74 @@ describe('order detail (EF-CLT-04)', () => {
     expect(screen.queryByText(/Modifiable/)).not.toBeInTheDocument()
   })
 
+  it('shows a validated order with adjustment on its Validée step, before any shipping', async () => {
+    await renderDetail(
+      closedOrder({
+        status: 'IN_PREPARATION',
+        status_label: 'En préparation',
+        version: 4,
+        is_adjusted: true,
+        decided_at: '2026-10-08T10:15:00+00:00',
+        decision_comment: 'Reste région limité',
+        lines: [
+          makeLine({
+            ...orangeLine,
+            validated_qty: 30,
+            amount_ht: 27000,
+            adjustment_reason_code: 'BORNE_ATTEINTE',
+            // Motif désactivé depuis : le serveur garde son libellé.
+            adjustment_reason: { code: 'BORNE_ATTEINTE', label: 'Borne du client atteinte' },
+          }),
+          makeLine({ ...pommeLine, validated_qty: 0, amount_ht: 0, adjustment_reason_code: 'QUOTA_INSUFFISANT', adjustment_reason: null }),
+        ],
+        history: [
+          SENT,
+          { from: 'SUBMITTED', to: 'VALIDATED', version: 2, at: '2026-10-08T10:15:00+00:00', actor: 'REGIONAL', by_name: null, comment: null },
+          { from: 'VALIDATED', to: 'IN_PREPARATION', version: 3, at: '2026-10-09T06:00:00+00:00', actor: 'ADV', by_name: null, comment: null },
+        ],
+      }),
+    )
+
+    const decision = screen.getByRole('region', { name: 'Validée avec ajustement' })
+    expect(decision).toHaveTextContent('2 lignes ajustées sur 2.')
+    expect(decision).toHaveTextContent('Commentaire : Reste région limité')
+    expect(screen.getByRole('article', { name: 'Jus orange 1 L' })).toHaveTextContent('Quantité réduite de 40 à 30 · Motif : Borne du client atteinte')
+    // Sans libellé du serveur (donnée ancienne), le code rendu lisible.
+    expect(screen.getByRole('article', { name: 'Jus pomme 1 L' })).toHaveTextContent('Quantité réduite de 25 à 0 · Motif : Quota insuffisant')
+    // Pas encore expédiée : ni quantité expédiée, ni date, ni bon de livraison.
+    expect(screen.queryByRole('region', { name: 'Expédition' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Expédiée', { selector: 'dt' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/Bon de livraison/)).not.toBeInTheDocument()
+    expect(timeline().current).toEqual(['En préparation09/10/2026 07:00'])
+  })
+
+  it('shows no decision card for an order validated as asked', async () => {
+    await renderDetail(
+      closedOrder({
+        status: 'VALIDATED',
+        lines: [makeLine({ ...orangeLine, validated_qty: 40 })],
+        history: [SENT, { from: 'SUBMITTED', to: 'VALIDATED', version: 2, at: '2026-10-08T10:15:00+00:00', actor: 'REGIONAL', by_name: null, comment: null }],
+      }),
+    )
+    expect(screen.queryByRole('region', { name: 'Validée avec ajustement' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Décision' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Expédition' })).not.toBeInTheDocument()
+  })
+
+  it('shows the shipping of a delivered order without a delivery note', async () => {
+    await renderDetail(
+      closedOrder({
+        status: 'DELIVERED',
+        shipped_at: '2026-10-10T07:30:00+00:00',
+        lines: [makeLine({ ...orangeLine, validated_qty: 40, shipped_qty: 40 })],
+      }),
+    )
+    const shipping = screen.getByRole('region', { name: 'Expédition' })
+    expect(shipping).toHaveTextContent('Expédiée le10/10/2026 08:30')
+    expect(shipping).not.toHaveTextContent('Bon de livraison')
+    expect(shipping).not.toHaveTextContent('Certaines quantités')
+  })
+
   it('shows a validated order on its Validée step', async () => {
     await renderDetail(
       closedOrder({
@@ -145,14 +235,15 @@ describe('order detail (EF-CLT-04)', () => {
         status_label: 'Rejetée',
         version: 2,
         decided_at: '2026-10-08T10:15:00+00:00',
-        decision_reason_code: 'RUPTURE_STOCK',
+        decision_reason_code: 'QUOTA_EPUISE',
+        decision_reason: { code: 'QUOTA_EPUISE', label: 'Quota épuisé' },
         decision_comment: 'Plus de stock cette semaine.',
         history: [SENT, { from: 'SUBMITTED', to: 'REJECTED', version: 2, at: '2026-10-08T10:15:00+00:00', actor: 'REGIONAL', by_name: null, comment: 'Plus de stock cette semaine.' }],
       }),
     )
 
     const decision = screen.getByRole('region', { name: 'Motif du rejet' })
-    expect(decision).toHaveTextContent('Motif : Rupture stock')
+    expect(decision).toHaveTextContent('Motif : Quota épuisé')
     expect(decision).toHaveTextContent('Commentaire : Plus de stock cette semaine.')
     expect(decision).toHaveTextContent('Le 08/10/2026 11:15')
     expect(timeline()).toEqual({
@@ -195,6 +286,43 @@ describe('order detail (EF-CLT-04)', () => {
       states: ['done', 'current'],
     })
     expect(history().at(-1)).toBe('08/10/2026 10:30Commande annuléepar Gérant C0012')
+  })
+
+  it('shows an exceptional cancellation by the ADV: reason label, comment, its own date and the steps reached', async () => {
+    await renderDetail(
+      closedOrder({
+        status: 'CANCELLED',
+        status_label: 'Annulée',
+        version: 4,
+        // `decided_at` garde la validation ; l'annulation est datée par l'historique (I-75).
+        decided_at: '2026-10-08T10:15:00+00:00',
+        decision_reason_code: 'RUPTURE',
+        decision_reason: { code: 'RUPTURE', label: 'Rupture de stock' },
+        decision_comment: 'Produit indisponible en dépôt',
+        history: [
+          SENT,
+          { from: 'SUBMITTED', to: 'VALIDATED', version: 2, at: '2026-10-08T10:15:00+00:00', actor: 'REGIONAL', by_name: null, comment: null },
+          { from: 'VALIDATED', to: 'IN_PREPARATION', version: 3, at: '2026-10-09T06:00:00+00:00', actor: 'ADV', by_name: null, comment: null },
+          { from: 'IN_PREPARATION', to: 'CANCELLED', version: 4, at: '2026-10-09T08:00:00+00:00', actor: 'ADV', by_name: null, comment: 'Produit indisponible en dépôt' },
+        ],
+      }),
+    )
+
+    const decision = screen.getByRole('region', { name: 'Motif de l’annulation' })
+    expect(decision).toHaveTextContent('Commande annulée par l’administration des ventes après sa validation.')
+    expect(decision).toHaveTextContent('Motif : Rupture de stock')
+    expect(decision).toHaveTextContent('Commentaire : Produit indisponible en dépôt')
+    expect(decision).toHaveTextContent('Le 09/10/2026 09:00')
+    expect(timeline()).toEqual({
+      labels: ['Envoyée08/10/2026 09:40', 'Validée08/10/2026 11:15', 'En préparation09/10/2026 07:00', 'Annulée09/10/2026 09:00'],
+      current: ['Annulée09/10/2026 09:00'],
+      states: ['done', 'done', 'done', 'current'],
+    })
+    expect(history().at(-1)).toBe('09/10/2026 09:00Commande annuléepar l’administration des ventesProduit indisponible en dépôt')
+    // Le client peut recommander (la disponibilité du jour reste jugée par le serveur, I-94).
+    expect(within(screen.getByRole('group', { name: 'Actions sur la commande' })).getAllByRole('button').map((button) => button.textContent)).toEqual([
+      'Recommander',
+    ])
   })
 
   it('lets a blocked client cancel, not modify, until the deadline', async () => {

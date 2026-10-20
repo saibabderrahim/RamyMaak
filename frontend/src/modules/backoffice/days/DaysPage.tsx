@@ -9,7 +9,7 @@ import { useBackoffice } from '../shared/access'
 import { addDays } from '../shared/dates'
 import { DataTable, TableHead, Th } from '../shared/ui'
 import { DAY_EVENTS, type DaysList, type DaysRange, daysKey, useDays } from './api'
-import { DayStatusBadge, OpenDayButton, OpenDayConfirm, QuotasLink, RegionPills, StatusLegend } from './components'
+import { DayStatusBadge, MonitoringLink, OpenDayButton, OpenDayConfirm, QuotasLink, RegionPills, StatusLegend } from './components'
 import { datesBetween, formatDayLong, openWindow, spanOf, weekdayOf } from './dates'
 import { type OpenDayFlow, useOpenDayFlow } from './useOpenDayFlow'
 
@@ -158,7 +158,10 @@ function Calendar({ list, flow }: { list: DaysList; flow: OpenDayFlow }) {
               <td className="py-2 pe-4 align-top">{day && <RegionPills regions={day.regions} />}</td>
               <td className="py-1 align-top">
                 {day ? (
-                  <QuotasLink day={day} />
+                  <span className="flex flex-col items-start">
+                    <QuotasLink day={day} />
+                    <MonitoringLink day={day} variant="link" />
+                  </span>
                 ) : (
                   can('day.manage') && openWindow(date, meta.today) === 'open' && <OpenDayButton day={date} workingDay={workingDay} flow={flow} />
                 )}

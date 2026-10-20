@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router'
 import { ApiError } from '../../../shared/api/client'
 import type { DistributionGrid } from '../../../shared/api/types'
 import { formatDate, formatQuantity } from '../../../shared/format'
-import { useLiveRefresh } from '../../../shared/realtime'
+import { REGION_DAY_DECISION_EVENTS, useLiveRefresh } from '../../../shared/realtime'
 import { Alert, Button, Card, ErrorAlert, PageHeader, Spinner } from '../../../shared/ui'
 import { useErrorMessage } from '../../../shared/ui/useErrorMessage'
 import { backOfficeGridKey, useBackOfficeGrid } from '../../distribution/api'
@@ -15,8 +15,9 @@ import { useBackoffice } from '../shared/access'
 
 // Événements de la journée (`adv.{day}`) et de la région (`region-day.{regionId}.{day}`, brouillons du régional).
 const DAY_EVENTS = ['DistributionPublished', 'QuotaPublished', 'DayClosed'] as const
-// S relu en direct sur les événements de commande (contrat du lot 5, §5).
-const REGION_EVENTS = ['LimitDraftsUpdated', 'OrderSubmitted', 'OrderUpdated', 'OrderCancelled', 'OrdersExpired'] as const
+// S relu en direct sur les événements de commande (contrat du lot 5, §5), V sur les décisions (lot 6, §7) :
+// envois, modifications, validations, rejets, traitement ADV et annulations par l'ADV de la région.
+const REGION_EVENTS = ['LimitDraftsUpdated', 'OrderSubmitted', 'OrderUpdated', 'OrderCancelled', 'OrdersExpired', ...REGION_DAY_DECISION_EVENTS] as const
 
 const NO_EDITS: EditsByClient = new Map()
 const noop = () => undefined

@@ -3,30 +3,36 @@ import { useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
-import { EXTENDABLE_CUTOFFS, type Day, type ExtendableCutoff, type RegionDay } from '../../../shared/api/types'
+import type { Day } from '../../../shared/api/types'
 import { applyServerErrors } from '../../../shared/forms'
 import { ErrorAlert, Field, Input } from '../../../shared/ui'
 import { Dialog, DialogActions } from '../shared/ui'
 import { useExtendCutoff } from './api'
+import { CUTOFF_KEYS, type DayRegion, EXTENDABLE_CUTOFFS, type ExtendableCutoff } from './cutoffs'
 import { TIME_PATTERN } from './dates'
 
 type FormValues = { kind: ExtendableCutoff; until: string }
 
 const FIELDS = ['kind', 'until'] as const
 
-const CURRENT_KEYS = { DISTRIBUTION: 'distribution', ORDERING: 'ordering' } as const satisfies Record<ExtendableCutoff, keyof RegionDay['cutoffs']>
+// Libellés des heures limites : répartition et commande (lot 3), validation (lot 6, I-98).
+const KIND_LABELS = {
+  DISTRIBUTION: 'backoffice.days.extend.kinds.DISTRIBUTION',
+  ORDERING: 'backoffice.days.extend.kinds.ORDERING',
+  VALIDATION: 'backoffice.monitoring.days.kinds.VALIDATION',
+} as const satisfies Record<ExtendableCutoff, string>
 
 type Props = {
   day: Day
   /** Région à prolonger ; null : boîte fermée. */
-  regionDay: RegionDay | null
+  regionDay: DayRegion | null
   onClose: () => void
-  onDone: (regionDay: RegionDay, kind: ExtendableCutoff, until: string) => void
+  onDone: (regionDay: DayRegion, kind: ExtendableCutoff, until: string) => void
 }
 
 /**
- * Prolongation de l'heure limite de répartition ou de commande pour une
- * région (RG-A05), avec day.extend-cutoff (ADV et Admin). Le serveur
+ * Prolongation de l'heure limite de répartition, de commande ou de validation
+ * pour une région (RG-A05, I-98), avec day.extend-cutoff (ADV et Admin). Le serveur
  * vérifie que l'heure est à venir, après l'heure actuelle et avant la
  * clôture ; ses refus s'affichent sur le champ.
  */
@@ -43,7 +49,7 @@ export function ExtendCutoffDialog({ day, regionDay, onClose, onDone }: Props) {
   )
 }
 
-function ExtendForm({ day, regionDay, onCancel, onDone }: { day: Day; regionDay: RegionDay; onCancel: () => void; onDone: Props['onDone'] }) {
+function ExtendForm({ day, regionDay, onCancel, onDone }: { day: Day; regionDay: DayRegion; onCancel: () => void; onDone: Props['onDone'] }) {
   const { t } = useTranslation()
   const extend = useExtendCutoff(day.day)
   const schema = useMemo(
@@ -75,7 +81,7 @@ function ExtendForm({ day, regionDay, onCancel, onDone }: { day: Day; regionDay:
 
       <fieldset className="flex flex-col gap-1">
         <legend className="mb-1 text-sm font-medium text-slate-800">{t('backoffice.days.extend.kind')}</legend>
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid gap-2 sm:grid-cols-3">
           {EXTENDABLE_CUTOFFS.map((kind) => (
             <label
               key={kind}
@@ -83,9 +89,9 @@ function ExtendForm({ day, regionDay, onCancel, onDone }: { day: Day; regionDay:
             >
               <input type="radio" value={kind} {...register('kind')} className="size-5 shrink-0 accent-brand-600" />
               <span>
-                <span className="block font-semibold text-slate-900">{t(`backoffice.days.extend.kinds.${kind}`)}</span>
+                <span className="block font-semibold text-slate-900">{t(KIND_LABELS[kind])}</span>
                 <span className="block text-xs text-slate-600">
-                  {t('backoffice.days.extend.current', { time: regionDay.cutoffs[CURRENT_KEYS[kind]] })}
+                  {t('backoffice.days.extend.current', { time: regionDay.cutoffs[CUTOFF_KEYS[kind]] })}
                 </span>
               </span>
             </label>

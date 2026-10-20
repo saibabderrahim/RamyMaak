@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useParams } from 'react-router'
 import { ApiError } from '../../../shared/api/client'
@@ -5,6 +6,8 @@ import { Alert, Button, ErrorAlert, Spinner } from '../../../shared/ui'
 import { useErrorMessage } from '../../../shared/ui/useErrorMessage'
 import { ORDER_DETAIL_EVENTS, regionalOrderKey, useLiveIntervals, useRegionalOrder } from './api'
 import { RegionOrdersLive } from './components'
+import type { Outcome } from './decision/api'
+import { OutcomeBar } from './decision/OutcomeBar'
 import { OrderDetail } from './OrderDetail'
 
 const LINK_CLASSES =
@@ -12,22 +15,31 @@ const LINK_CLASSES =
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
 
 /**
- * Détail d'une commande reçue (EF-REG-04, EF-REG-05 sans décision) :
- * `/regional/commandes/:id`, lien des notifications N-05 et N-06. Lecture
- * seule ; tenu à jour sur le canal de la région de la commande, ce jour-là
- * (§9.6). Commande inconnue ou hors du périmètre à sa date : 404.
- * Le lien de retour reprend la liste d’où l’on vient (journée, onglet,
- * région), sinon la journée de la commande.
- * Contrat : docs/lot-5-contrat-api.md §4 à §6.
+ * Détail d'une commande reçue et décision (EF-REG-04, EF-REG-05) :
+ * `/regional/commandes/:id`, lien des notifications N-05 et N-06. Tenu à jour
+ * sur le canal de la région de la commande, ce jour-là (§9.6). Commande
+ * inconnue ou hors du périmètre à sa date : 404. Le lien de retour reprend la
+ * liste d’où l’on vient (journée, onglet, région), sinon la journée de la
+ * commande ; après une décision, « Commande suivante » reprend cette liste.
+ * Contrat : docs/lot-5-contrat-api.md §4 à §6, docs/lot-6-contrat-api.md §3 et §8.
  */
 export default function RegionalOrderPage() {
+  // Une commande par écran : le compte rendu d'une décision ne passe pas à la commande suivante.
+  const id = useParams().id ?? ''
+  return <OrderScreen key={id} id={id} />
+}
+
+function OrderScreen({ id }: { id: string }) {
   const { t } = useTranslation()
   const errorMessage = useErrorMessage()
-  const id = useParams().id ?? ''
   const location = useLocation()
   const { interval, report } = useLiveIntervals()
   const query = useRegionalOrder(id, interval)
   const order = query.data
+  const [outcome, setOutcome] = useState<Outcome | null>(null)
+
+  // Une commande par écran (« Commande suivante » en ouvre une autre) : toujours lue depuis le haut.
+  useEffect(() => window.scrollTo({ top: 0 }), [])
 
   const state: unknown = location.state
   const listSearch = state !== null && typeof state === 'object' && 'list' in state && typeof state.list === 'string' ? state.list : null
@@ -83,7 +95,8 @@ export default function RegionalOrderPage() {
           </div>
         </Alert>
       )}
-      <OrderDetail order={order} />
+      <OrderDetail order={order} onOutcome={setOutcome} />
+      {outcome && <OutcomeBar outcome={outcome} order={order} listSearch={listSearch} backTo={backTo} />}
     </div>
   )
 }

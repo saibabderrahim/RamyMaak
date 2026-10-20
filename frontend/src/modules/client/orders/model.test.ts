@@ -1,12 +1,25 @@
 import { describe, expect, it } from 'vitest'
 import type { OrderHistoryEntry } from '../../../shared/api/types'
 import { formatQuantity } from '../../../shared/format'
-import { reasonLabel } from '../../../shared/reasons/labels'
+import { reasonLabel, reasonText } from '../../../shared/reasons/labels'
 import { MAX_LINE_QUANTITY } from '../../../shared/ui/QuantityStepper'
 import { hasChanges, planReorder, reorderBlock } from './reorder'
 import { closedOrder, fraise, lbenLine, makeLine, makeOrder, makeProduct, makeToday, orange, orangeLine, pomme, pommeLine } from './testing'
 import { timelineSteps } from './timeline'
-import { formatTime, historyLabelKey, locationNotice, pageParam } from './view'
+import {
+  cancelledByAdv,
+  decisionInstant,
+  decisionKind,
+  formatTime,
+  hasShippingGap,
+  historyLabelKey,
+  isAccepted,
+  isReduced,
+  isShipped,
+  locationNotice,
+  pageParam,
+  reducedCount,
+} from './view'
 
 const entry = (from: OrderHistoryEntry['from'], to: OrderHistoryEntry['to'], at: string, version = 1): OrderHistoryEntry => ({
   from,
@@ -137,5 +150,66 @@ describe('formatting', () => {
     expect(locationNotice({ notice: 'Commande envoyée.' })).toBe('Commande envoyée.')
     expect(locationNotice({ sheet: true })).toBeNull()
     expect(locationNotice(null)).toBeNull()
+  })
+})
+
+describe('decision and shipping display (lot 6)', () => {
+  const rejection = { code: 'QUOTA_EPUISE', label: 'Quota épuisé' }
+
+  it('picks the decision to show: rejection, ADV cancellation, adjusted validation, a commented decision, or nothing', () => {
+    const kind = (overrides: Parameters<typeof closedOrder>[0]) => decisionKind(closedOrder(overrides))
+
+    expect(kind({ status: 'REJECTED', decision_reason: rejection, decision_reason_code: 'QUOTA_EPUISE' })).toBe('REJECTED')
+    expect(kind({ status: 'REJECTED' })).toBeNull()
+    expect(kind({ status: 'CANCELLED', decision_reason: { code: 'RUPTURE', label: 'Rupture de stock' } })).toBe('CANCELLED')
+    // Annulée par le client lui-même : pas de motif, rien à dire.
+    expect(kind({ status: 'CANCELLED' })).toBeNull()
+    expect(kind({ status: 'VALIDATED', is_adjusted: true })).toBe('ADJUSTED')
+    expect(kind({ status: 'SHIPPED', is_adjusted: true, decision_comment: 'Reste limité' })).toBe('ADJUSTED')
+    expect(kind({ status: 'VALIDATED', decision_comment: 'Livraison lundi' })).toBe('other')
+    expect(kind({ status: 'VALIDATED' })).toBeNull()
+    expect(kind({ status: 'SUBMITTED', is_adjusted: false })).toBeNull()
+    // Un code de motif sans libellé (donnée antérieure au lot 6) suffit à montrer le motif.
+    expect(kind({ status: 'REJECTED', decision_reason_code: 'DOUBLON' })).toBe('REJECTED')
+  })
+
+  it('dates an ADV cancellation by its history entry, not by the validation kept in decided_at (I-75)', () => {
+    const cancelled = closedOrder({
+      status: 'CANCELLED',
+      decided_at: '2026-10-08T10:15:00+00:00',
+      history: [
+        SENT,
+        { ...entry('SUBMITTED', 'VALIDATED', '2026-10-08T10:15:00+00:00', 2), actor: 'REGIONAL' },
+        { ...entry('VALIDATED', 'CANCELLED', '2026-10-09T08:00:00+00:00', 3), actor: 'ADV' },
+      ],
+    })
+    expect(decisionInstant(cancelled)).toBe('2026-10-09T08:00:00+00:00')
+    expect(cancelledByAdv(cancelled)).toBe(true)
+
+    const byClient = closedOrder({ status: 'CANCELLED', history: [SENT, { ...entry('SUBMITTED', 'CANCELLED', '2026-10-08T09:30:00+00:00', 2), actor: 'CLIENT' }] })
+    expect(cancelledByAdv(byClient)).toBe(false)
+    expect(decisionInstant(closedOrder({ status: 'REJECTED', decided_at: '2026-10-08T10:15:00+00:00' }))).toBe('2026-10-08T10:15:00+00:00')
+    expect(decisionInstant(makeOrder())).toBeNull()
+  })
+
+  it('knows when the order is accepted, shipped, and which lines are reduced or short-shipped', () => {
+    expect((['VALIDATED', 'IN_PREPARATION', 'PREPARED', 'SHIPPED', 'DELIVERED'] as const).every(isAccepted)).toBe(true)
+    expect((['SUBMITTED', 'REJECTED', 'CANCELLED', 'EXPIRED'] as const).some(isAccepted)).toBe(false)
+    expect(['SHIPPED', 'DELIVERED'].map((status) => isShipped(status as 'SHIPPED'))).toEqual([true, true])
+    expect((['VALIDATED', 'PREPARED'] as const).some(isShipped)).toBe(false)
+
+    const full = makeLine({ product_id: 1, name: 'Plein', requested_qty: 10, validated_qty: 10, shipped_qty: 10 })
+    const cut = makeLine({ product_id: 2, name: 'Réduit', requested_qty: 10, validated_qty: 6, shipped_qty: 4 })
+    const unseen = makeLine({ product_id: 3, name: 'Non décidé', requested_qty: 10 })
+    expect([full, cut, unseen].map(isReduced)).toEqual([false, true, false])
+    expect([full, cut, unseen].map(hasShippingGap)).toEqual([false, true, false])
+    expect(reducedCount([full, cut, unseen])).toBe(1)
+  })
+
+  it('reads the label of a reason, the humanised code when the server gives none, nothing without a reason', () => {
+    expect(reasonText(rejection)).toBe('Quota épuisé')
+    expect(reasonText(null, 'QUOTA_INSUFFISANT')).toBe('Quota insuffisant')
+    expect(reasonText(null, null)).toBeNull()
+    expect(reasonText(undefined)).toBeNull()
   })
 })

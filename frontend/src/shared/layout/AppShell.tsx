@@ -4,6 +4,7 @@ import type { Role } from '../api/types'
 import { LOGIN_PATH } from '../auth/guards'
 import { homePath, useAuthenticatedUser, useLogout } from '../auth/session'
 import { NotificationBell } from '../notifications/NotificationBell'
+import { useAdvToPrepareCount } from '../orders'
 import { OfflineBanner } from '../pwa/components'
 import { useCartLineCount } from '../../modules/client/cart/store'
 
@@ -13,6 +14,8 @@ type NavItem = { to: string; label: string; end?: boolean; badge?: number; tabBa
 function useNavItems(role: Role, permissions: readonly string[]): NavItem[] {
   const { t } = useTranslation()
   const cartLines = useCartLineCount()
+  // Commandes à préparer de l'ADV (N-08) : lues seulement avec le droit de consulter les commandes.
+  const toPrepare = useAdvToPrepareCount(role === 'adv' && permissions.includes('order.view'))
   const profile = { to: '/profil', label: t('nav.profile') }
 
   switch (role) {
@@ -33,8 +36,8 @@ function useNavItems(role: Role, permissions: readonly string[]): NavItem[] {
     case 'adv':
       return [
         { to: '/adv', label: t('nav.home'), end: true },
-        // Commandes validées à préparer (EF-ADV-04) ; pastille N-08 au lot de travail des écrans ADV.
-        { to: '/adv/commandes', label: t('nav.orders') },
+        // Commandes validées à préparer (EF-ADV-04), avec la pastille du nombre à préparer (N-08).
+        { to: '/adv/commandes', label: t('nav.orders'), badge: toPrepare },
         { to: '/adv/journees', label: t('nav.days') },
         { to: '/adv/regions', label: t('nav.regions') },
         { to: '/adv/clients', label: t('nav.clients') },

@@ -96,8 +96,36 @@ describe('regional order — detail', () => {
       'Commande modifiée (version 2)08/10/2026 10:12 · par Gérant C0012 (client)',
     ])
 
-    // Lecture seule : aucune action.
+    // Sans droit de décision (can_validate et can_reject faux) : lecture seule, ni panneau de décision ni action.
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Décision sur la commande' })).not.toBeInTheDocument()
+  })
+
+  it('offers the decision on the lines instead of the read-only lines when the regional may validate (lot 6)', async () => {
+    renderOrders({ path: DETAIL, routes: { [orderUrl(ORDER_ID)]: () => json(makeOrder({ can_validate: true, can_reject: true })) } })
+    await findTitle()
+
+    expect(await screen.findByRole('group', { name: 'Décision sur la commande' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Valider' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Rejeter' })).toBeInTheDocument()
+    // Les lignes à décider portent le même contexte publié que les lignes en lecture seule.
+    expect(screen.getAllByRole('article').map((line) => line.getAttribute('aria-label'))).toEqual(['Jus orange 1 L', 'Lben 1 L'])
+    expect(contextOf('Jus orange 1 L').map((fact) => fact?.replace(/\u00a0/g, ' '))).toEqual(
+      expect.arrayContaining(['Borne : 50', 'Déjà validé pour ce client : 0', 'Reste région : 1 500']),
+    )
+    // Client et historique restent affichés.
+    expect(screen.getByRole('link', { name: 'Voir la fiche du client' })).toBeInTheDocument()
+    expect(screen.getByRole('list', { name: 'Historique' })).toBeInTheDocument()
+  })
+
+  it('stays read-only once the order is decided, even when the regional could decide', async () => {
+    renderOrders({
+      path: DETAIL,
+      routes: { [orderUrl(ORDER_ID)]: () => json(makeOrder({ status: 'VALIDATED', status_label: 'Validée', can_validate: true, can_reject: true })) },
+    })
+    await findTitle()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Décision sur la commande' })).not.toBeInTheDocument()
   })
 
   it('shows a blocked client, a client without phone, the validated quantities and an automatic expiry', async () => {

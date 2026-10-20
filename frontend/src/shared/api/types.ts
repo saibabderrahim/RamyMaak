@@ -827,7 +827,7 @@ export type DecisionViolation = {
   cause: 'REGION_QUOTA' | 'CLIENT_LIMIT'
 }
 
-/* « Ma journée » du régional (EF-REG-01) : `GET /regional/dashboard?day=` → DataResponse<RegionalDashboard>. */
+/* « Ma journée » du régional (EF-REG-01) : `GET /regional/dashboard?day=` → RegionalDashboard (réponse sans enveloppe `data`, I-96). */
 
 /** Compteurs par onglet des commandes reçues (CLOSED : annulées et expirées). */
 export type RegionalOrderCounts = RegionalOrdersPage['meta']['counts']
@@ -972,7 +972,7 @@ export type ShippingBody = {
 /** Annulation exceptionnelle (`POST /adv/orders/{id}/cancel`) : motif CANCELLATION, depuis Validée ou En préparation. */
 export type AdvCancelBody = { version: number; reason_code: string; comment?: string | null }
 
-/* Suivi de la journée (EF-ADV-03) : `GET /adv/days/{day}/monitoring` → DataResponse<DayMonitoring>. */
+/* Suivi de la journée (EF-ADV-03) : `GET /adv/days/{day}/monitoring` → DayMonitoring (réponse sans enveloppe `data`, I-96). */
 
 export const MONITORING_ORDER_STATUSES = [
   'SUBMITTED',

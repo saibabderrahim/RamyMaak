@@ -1,8 +1,49 @@
 // « Ma journée » du régional (lot 6, docs/lot-6-contrat-api.md §3 et §8 ; EF-REG-01) :
-// statuts, heures limites, commandes à valider, clients sans commande. Fichier de la
-// fondation, complété par le lot de travail de l'écran.
+// statuts, heures limites, commandes à valider, clients sans commande.
 const myDay = {
   title: 'Ma journée',
+  dayChoice: 'Journée affichée',
+  dayTitle: 'Journée du {{date}}',
+  updatedAt: 'Mis à jour à {{time}}',
+  notOpened: 'Cette journée n’est pas encore ouverte.',
+  notOpenedHint: 'Vos régions, leurs commandes et les clients sans commande s’afficheront dès l’ouverture de la journée.',
+  closed: 'Journée clôturée : plus aucune décision n’est possible.',
+  noRegion: 'Aucune région ne vous est affectée ce jour-là.',
+  refreshFailed: 'Mise à jour impossible ({{reason}}) : cette page n’est peut-être plus à jour.',
+  shortcuts: {
+    label: 'Raccourcis',
+    quotas: 'Quotas du jour',
+    orders: 'Commandes reçues',
+  },
+  region: {
+    cutoffs: 'Heures limites',
+    distribution: 'Répartition avant {{time}}',
+    ordering: 'Commande avant {{time}}',
+    validation: 'Validation avant {{time}}',
+    extended: 'prolongée',
+    blocking: 'bloquante',
+    blockingNote: 'Après {{time}}, la validation est refusée ; le rejet reste possible.',
+    toValidate: '{{count}} à valider',
+    toValidateLabel: '{{count}} à valider — {{name}}',
+    nothingToValidate: 'Aucune commande à valider',
+    counts: 'Validées : {{validated}} · Rejetées : {{rejected}} · Annulées ou expirées : {{closed}}',
+    oldest: 'La plus ancienne attend depuis {{time}}',
+    clients: 'Clients : {{notified}} notifiés · {{ordered}} ont commandé · {{without}} sans commande',
+    clientsWaiting: 'La répartition n’a pas encore été envoyée aux clients.',
+    distribute: 'Répartir',
+    seeDistribution: 'Voir la répartition',
+    distributionLabel: '{{action}} — {{name}}',
+  },
+  withoutOrder: {
+    title: 'Clients sans commande',
+    count_one: '{{count}} client sans commande',
+    count_other: '{{count}} clients sans commande',
+    none: 'Tous les clients notifiés ont commandé.',
+    waiting: 'Les clients sans commande seront listés une fois la répartition envoyée.',
+    sheet: 'Voir la fiche',
+    sheetLabel: 'Voir la fiche de {{name}}',
+    phones: 'Téléphones de {{name}}',
+  },
 }
 
 export default myDay

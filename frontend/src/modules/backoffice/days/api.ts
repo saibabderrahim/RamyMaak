@@ -1,8 +1,9 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../../shared/api/client'
-import type { Day, DayCutoffs, ExtendableCutoff, RegionDay } from '../../../shared/api/types'
+import type { Day, DayCutoffs } from '../../../shared/api/types'
 import { businessToday } from '../../../shared/format'
 import { addDays } from '../shared/dates'
+import type { DayDetail, DayRegion, ExtendableCutoff } from './cutoffs'
 import { OPEN_DAYS_AHEAD } from './dates'
 
 /** Journées (EF-ADV-01, §4.3, RG-A05) — contrat : docs/lot-3-contrat-api.md §3. */
@@ -66,7 +67,7 @@ export function useOpenDays(enabled = true) {
 export function useDay(day: string, { enabled = true, refetchInterval = false }: LiveOptions = {}) {
   return useQuery({
     queryKey: dayKey(day),
-    queryFn: ({ signal }) => api.get<Day>(`/adv/days/${day}`, undefined, signal),
+    queryFn: ({ signal }) => api.get<DayDetail>(`/adv/days/${day}`, undefined, signal),
     enabled,
     refetchInterval,
   })
@@ -88,7 +89,7 @@ export function useOpenDay() {
   const queryClient = useQueryClient()
   const refresh = useRefreshDays()
   return useMutation({
-    mutationFn: (day: string) => api.post<Day>('/adv/days', { day }),
+    mutationFn: (day: string) => api.post<DayDetail>('/adv/days', { day }),
     onSuccess: (opened) => queryClient.setQueryData(dayKey(opened.day), opened),
     onSettled: refresh,
   })
@@ -101,7 +102,7 @@ export function useUpdateDay(day: string) {
   const queryClient = useQueryClient()
   const refresh = useRefreshDays()
   return useMutation({
-    mutationFn: (input: DayScheduleUpdate) => api.patch<Day>(`/adv/days/${day}`, input),
+    mutationFn: (input: DayScheduleUpdate) => api.patch<DayDetail>(`/adv/days/${day}`, input),
     onSuccess: (updated) => {
       queryClient.setQueryData(dayKey(day), updated)
       refresh()
@@ -119,9 +120,9 @@ export function useExtendCutoff(day: string) {
   const refresh = useRefreshDays()
   return useMutation({
     mutationFn: ({ regionId, kind, until }: CutoffExtension) =>
-      api.post<RegionDay>(`/adv/days/${day}/regions/${regionId}/extend-cutoff`, { kind, until }),
+      api.post<DayRegion>(`/adv/days/${day}/regions/${regionId}/extend-cutoff`, { kind, until }),
     onSuccess: (regionDay) => {
-      queryClient.setQueryData<Day>(dayKey(day), (current) =>
+      queryClient.setQueryData<DayDetail>(dayKey(day), (current) =>
         current
           ? { ...current, regions: current.regions.map((item) => (item.region.id === regionDay.region.id ? regionDay : item)) }
           : current,

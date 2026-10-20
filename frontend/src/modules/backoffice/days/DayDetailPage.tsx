@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router'
 import { ApiError } from '../../../shared/api/client'
-import type { Day, ExtendableCutoff, RegionDay } from '../../../shared/api/types'
+import type { Day } from '../../../shared/api/types'
 import { formatDate, formatDateTime } from '../../../shared/format'
 import { useLiveRefresh } from '../../../shared/realtime'
 import { Alert, Badge, Button, Card, ErrorAlert, PageHeader, Spinner } from '../../../shared/ui'
@@ -14,11 +14,13 @@ import {
   DayStatusBadge,
   DistributionLink,
   DistributionState,
+  MonitoringLink,
   OpenDayButton,
   OpenDayConfirm,
   QuotasLink,
   RegionDayStatusBadge,
 } from './components'
+import type { DayDetail, DayRegion, ExtendableCutoff } from './cutoffs'
 import { formatDayLong, isDay, OPEN_DAYS_AHEAD, openWindow, weekdayOf } from './dates'
 import { ExtendCutoffDialog } from './ExtendCutoffDialog'
 import { ScheduleForm } from './ScheduleForm'
@@ -29,8 +31,9 @@ import { useOpenDayFlow } from './useOpenDayFlow'
  * limites (modifiables avec day.manage tant que la journée est ouverte),
  * régions (statut, version et dernière publication des quotas, état de la
  * répartition aux clients et lien vers sa grille, heures limites
- * applicables, brouillons), « Prolonger » (day.extend-cutoff, RG-A05), lien
- * vers la matrice. Journée non ouverte : proposition de l'ouvrir. Tenue à
+ * applicables, dont celle de validation du régional (I-98), brouillons),
+ * « Prolonger » (day.extend-cutoff, RG-A05), liens vers la matrice et vers le
+ * suivi de la journée (dashboard.view, lot 6). Journée non ouverte : proposition de l'ouvrir. Tenue à
  * jour par le canal `adv.{day}` (§9.6), envoi des répartitions compris.
  */
 export default function DayDetailPage() {
@@ -81,6 +84,7 @@ function DayDetail({ day }: { day: string }) {
         actions={
           <>
             {back}
+            <MonitoringLink day={current} />
             <QuotasLink day={current} variant="button" />
           </>
         }
@@ -206,18 +210,18 @@ function ScheduleCard({ day }: { day: Day }) {
 }
 
 /** Régions du périmètre : statut, quotas, répartition, heures limites applicables, prolongation. */
-function RegionsCard({ day }: { day: Day }) {
+function RegionsCard({ day }: { day: DayDetail }) {
   const { t } = useTranslation()
   const { can } = useBackoffice()
-  const [extending, setExtending] = useState<RegionDay | null>(null)
+  const [extending, setExtending] = useState<DayRegion | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const canExtend = can('day.extend-cutoff') && day.status === 'OPEN'
 
-  const done = (regionDay: RegionDay, kind: ExtendableCutoff, until: string) => {
+  const done = (regionDay: DayRegion, kind: ExtendableCutoff, until: string) => {
     setExtending(null)
     setNotice(
       t('backoffice.days.extend.done', {
-        kind: t(`backoffice.days.extend.kindLower.${kind}`),
+        kind: t(`backoffice.monitoring.days.kindLower.${kind}`),
         name: regionDay.region.name,
         time: until,
       }),
@@ -234,7 +238,7 @@ function RegionsCard({ day }: { day: Day }) {
       {day.regions.length === 0 ? (
         <EmptyState>{t('backoffice.days.regions.empty')}</EmptyState>
       ) : (
-        <DataTable label={t('backoffice.days.regions.title')} className="min-w-[1120px]">
+        <DataTable label={t('backoffice.days.regions.title')} className="min-w-[1240px]">
           <TableHead>
             <Th>{t('backoffice.days.regions.columns.region')}</Th>
             <Th>{t('backoffice.days.regions.columns.status')}</Th>
@@ -243,6 +247,7 @@ function RegionsCard({ day }: { day: Day }) {
             <Th>{t('backoffice.days.regions.columns.distributionState')}</Th>
             <Th>{t('backoffice.days.regions.columns.distribution')}</Th>
             <Th>{t('backoffice.days.regions.columns.ordering')}</Th>
+            <Th>{t('backoffice.monitoring.days.validationColumn')}</Th>
             <Th className="text-end">{t('backoffice.days.regions.columns.drafts')}</Th>
             {canExtend && <Th>{t('backoffice.days.regions.columns.actions')}</Th>}
           </TableHead>
@@ -285,6 +290,9 @@ function RegionsCard({ day }: { day: Day }) {
                 </td>
                 <td className="py-2 pe-4">
                   <CutoffTime time={item.cutoffs.ordering} extended={item.extended.ordering} />
+                </td>
+                <td className="py-2 pe-4">
+                  <CutoffTime time={item.cutoffs.validation} extended={item.extended.validation} />
                 </td>
                 <td className="py-2 pe-4 text-end tabular-nums">
                   {item.pending_drafts > 0 ? (

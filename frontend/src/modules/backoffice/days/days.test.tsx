@@ -1,11 +1,12 @@
-import { act, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import type { CurrentUser, Day, RegionDay } from '../../../shared/api/types'
+import type { CurrentUser, Day } from '../../../shared/api/types'
 import { businessToday } from '../../../shared/format'
 import { disconnectRealtime } from '../../../shared/realtime'
 import { json, makeUser, mockApi, problem, renderApp } from '../../../test/utils'
 import { addDays } from '../shared/dates'
+import type { DayRegion } from './cutoffs'
 
 // Temps réel simulé (même principe que shared/realtime/realtime.test.tsx).
 const fake = vi.hoisted(() => ({
@@ -48,6 +49,7 @@ const ADV_PERMISSIONS = [
   'limit.view',
   'day.manage',
   'day.extend-cutoff',
+  'dashboard.view',
 ]
 const ADMIN_PERMISSIONS = [
   'user.manage',
@@ -64,7 +66,8 @@ const ADMIN_PERMISSIONS = [
 const adv = (overrides: Partial<CurrentUser> = {}) => makeUser('adv', { permissions: ADV_PERMISSIONS, ...overrides })
 const admin = () => makeUser('admin', { permissions: ADMIN_PERMISSIONS })
 
-const centre: RegionDay = {
+// Régions de la journée avec l'heure limite de validation du régional (lot 6, I-98).
+const centre: DayRegion = {
   region: { id: 3, code: 'CENTRE', name: 'Centre' },
   status: 'QUOTA_PUBLISHED',
   status_label: 'Quotas publiés',
@@ -74,11 +77,11 @@ const centre: RegionDay = {
   distribution_version: 0,
   distribution_published_at: null,
   pending_drafts: 3,
-  cutoffs: { distribution: '11:15', ordering: '13:00' },
-  extended: { distribution: true, ordering: false },
+  cutoffs: { distribution: '11:15', ordering: '13:00', validation: '15:00' },
+  extended: { distribution: true, ordering: false, validation: false },
 }
 
-const est: RegionDay = {
+const est: DayRegion = {
   region: { id: 4, code: 'EST', name: 'Est' },
   status: 'QUOTA_DRAFT',
   status_label: 'Quotas en brouillon',
@@ -88,8 +91,8 @@ const est: RegionDay = {
   distribution_version: 0,
   distribution_published_at: null,
   pending_drafts: 0,
-  cutoffs: { distribution: '10:00', ordering: '13:00' },
-  extended: { distribution: false, ordering: false },
+  cutoffs: { distribution: '10:00', ordering: '13:00', validation: '15:00' },
+  extended: { distribution: false, ordering: false, validation: false },
 }
 
 const openDay: Day = {
@@ -409,7 +412,7 @@ describe('ADV — business day page', () => {
           })
         }
         const input = body as { until: string }
-        const extended: RegionDay = { ...est, cutoffs: { ...est.cutoffs, ordering: input.until }, extended: { distribution: false, ordering: true } }
+        const extended: DayRegion = { ...est, cutoffs: { ...est.cutoffs, ordering: input.until }, extended: { distribution: false, ordering: true, validation: false } }
         current = { ...openDay, regions: [centre, extended] }
         return json(extended)
       },
@@ -549,7 +552,7 @@ describe('ADV — business day page', () => {
 
 describe('ADV and Admin — distribution state of the regions (lot 4)', () => {
   // Répartition envoyée deux fois : premier envoi à 09:40 (Alger).
-  const ouest: RegionDay = {
+  const ouest: DayRegion = {
     ...centre,
     region: { id: 5, code: 'OUEST', name: 'Ouest' },
     status: 'DISTRIBUTION_PUBLISHED',
@@ -558,8 +561,8 @@ describe('ADV and Admin — distribution state of the regions (lot 4)', () => {
     distribution_version: 2,
     distribution_published_at: '2026-10-08T08:40:00+00:00',
   }
-  const nord: RegionDay = { ...ouest, region: { id: 6, code: 'NORD', name: 'Nord' }, distribution_version: 1 }
-  const sud: RegionDay = {
+  const nord: DayRegion = { ...ouest, region: { id: 6, code: 'NORD', name: 'Nord' }, distribution_version: 1 }
+  const sud: DayRegion = {
     ...centre,
     region: { id: 7, code: 'SUD', name: 'Sud' },
     status: 'DISTRIBUTION_DRAFT',
@@ -668,7 +671,7 @@ describe('ADV and Admin — distribution state of the regions (lot 4)', () => {
 
     const reads = () => calls.filter((call) => call.path === '/api/v1/adv/days/2026-10-08').length
     const before = reads()
-    const sent: RegionDay = {
+    const sent: DayRegion = {
       ...sud,
       status: 'DISTRIBUTION_PUBLISHED',
       status_label: 'Répartition publiée',
@@ -720,5 +723,83 @@ describe('ADV and Admin — distribution state of the regions (lot 4)', () => {
     const payload = { region_id: 5, day: businessToday(), version: 3, first: false }
     act(() => fake.listeners.get(`${channel}:.DistributionPublished`)?.forEach((listener) => listener(payload)))
     await waitFor(() => expect(reads).toBe(before + 1))
+  })
+})
+
+describe('ADV and Admin — validation cutoff and monitoring link (lot 6, I-98)', () => {
+  // Heure limite de validation prolongée à 15:30 pour la région Est.
+  const estExtended: DayRegion = { ...est, cutoffs: { ...est.cutoffs, validation: '15:30' }, extended: { distribution: false, ordering: false, validation: true } }
+
+  function dayApi(user: CurrentUser, day: Day = openDay, extra: Routes = {}) {
+    return mockApi({ ...baseRoutes(user), [`GET /api/v1/adv/days/${day.day}`]: () => json(day), ...extra })
+  }
+
+  it('shows the validation cutoff of each region, with its extension', async () => {
+    dayApi(adv(), { ...openDay, regions: [centre, estExtended] })
+
+    renderApp('/adv/journees/2026-10-08')
+
+    const table = await screen.findByRole('table', { name: 'Régions' }, slow)
+    expect(within(table).getByRole('columnheader', { name: 'Validation' })).toBeInTheDocument()
+    const centreRow = within(within(table).getByRole('row', { name: /CENTRE/ }))
+    expect(centreRow.getByText('15:00')).toBeInTheDocument()
+    const estRow = within(within(table).getByRole('row', { name: /EST/ }))
+    expect(estRow.getByText('15:30')).toBeInTheDocument()
+    expect(estRow.getAllByText('prolongée')).toHaveLength(1)
+    expect(centreRow.getAllByText('prolongée')).toHaveLength(1) // la répartition seule
+  })
+
+  it('extends the validation cutoff of a region', async () => {
+    const { calls } = dayApi(adv(), openDay, {
+      'POST /api/v1/adv/days/2026-10-08/regions/4/extend-cutoff': ({ body }) => {
+        const input = body as { until: string }
+        return json({ ...est, cutoffs: { ...est.cutoffs, validation: input.until }, extended: { ...est.extended, validation: true } })
+      },
+    })
+    const user = userEvent.setup()
+
+    renderApp('/adv/journees/2026-10-08')
+
+    const table = await screen.findByRole('table', { name: 'Régions' }, slow)
+    await user.click(within(within(table).getByRole('row', { name: /EST/ })).getByRole('button', { name: 'Prolonger une heure limite de la région Est' }))
+    const dialog = within(screen.getByRole('dialog', { name: 'Prolonger une heure limite — Est' }))
+    expect(dialog.getAllByRole('radio').map((radio) => (radio as HTMLInputElement).value)).toEqual(['DISTRIBUTION', 'ORDERING', 'VALIDATION'])
+    const validation = dialog.getByRole('radio', { name: /^Validation/ })
+    expect(validation.closest('label')).toHaveTextContent('actuellement 15:00')
+    await user.click(validation)
+    await user.type(dialog.getByLabelText('Nouvelle heure limite'), '15:30')
+    await user.click(dialog.getByRole('button', { name: 'Prolonger' }))
+
+    expect(await screen.findByText('Heure limite de validation de la région Est prolongée jusqu’à 15:30. Les régionaux sont prévenus.')).toBeInTheDocument()
+    expect(calls.find((call) => call.method === 'POST')?.body).toEqual({ kind: 'VALIDATION', until: '15:30' })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('links the day sheet and the calendar rows of opened days to the monitoring', async () => {
+    dayApi(adv())
+    renderApp('/adv/journees/2026-10-08')
+    const sheet = await screen.findByRole('link', { name: 'Suivi de la journée du jeudi 08/10/2026' }, slow)
+    expect(sheet).toHaveAttribute('href', '/adv/journees/2026-10-08/suivi')
+
+    cleanup()
+    calendarApi(adv())
+    renderApp('/adv/journees')
+    await screen.findByRole('table', { name: 'Calendrier des journées' }, slow)
+    // Seules les journées ouvertes ont un suivi.
+    expect(within(rowOf('2026-10-08')).getByRole('link', { name: 'Suivi de la journée du jeudi 08/10/2026' })).toHaveAttribute('href', '/adv/journees/2026-10-08/suivi')
+    expect(within(rowOf('2026-10-07')).getByRole('link', { name: 'Suivi de la journée du mercredi 07/10/2026' })).toBeInTheDocument()
+    expect(within(rowOf('2026-10-09')).queryByRole('link', { name: /Suivi/ })).not.toBeInTheDocument()
+  })
+
+  it('offers the monitoring to the Admin, read-only, and to no one without dashboard.view', async () => {
+    dayApi(makeUser('admin', { permissions: [...ADMIN_PERMISSIONS, 'dashboard.view'] }))
+    renderApp('/admin/journees/2026-10-08')
+    expect(await screen.findByRole('link', { name: 'Suivi de la journée du jeudi 08/10/2026' }, slow)).toHaveAttribute('href', '/admin/journees/2026-10-08/suivi')
+
+    cleanup()
+    dayApi(adv({ permissions: ADV_PERMISSIONS.filter((permission) => permission !== 'dashboard.view') }))
+    renderApp('/adv/journees/2026-10-08')
+    await screen.findByRole('table', { name: 'Régions' }, slow)
+    expect(screen.queryByRole('link', { name: /Suivi de la journée/ })).not.toBeInTheDocument()
   })
 })

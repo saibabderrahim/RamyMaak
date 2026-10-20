@@ -35,10 +35,23 @@ export function BlockedBadge() {
 }
 
 /** Bascule Aujourd’hui / Demain (`?day=`), comme les autres écrans du régional. */
-export function DayToggle({ day, today, tomorrow, onChange }: { day: string; today: string; tomorrow: string; onChange: (day: string) => void }) {
+export function DayToggle({
+  day,
+  today,
+  tomorrow,
+  label,
+  onChange,
+}: {
+  day: string
+  today: string
+  tomorrow: string
+  /** Nom du groupe pour les lecteurs d'écran ; « Journée des commandes » par défaut. */
+  label?: string
+  onChange: (day: string) => void
+}) {
   const { t } = useTranslation()
   return (
-    <div role="group" aria-label={t('orders.regional.dayChoice')} className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 sm:max-w-md">
+    <div role="group" aria-label={label ?? t('orders.regional.dayChoice')} className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 sm:max-w-md">
       {[
         { value: today, label: t('orders.regional.today') },
         { value: tomorrow, label: t('orders.regional.tomorrow') },

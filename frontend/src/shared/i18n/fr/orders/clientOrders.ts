@@ -1,5 +1,6 @@
 // « Mes commandes » du client : liste, détail, modification, annulation, Recommander (lot de travail E,
-// docs/lot-5-contrat-api.md §6 ; EF-CLT-04, EF-CLT-05).
+// docs/lot-5-contrat-api.md §6 ; EF-CLT-04, EF-CLT-05) ; décision, motifs et expédition (lot 6, lot de travail H,
+// docs/lot-6-contrat-api.md §8).
 const clientOrders = {
   list: {
     title: 'Mes commandes',
@@ -34,7 +35,6 @@ const clientOrders = {
     cancellableUntil: 'Annulable jusqu’à {{time}}.',
     editing: 'Cette commande est en cours de modification dans votre panier.',
     seeCart: 'Voir le panier',
-    adjusted: 'Des quantités ont été ajustées à la validation : l’écart figure sur chaque ligne concernée.',
     comment: 'Votre commentaire',
     actions: 'Actions sur la commande',
     modify: 'Modifier la commande',
@@ -51,7 +51,9 @@ const clientOrders = {
     validated: 'Validée',
     shipped: 'Expédiée',
     reason: 'Motif : {{reason}}',
+    comment: 'Commentaire de votre commercial régional : {{comment}}',
     reduced: 'Quantité réduite de {{from}} à {{to}}',
+    shortShipped: 'Expédition partielle : {{shipped}} expédiée(s) sur {{validated}} validée(s)',
     unitPrice: '{{amount}} HT l’unité de vente',
     amount: 'Montant HT',
   },
@@ -64,10 +66,21 @@ const clientOrders = {
   decision: {
     REJECTED: 'Motif du rejet',
     CANCELLED: 'Motif de l’annulation',
+    ADJUSTED: 'Validée avec ajustement',
     other: 'Décision',
+    adjustedText: 'Votre commercial régional a validé votre commande avec des quantités ajustées : l’écart et son motif figurent sur chaque ligne concernée.',
+    adjustedLines_one: '{{count}} ligne ajustée sur {{total}}.',
+    adjustedLines_other: '{{count}} lignes ajustées sur {{total}}.',
+    cancelledByAdv: 'Commande annulée par l’administration des ventes après sa validation.',
     reason: 'Motif : {{reason}}',
     comment: 'Commentaire : {{comment}}',
     at: 'Le {{date}}',
+  },
+  shipping: {
+    title: 'Expédition',
+    shippedAt: 'Expédiée le',
+    deliveryNote: 'Bon de livraison',
+    partial: 'Certaines quantités expédiées sont inférieures aux quantités validées : le motif figure sur chaque ligne concernée.',
   },
   history: {
     title: 'Historique',

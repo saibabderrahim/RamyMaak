@@ -119,18 +119,11 @@ const fr = {
         'Notifications de validation et d’expédition',
       ],
     },
-    // Écrans livrés (lots 3 et 4) : liens de la page d'accueil, plus dans « Prochainement ».
-    regional: {
-      shortcuts: 'Quotas et répartition',
-      todayQuotas: 'Quotas du jour',
-      distribution: 'Répartition',
-      items: ['Ma journée : clients sans commande', 'Validation des commandes une par une'],
-    },
+    // Accueil de l'ADV : liens (le régional a « Ma journée », lot 6).
     adv: {
       shortcuts: 'Journées et quotas',
       days: 'Calendrier des journées',
       todayQuotas: 'Quotas du jour',
-      items: ['Suivi de la journée en temps réel', 'Préparation, expédition, documents et exports'],
     },
   },
   profile: {

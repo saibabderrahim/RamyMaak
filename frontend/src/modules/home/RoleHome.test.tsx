@@ -1,19 +1,22 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createQueryClient } from '../../shared/api/queryClient'
 import { meQueryKey } from '../../shared/auth/session'
-import { makeUser } from '../../test/utils'
+import { json, makeUser, mockApi } from '../../test/utils'
+import '../backoffice/i18n'
 import { RoleHome } from './RoleHome'
 
 afterEach(() => {
   vi.useRealTimers()
 })
 
-function renderHome(role: 'client' | 'regional' | 'adv') {
+const ADV_PERMISSIONS = ['order.view', 'order.process', 'dashboard.view', 'quota.view', 'quota.edit']
+
+function renderHome(role: 'client' | 'adv', permissions: string[] = []) {
   const queryClient = createQueryClient()
-  queryClient.setQueryData(meQueryKey, makeUser(role))
+  queryClient.setQueryData(meQueryKey, makeUser(role, { permissions }))
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
@@ -36,28 +39,46 @@ const upcomingItems = () =>
     .map((item) => item.textContent)
 
 describe('role home', () => {
-  it('opens the ADV day calendar and today’s quota matrix, no longer announced as upcoming', () => {
+  it('opens the ADV order queue and today’s monitoring, then the day calendar and today’s quotas', () => {
     // 23 h 30 UTC le 08/10 : déjà le 09/10 à Alger (jour métier).
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-10-08T23:30:00Z'))
-    renderHome('adv')
+    mockApi({ 'GET /api/v1/adv/orders': () => json({ data: [], meta: { counts: { VALIDATED: 0, IN_PREPARATION: 0, PREPARED: 0, SHIPPED: 0, CANCELLED: 0 } } }) })
+    renderHome('adv', ADV_PERMISSIONS)
+
+    const orders = within(card('Commandes et suivi'))
+    expect(orders.getByRole('link', { name: 'File des commandes' })).toHaveAttribute('href', '/adv/commandes')
+    expect(orders.getByRole('link', { name: 'Suivi de la journée' })).toHaveAttribute('href', '/adv/journees/2026-10-09/suivi')
 
     const shortcuts = within(card('Journées et quotas'))
     expect(shortcuts.getByRole('link', { name: 'Quotas du jour' })).toHaveAttribute('href', '/adv/journees/2026-10-09/quotas')
     expect(shortcuts.getByRole('link', { name: 'Calendrier des journées' })).toHaveAttribute('href', '/adv/journees')
 
-    expect(upcomingItems()).toEqual(['Suivi de la journée en temps réel', 'Préparation, expédition, documents et exports'])
+    // Plus de « Prochainement » pour l'ADV : tout est livré.
+    expect(screen.queryByText('Prochainement dans cet espace')).not.toBeInTheDocument()
+    expect(screen.queryByText('Suivi de la journée en temps réel')).not.toBeInTheDocument()
     expect(screen.queryByText(/matrice des quotas/)).not.toBeInTheDocument()
   })
 
-  it('opens the regional « Quotas du jour » and « Répartition », no longer announced as upcoming', () => {
-    renderHome('regional')
+  it('shows how many orders are waiting to be prepared', async () => {
+    const { calls } = mockApi({
+      'GET /api/v1/adv/orders': () =>
+        json({ data: [], meta: { counts: { VALIDATED: 12, IN_PREPARATION: 3, PREPARED: 0, SHIPPED: 0, CANCELLED: 0 } } }),
+    })
+    renderHome('adv', ADV_PERMISSIONS)
 
-    const shortcuts = within(card('Quotas et répartition'))
-    expect(shortcuts.getByRole('link', { name: 'Quotas du jour' })).toHaveAttribute('href', '/regional/quotas')
-    expect(shortcuts.getByRole('link', { name: 'Répartition' })).toHaveAttribute('href', '/regional/repartition')
-    expect(upcomingItems()).toEqual(['Ma journée : clients sans commande', 'Validation des commandes une par une'])
-    expect(screen.queryByText(/quotas reçus/)).not.toBeInTheDocument()
+    expect(await within(card('Commandes et suivi')).findByText('12 commandes à préparer')).toBeInTheDocument()
+    expect(calls.filter((call) => call.path === '/api/v1/adv/orders')).toHaveLength(1)
+  })
+
+  it('offers only the screens the account may open, and reads no queue without order.view', async () => {
+    const { calls } = mockApi({})
+    renderHome('adv', ['dashboard.view'])
+
+    const orders = within(card('Commandes et suivi'))
+    expect(orders.queryByRole('link', { name: 'File des commandes' })).not.toBeInTheDocument()
+    expect(orders.getByRole('link', { name: 'Suivi de la journée' })).toBeInTheDocument()
+    await waitFor(() => expect(calls).toHaveLength(0))
   })
 
   it('keeps the client home unchanged', () => {

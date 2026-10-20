@@ -1,14 +1,43 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createQueryClient } from '../../../shared/api/queryClient'
+import { disconnectRealtime } from '../../../shared/realtime'
 import type { CurrentUser } from '../../../shared/api/types'
 import { meQueryKey } from '../../../shared/auth/session'
 import { json, makeUser, mockApi, problem, renderApp } from '../../../test/utils'
 import { cellOf, DAY, makeGrid, summaryOf } from '../../distribution/testing'
 import BackOfficeDistributionPage from './BackOfficeDistributionPage'
+
+// Temps réel simulé (même principe que shared/realtime/realtime.test.tsx).
+const fake = vi.hoisted(() => ({
+  stateChange: null as null | ((change: { current: string }) => void),
+  listeners: new Map<string, Set<(payload: unknown) => void>>(),
+}))
+
+vi.mock('pusher-js', () => ({
+  default: class {
+    connection = { bind: (_: string, callback: (change: { current: string }) => void) => (fake.stateChange = callback) }
+  },
+}))
+
+vi.mock('laravel-echo', () => ({
+  default: class {
+    private(channel: string) {
+      return {
+        listen: (event: string, listener: (payload: unknown) => void) => {
+          const key = `${channel}:${event}`
+          fake.listeners.set(key, (fake.listeners.get(key) ?? new Set()).add(listener))
+        },
+        stopListening: (event: string, listener: (payload: unknown) => void) => fake.listeners.get(`${channel}:${event}`)?.delete(listener),
+      }
+    }
+    leave() {}
+    disconnect() {}
+  },
+}))
 
 const GRID_URL = `GET /api/v1/adv/days/${DAY}/regions/3/grid`
 
@@ -20,6 +49,9 @@ const backOfficeGrid = () => makeGrid({ can_edit: false, can_publish: false })
 
 afterEach(() => {
   vi.restoreAllMocks()
+  disconnectRealtime()
+  fake.stateChange = null
+  fake.listeners.clear()
 })
 
 function renderPage(user: CurrentUser, routes: Parameters<typeof mockApi>[0] = {}, path = `/${user.role}/journees/${DAY}/repartition/3`) {
@@ -126,4 +158,22 @@ describe('back-office — distribution grid (read-only)', () => {
     renderApp(`/adv/journees/${DAY}/repartition/3`)
     expect(await screen.findByRole('grid', {}, { timeout: 10_000 })).toBeInTheDocument()
   }, 20_000)
+})
+
+describe('back-office — distribution grid: validated quantities in real time (lot 6, §7)', () => {
+  it('rereads the grid on the decisions and the ADV processing of the region', async () => {
+    const user = { ...adv(), realtime: { key: 'app-key' } }
+    const mock = renderPage(user)
+    await screen.findByRole('grid', undefined)
+    const channel = `region-day.3.${DAY}`
+    const events = ['OrderSubmitted', 'OrderUpdated', 'OrderCancelled', 'OrdersExpired', 'OrderValidated', 'OrderRejected', 'OrdersProcessed', 'OrderCancelledByAdv']
+    for (const event of events) await waitFor(() => expect(fake.listeners.get(`${channel}:.${event}`)?.size).toBe(1))
+
+    const reads = () => mock.calls.filter((call) => call.path === `/api/v1/adv/days/${DAY}/regions/3/grid`).length
+    for (const event of ['OrderValidated', 'OrderRejected', 'OrdersProcessed', 'OrderCancelledByAdv']) {
+      const before = reads()
+      act(() => fake.listeners.get(`${channel}:.${event}`)?.forEach((listener) => listener({ id: '01JA2Z6K8QW3X9M4T7RBN5CDEF', day: DAY })))
+      await waitFor(() => expect(reads()).toBe(before + 1))
+    }
+  })
 })

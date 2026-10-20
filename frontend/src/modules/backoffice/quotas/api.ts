@@ -8,6 +8,7 @@ import type {
   SavedQuotaCell,
   SaveQuotasResult,
 } from '../../../shared/api/types'
+import { ORDER_CANCELLED_BY_ADV, ORDER_VALIDATED, ORDERS_PROCESSED } from '../../../shared/realtime'
 import { daysKey } from '../days/api'
 import { fetchFile, saveFile } from '../shared/download'
 
@@ -15,8 +16,12 @@ import { fetchFile, saveFile } from '../shared/download'
 
 export const matrixKey = (day: string) => ['backoffice', 'quotas', 'matrix', day] as const
 
-/** Événements du canal `adv.{day}` qui imposent de relire la matrice (§9.6). */
-export const MATRIX_EVENTS = ['QuotaPublished', 'DraftsUpdated', 'DayClosed'] as const
+/**
+ * Événements du canal `adv.{day}` qui imposent de relire la matrice (§9.6) :
+ * quotas, clôture, et le validé V(r,p) que la matrice montre (validation du
+ * régional, annulation par l'ADV, traitement ADV — contrat du lot 6, §7).
+ */
+export const MATRIX_EVENTS = ['QuotaPublished', 'DraftsUpdated', 'DayClosed', ORDER_VALIDATED, ORDER_CANCELLED_BY_ADV, ORDERS_PROCESSED] as const
 
 export function useQuotaMatrix(day: string, refetchInterval: number | false) {
   return useQuery({

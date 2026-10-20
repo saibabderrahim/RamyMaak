@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import type { DayCutoffs, RegionalQuota, RegionalQuotaRegion, RegionDayStatus } from '../../../shared/api/types'
 import { formatQuantity } from '../../../shared/format'
-import { useLiveRefresh } from '../../../shared/realtime'
+import { ORDERS_PROCESSED, useLiveRefresh, VALIDATED_QUANTITY_EVENTS } from '../../../shared/realtime'
 import { Badge } from '../../../shared/ui'
 import { regionalQuotasKey } from './api'
 import { distributionPath, formatDayMonth, formatTime, groupByFamily } from './format'
@@ -17,12 +17,20 @@ const STATUS_TONES: Record<RegionDayStatus, 'neutral' | 'success' | 'warning' | 
   CLOSED: 'neutral',
 }
 
+/** Statut d'une région pour la journée (§6.1) : à répartir, répartition en cours, publiée, clôturée. */
+export function RegionStatusBadge({ status }: { status: RegionDayStatus }) {
+  const { t } = useTranslation()
+  return <Badge tone={STATUS_TONES[status]}>{t(`notifications.regionalQuotas.status.${status}`)}</Badge>
+}
+
 /**
  * Événements du canal de la région (§9.6) : publication (N-01) et
  * modification (N-02) des quotas ; envoi de la répartition aux clients et
- * premier brouillon de répartition (statut « Répartition en cours »), lot 4.
+ * premier brouillon de répartition (statut « Répartition en cours »), lot 4 ;
+ * validation et annulation ADV, qui changent V(r,p) donc le reste R = Q − V, et
+ * traitement ADV (lot 6, §7).
  */
-const LIVE_EVENTS = ['QuotaPublished', 'DistributionPublished', 'LimitDraftsUpdated'] as const
+const LIVE_EVENTS = ['QuotaPublished', 'DistributionPublished', 'LimitDraftsUpdated', ...VALIDATED_QUANTITY_EVENTS, ORDERS_PROCESSED] as const
 
 /**
  * Abonnement au canal `region-day.{regionId}.{day}` : une publication ou un
@@ -74,7 +82,7 @@ export function RegionQuotasCard({
           </h2>
           <p className="text-sm text-slate-600">{region.region.code}</p>
         </div>
-        <Badge tone={STATUS_TONES[region.status]}>{t(`notifications.regionalQuotas.status.${region.status}`)}</Badge>
+        <RegionStatusBadge status={region.status} />
       </header>
 
       {published && region.quota_last_published_at !== null && (
@@ -196,7 +204,13 @@ function FamilyQuotas({ name, quotas }: { name: string; quotas: RegionalQuota[] 
               </p>
               {validated > 0 && (
                 <p className="text-xs text-slate-600 tabular-nums">
-                  {t('notifications.regionalQuotas.validated', { quantity: formatQuantity(validated) })}
+                  <span>{t('notifications.regionalQuotas.validated', { quantity: formatQuantity(validated) })}</span>
+                  {' · '}
+                  <span data-testid="quota-remaining" className={quantity <= validated ? 'font-semibold text-red-800' : undefined}>
+                    {quantity <= validated
+                      ? t('orders.decision.quotas.soldOut')
+                      : t('orders.decision.quotas.remaining', { quantity: formatQuantity(quantity - validated) })}
+                  </span>
                 </p>
               )}
             </div>

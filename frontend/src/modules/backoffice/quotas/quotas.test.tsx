@@ -18,9 +18,38 @@ import type {
 } from '../../../shared/api/types'
 import { meQueryKey } from '../../../shared/auth/session'
 import { formatQuantity } from '../../../shared/format'
+import { disconnectRealtime } from '../../../shared/realtime'
 import { json, makeUser, mockApi, problem, renderApp } from '../../../test/utils'
 import { daysKey } from '../days/api'
 import QuotaMatrixPage from './QuotaMatrixPage'
+
+// Temps réel simulé (même principe que shared/realtime/realtime.test.tsx).
+const fake = vi.hoisted(() => ({
+  stateChange: null as null | ((change: { current: string }) => void),
+  listeners: new Map<string, Set<(payload: unknown) => void>>(),
+}))
+
+vi.mock('pusher-js', () => ({
+  default: class {
+    connection = { bind: (_: string, callback: (change: { current: string }) => void) => (fake.stateChange = callback) }
+  },
+}))
+
+vi.mock('laravel-echo', () => ({
+  default: class {
+    private(channel: string) {
+      return {
+        listen: (event: string, listener: (payload: unknown) => void) => {
+          const key = `${channel}:${event}`
+          fake.listeners.set(key, (fake.listeners.get(key) ?? new Set()).add(listener))
+        },
+        stopListening: (event: string, listener: (payload: unknown) => void) => fake.listeners.get(`${channel}:${event}`)?.delete(listener),
+      }
+    }
+    leave() {}
+    disconnect() {}
+  },
+}))
 
 const DAY = '2026-10-08'
 const MATRIX_URL = `GET /api/v1/adv/days/${DAY}/quotas`
@@ -191,6 +220,9 @@ const text = (value: number) => formatQuantity(value).replace(/\u00a0/g, ' ')
 afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
+  disconnectRealtime()
+  fake.stateChange = null
+  fake.listeners.clear()
 })
 
 describe('back-office — quota matrix: display', () => {
@@ -1166,5 +1198,21 @@ describe('back-office — quota matrix: copy, import, template', () => {
       expect(await screen.findByText('La journée du 08/10/2026 est clôturée.')).toBeInTheDocument()
       expect(downloads).toEqual([])
     })
+  })
+})
+
+describe('back-office — quota matrix: validated quantities in real time (lot 6, §7)', () => {
+  it('rereads the matrix when an order is validated, cancelled by the ADV or processed', async () => {
+    const { requests } = renderMatrix({ ...adv(), realtime: { key: 'app-key' } })
+    await grid()
+    const channel = `adv.${DAY}`
+    const events = ['QuotaPublished', 'DraftsUpdated', 'DayClosed', 'OrderValidated', 'OrderCancelledByAdv', 'OrdersProcessed']
+    for (const event of events) await waitFor(() => expect(fake.listeners.get(`${channel}:.${event}`)?.size).toBe(1))
+
+    for (const event of ['OrderValidated', 'OrderCancelledByAdv', 'OrdersProcessed']) {
+      const before = requests(MATRIX_URL).length
+      act(() => fake.listeners.get(`${channel}:.${event}`)?.forEach((listener) => listener({ id: '01JA2Z6K8QW3X9M4T7RBN5CDEF', day: DAY })))
+      await waitFor(() => expect(requests(MATRIX_URL).length).toBe(before + 1))
+    }
   })
 })

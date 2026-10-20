@@ -2,12 +2,24 @@ import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Order, OrderHistoryEntry, OrderLine, OrderStatus } from '../../../shared/api/types'
 import { formatAmount, formatDateTime, formatQuantity } from '../../../shared/format'
-import { reasonLabel } from '../../../shared/reasons/labels'
+import { reasonText } from '../../../shared/reasons/labels'
 import { ProductImage } from '../../../shared/ui/ProductImage'
 import { type StepState, timelineSteps } from './timeline'
-import { historyLabelKey, STATUS_CLASSES } from './view'
+import {
+  cancelledByAdv,
+  type DecisionKind,
+  decisionInstant,
+  decisionKind,
+  hasShippingGap,
+  historyLabelKey,
+  isReduced,
+  isShipped,
+  reducedCount,
+  STATUS_CLASSES,
+} from './view'
 
-// Éléments du détail d'une commande du client (EF-CLT-04) — contrat : docs/lot-5-contrat-api.md §3 et §6.
+// Éléments du détail d'une commande du client (EF-CLT-04) — contrat : docs/lot-5-contrat-api.md §3 et §6 ;
+// motifs avec libellé, ajustement, expédition : docs/lot-6-contrat-api.md §4 et §8. RG-C09 : jamais Q, R ni V(r,p).
 
 const SECTION = 'flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-xs sm:p-6'
 
@@ -96,7 +108,11 @@ export function OrderLines({ lines }: { lines: OrderLine[] }) {
 function OrderLineItem({ line }: { line: OrderLine }) {
   const { t } = useTranslation()
   const nameId = useId()
-  const reduced = line.validated_qty !== null && line.validated_qty < line.requested_qty
+  const reduced = isReduced(line)
+  // Motif d'ajustement : son libellé (motif désactivé compris), à défaut le code rendu lisible.
+  const reason = reasonText(line.adjustment_reason, line.adjustment_reason_code)
+  const gap = hasShippingGap(line)
+  const gapReason = reasonText(line.shipping_gap_reason)
 
   return (
     <article aria-labelledby={nameId} className="flex gap-3">
@@ -122,7 +138,7 @@ function OrderLineItem({ line }: { line: OrderLine }) {
           {line.shipped_qty !== null && (
             <div className="flex gap-1">
               <dt className="text-slate-600">{t('orders.clientOrders.lines.shipped')}</dt>
-              <dd className="font-semibold text-slate-900">{formatQuantity(line.shipped_qty)}</dd>
+              <dd className={`font-semibold ${gap ? 'text-amber-800' : 'text-slate-900'}`}>{formatQuantity(line.shipped_qty)}</dd>
             </div>
           )}
           <div className="flex gap-1">
@@ -133,11 +149,19 @@ function OrderLineItem({ line }: { line: OrderLine }) {
         {reduced && (
           <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
             {t('orders.clientOrders.lines.reduced', { from: formatQuantity(line.requested_qty), to: formatQuantity(line.validated_qty ?? 0) })}
-            {line.adjustment_reason_code && <> · {t('orders.clientOrders.lines.reason', { reason: reasonLabel(line.adjustment_reason_code) })}</>}
+            {reason && <> · {t('orders.clientOrders.lines.reason', { reason })}</>}
+            {line.adjustment_comment && <span className="mt-1 block">{t('orders.clientOrders.lines.comment', { comment: line.adjustment_comment })}</span>}
           </p>
         )}
-        {!reduced && line.adjustment_reason_code && (
-          <p className="text-sm text-slate-700">{t('orders.clientOrders.lines.reason', { reason: reasonLabel(line.adjustment_reason_code) })}</p>
+        {!reduced && reason && <p className="text-sm text-slate-700">{t('orders.clientOrders.lines.reason', { reason })}</p>}
+        {!reduced && line.adjustment_comment && (
+          <p className="text-sm text-slate-700">{t('orders.clientOrders.lines.comment', { comment: line.adjustment_comment })}</p>
+        )}
+        {gap && (
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            {t('orders.clientOrders.lines.shortShipped', { shipped: formatQuantity(line.shipped_qty ?? 0), validated: formatQuantity(line.validated_qty ?? 0) })}
+            {gapReason && <> · {t('orders.clientOrders.lines.reason', { reason: gapReason })}</>}
+          </p>
         )}
       </div>
     </article>
@@ -171,19 +195,79 @@ export function OrderTotals({ order }: { order: Pick<Order, 'total_ht' | 'total_
   )
 }
 
-/** Décision du régional ou de l'ADV (lot 6) : motif, commentaire et date, quand ils existent. */
-export function OrderDecision({ order }: { order: Pick<Order, 'status' | 'decided_at' | 'decision_reason_code' | 'decision_comment'> }) {
+const DECISION_TONES: Record<DecisionKind, string> = {
+  REJECTED: 'border-red-200 bg-red-50 text-red-900',
+  CANCELLED: 'border-slate-200 bg-slate-50 text-slate-900',
+  ADJUSTED: 'border-amber-200 bg-amber-50 text-amber-900',
+  other: 'border-slate-200 bg-slate-50 text-slate-900',
+}
+
+type DecisionOrder = Pick<
+  Order,
+  'status' | 'is_adjusted' | 'decided_at' | 'decision_reason' | 'decision_reason_code' | 'decision_comment' | 'history' | 'lines'
+>
+
+/**
+ * Décision du régional ou de l'ADV (lot 6) : « Validée avec ajustement » (nombre de lignes ajustées, commentaire),
+ * motif du rejet, motif de l'annulation exceptionnelle (annulée par l'ADV, I-75) — libellé du motif, commentaire
+ * et date. Rien pour une commande envoyée, expirée, annulée par le client ou validée telle quelle.
+ */
+export function OrderDecision({ order }: { order: DecisionOrder }) {
   const { t } = useTranslation()
   const titleId = useId()
-  if (order.decision_reason_code === null && order.decision_comment === null) return null
-  const tone = order.status === 'REJECTED' ? 'border-red-200 bg-red-50 text-red-900' : 'border-slate-200 bg-slate-50 text-slate-900'
-  const title = order.status === 'REJECTED' || order.status === 'CANCELLED' ? order.status : 'other'
+  const kind = decisionKind(order)
+  if (kind === null) return null
+  const reason = reasonText(order.decision_reason, order.decision_reason_code)
+  const at = decisionInstant(order)
   return (
-    <section aria-labelledby={titleId} className={`flex flex-col gap-1 rounded-xl border px-4 py-3 text-sm ${tone}`}>
-      <h2 id={titleId} className="font-semibold">{t(`orders.clientOrders.decision.${title}`)}</h2>
-      {order.decision_reason_code && <p>{t('orders.clientOrders.decision.reason', { reason: reasonLabel(order.decision_reason_code) })}</p>}
+    <section aria-labelledby={titleId} className={`flex flex-col gap-1 rounded-xl border px-4 py-3 text-sm ${DECISION_TONES[kind]}`}>
+      <h2 id={titleId} className="font-semibold">
+        {t(`orders.clientOrders.decision.${kind}`)}
+      </h2>
+      {kind === 'ADJUSTED' && (
+        <>
+          <p>{t('orders.clientOrders.decision.adjustedText')}</p>
+          <p>{t('orders.clientOrders.decision.adjustedLines', { count: reducedCount(order.lines), total: order.lines.length })}</p>
+        </>
+      )}
+      {kind === 'CANCELLED' && cancelledByAdv(order) && <p>{t('orders.clientOrders.decision.cancelledByAdv')}</p>}
+      {reason && <p>{t('orders.clientOrders.decision.reason', { reason })}</p>}
       {order.decision_comment && <p>{t('orders.clientOrders.decision.comment', { comment: order.decision_comment })}</p>}
-      {order.decided_at && <p className="text-xs opacity-80">{t('orders.clientOrders.decision.at', { date: formatDateTime(order.decided_at) })}</p>}
+      {at && <p className="text-xs opacity-80">{t('orders.clientOrders.decision.at', { date: formatDateTime(at) })}</p>}
+    </section>
+  )
+}
+
+/**
+ * Expédition (I-79) : date d'expédition et bon de livraison, une fois la commande expédiée seulement (le serveur
+ * ne les envoie pas avant) ; rappelle qu'une quantité expédiée inférieure à la quantité validée est expliquée ligne par ligne.
+ */
+export function OrderShipping({ order }: { order: Pick<Order, 'status' | 'shipped_at' | 'delivery_note_ref' | 'lines'> }) {
+  const { t } = useTranslation()
+  const titleId = useId()
+  if (!isShipped(order.status) || (!order.shipped_at && !order.delivery_note_ref)) return null
+  return (
+    <section aria-labelledby={titleId} className={SECTION}>
+      <h2 id={titleId} className="text-base font-semibold text-slate-900">
+        {t('orders.clientOrders.shipping.title')}
+      </h2>
+      <dl className="flex flex-col gap-1 text-sm">
+        {order.shipped_at && (
+          <div className="flex flex-wrap gap-x-2">
+            <dt className="text-slate-600">{t('orders.clientOrders.shipping.shippedAt')}</dt>
+            <dd className="font-semibold text-slate-900">
+              <time dateTime={order.shipped_at}>{formatDateTime(order.shipped_at)}</time>
+            </dd>
+          </div>
+        )}
+        {order.delivery_note_ref && (
+          <div className="flex flex-wrap gap-x-2">
+            <dt className="text-slate-600">{t('orders.clientOrders.shipping.deliveryNote')}</dt>
+            <dd className="font-semibold text-slate-900">{order.delivery_note_ref}</dd>
+          </div>
+        )}
+      </dl>
+      {order.lines.some(hasShippingGap) && <p className="text-sm text-amber-900">{t('orders.clientOrders.shipping.partial')}</p>}
     </section>
   )
 }
