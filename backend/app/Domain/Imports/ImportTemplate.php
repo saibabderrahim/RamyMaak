@@ -2,6 +2,7 @@
 
 namespace App\Domain\Imports;
 
+use App\Models\BusinessDay;
 use App\Models\User;
 use App\Support\BusinessClock;
 use Carbon\CarbonInterface;
@@ -14,10 +15,11 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx as XlsxWriter;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * Gabarits téléchargeables (§6 du contrat, Annexes B.3 à B.5) : en-têtes de
- * l'annexe B, pré-remplis avec les données actuelles. Réimporté tel quel, un
- * gabarit ne change rien. Les textes commençant par =, +, - ou @ sont
- * neutralisés (§8.4) par le préfixe « ' » d'Excel, sans altérer la valeur.
+ * Gabarits téléchargeables (§8.1, Annexes B.1, B.3 à B.5) : en-têtes de
+ * l'annexe B, pré-remplis avec les données actuelles (pour les quotas, celles
+ * de la journée). Réimporté tel quel, un gabarit ne change rien. Les textes
+ * commençant par =, +, - ou @ sont neutralisés (§8.4) par le préfixe « ' »
+ * d'Excel, sans altérer la valeur.
  */
 final class ImportTemplate
 {
@@ -31,12 +33,15 @@ final class ImportTemplate
 
     private const INFORMATION_FONT = 'FF7F7F7F';
 
-    public function download(ImportType $type, User $user): StreamedResponse
+    /**
+     * @param  BusinessDay|null  $day  journée du gabarit des quotas
+     */
+    public function download(ImportType $type, User $user, ?BusinessDay $day = null): StreamedResponse
     {
-        $spreadsheet = $this->build($type, $user);
+        $spreadsheet = $this->build($type, $user, $day);
         $filename = __('imports.template.filename', [
             'type' => __('imports.template.names.'.$type->value),
-            'date' => BusinessClock::today()->format('Ymd'),
+            'date' => ($day?->day ?? BusinessClock::today())->format('Ymd'),
         ]);
 
         return response()->streamDownload(function () use ($spreadsheet): void {
@@ -47,23 +52,17 @@ final class ImportTemplate
         }, $filename, ['Content-Type' => self::CONTENT_TYPE]);
     }
 
-    public function build(ImportType $type, User $user): Spreadsheet
+    public function build(ImportType $type, User $user, ?BusinessDay $day = null): Spreadsheet
     {
-        $definition = ImportDefinition::for($type, $user);
-        $columns = $definition->columns();
-        $information = $definition->informationColumns();
-        $required = array_flip($definition->requiredColumns());
+        $definition = ImportDefinition::for($type, $user, $day);
+        $columns = $definition->templateColumns();
 
         $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle($type->label());
+        $sheet->setTitle($definition->sheetTitle() ?? $type->label());
 
-        $headers = [
-            ...$columns,
-            ...array_map(fn (string $column) => __('imports.template.information', ['column' => $column]), $information),
-        ];
-        foreach ($headers as $index => $header) {
-            $sheet->getCell([$index + 1, 1])->setValueExplicit($header, DataType::TYPE_STRING);
+        foreach ($columns as $index => $column) {
+            $sheet->getCell([$index + 1, 1])->setValueExplicit($column['header'], DataType::TYPE_STRING);
         }
 
         $line = 1;
@@ -81,10 +80,10 @@ final class ImportTemplate
             $sheet->getStyle([$column, 2, $column, $line])->getNumberFormat()->setFormatCode('dd/mm/yyyy');
         }
 
-        $this->styleHeader($sheet, $columns, $required, count($information));
+        $this->styleHeader($sheet, $columns);
         $sheet->freezePane('A2');
-        $sheet->setAutoFilter([1, 1, count($headers), $line]);
-        for ($column = 1; $column <= count($headers); $column++) {
+        $sheet->setAutoFilter([1, 1, count($columns), $line]);
+        for ($column = 1; $column <= count($columns); $column++) {
             $sheet->getColumnDimensionByColumn($column)->setAutoSize(true);
         }
 
@@ -123,26 +122,24 @@ final class ImportTemplate
     }
 
     /**
-     * @param  list<string>  $columns
-     * @param  array<string, int>  $required
+     * @param  list<array{header: string, required: bool, information: bool}>  $columns
      */
-    private function styleHeader(Worksheet $sheet, array $columns, array $required, int $information): void
+    private function styleHeader(Worksheet $sheet, array $columns): void
     {
-        $last = count($columns) + $information;
-        $header = $sheet->getStyle([1, 1, $last, 1]);
+        $header = $sheet->getStyle([1, 1, count($columns), 1]);
         $header->getFont()->setBold(true);
         $header->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB(self::HEADER_FILL);
 
         foreach ($columns as $index => $column) {
-            if (isset($required[$column])) {
+            if ($column['required']) {
                 $sheet->getStyle([$index + 1, 1])->getFill()->getStartColor()->setARGB(self::REQUIRED_FILL);
                 $sheet->getComment([$index + 1, 1])->getText()->createText(__('imports.template.required'));
             }
-        }
 
-        if ($information > 0) {
-            $sheet->getStyle([count($columns) + 1, 1, $last, 1])->getFont()->setItalic(true)
-                ->getColor()->setARGB(self::INFORMATION_FONT);
+            if ($column['information']) {
+                $sheet->getStyle([$index + 1, 1])->getFont()->setItalic(true)
+                    ->getColor()->setARGB(self::INFORMATION_FONT);
+            }
         }
     }
 }

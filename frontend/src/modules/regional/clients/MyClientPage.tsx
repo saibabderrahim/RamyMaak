@@ -5,6 +5,7 @@ import type { Client } from '../../../shared/api/types'
 import { businessToday, formatDate } from '../../../shared/format'
 import { Alert, Button, Card, ErrorAlert, Spinner } from '../../../shared/ui'
 import { useFieldClient } from './api'
+import { ClientAccess } from './ClientAccess'
 import { CallLink, ClientStatusBadge, InfoList, InfoRow } from './components'
 import { addressLines, mapHref, phonesOf } from './contact'
 
@@ -155,6 +156,9 @@ function ClientFiche({ client }: { client: Client }) {
             <InfoRow label={t('field.fields.region')}>{client.region.name}</InfoRow>
           </InfoList>
         </Card>
+
+        {/* Présents seulement pour qui peut réinitialiser un mot de passe client (EF-AUTH-05). */}
+        {client.accounts && <ClientAccess accounts={client.accounts} />}
 
         {fiscal.length > 0 && (
           <Card title={t('field.client.sections.tax')}>

@@ -141,7 +141,7 @@ it('validates the client list', function (mixed $ids, string $field) {
     'not integers' => [['abc'], 'client_ids.0'],
     'nested' => [[[1]], 'client_ids.0'],
     'unknown client' => [[999999], 'client_ids'],
-    'more than 200' => [range(1, 201), 'client_ids'],
+    'more than 100' => [range(1, 101), 'client_ids'],
 ]);
 
 it('journals each created account in one batch, without the password', function () {

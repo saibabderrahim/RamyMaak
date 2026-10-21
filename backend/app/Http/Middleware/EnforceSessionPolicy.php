@@ -55,7 +55,10 @@ class EnforceSessionPolicy
         if (! $session->has(self::STARTED_AT)) {
             $session->put(self::STARTED_AT, $now);
         }
-        $session->put(self::LAST_SEEN_AT, $now);
+        // La reconnexion du temps réel n'est pas une activité de l'utilisateur.
+        if (! $request->is('broadcasting/*')) {
+            $session->put(self::LAST_SEEN_AT, $now);
+        }
 
         return $next($request);
     }

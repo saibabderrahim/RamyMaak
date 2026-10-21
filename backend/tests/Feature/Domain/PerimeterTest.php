@@ -47,6 +47,28 @@ it('gives the ADV every region unless ADV assignments restrict it (RG-S05)', fun
         ->and(perimeter()->canAccessRegion($adv, $this->centre->id))->toBeFalse();
 });
 
+it('never widens a restricted ADV to every region when an assignment ends, has expired or has not started', function () {
+    $adv = userWithRole(Role::Adv);
+    $assignment = RegionAssignment::factory()->adv()->create(['user_id' => $adv->id, 'region_id' => $this->est->id]);
+
+    $assignment->forceFill(['revoked_at' => now()])->save();
+    expect(perimeter()->regionIds($adv))->toBe([])
+        ->and(visibleCodes($adv))->toBe([])
+        ->and(perimeter()->canAccessClient($adv, Client::where('code', 'C1')->sole()))->toBeFalse();
+
+    $expired = userWithRole(Role::Adv);
+    RegionAssignment::factory()->adv()->create([
+        'user_id' => $expired->id, 'region_id' => $this->est->id,
+        'starts_on' => BusinessClock::today()->subDays(10), 'ends_on' => BusinessClock::today()->subDay(),
+    ]);
+    expect(perimeter()->regionIds($expired))->toBe([]);
+
+    $upcoming = userWithRole(Role::Adv);
+    RegionAssignment::factory()->adv()->create(['user_id' => $upcoming->id, 'region_id' => $this->est->id, 'starts_on' => BusinessClock::today()->addDay()]);
+    expect(perimeter()->regionIds($upcoming))->toBe([])
+        ->and(perimeter()->regionIds($upcoming, BusinessClock::today()->addDay()))->toBe([$this->est->id]);
+});
+
 it('limits a regional to active and blocked clients of the regions they cover (RG-S01)', function () {
     $regional = userWithRole(Role::Regional);
     RegionAssignment::factory()->create(['user_id' => $regional->id, 'region_id' => $this->centre->id]);

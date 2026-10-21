@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import type { Product } from '../../../shared/api/types'
+import { formatDate } from '../../../shared/format'
 import { Badge } from '../../../shared/ui'
 
 /**
@@ -44,8 +45,13 @@ export function ProductThumbnail({ product, size = 48 }: { product: Pick<Product
   )
 }
 
-/** Statut et badges « Nouveau », « Mis en avant » (EF-PRD-05). */
-export function ProductBadges({ product }: { product: Pick<Product, 'is_active' | 'is_new' | 'is_featured'> }) {
+type BadgeProduct = Pick<Product, 'is_active' | 'is_new' | 'is_featured'> & Partial<Pick<Product, 'pending_deactivation_on'>>
+
+/**
+ * Statut, désactivation programmée (RG-Q07) et badges « Nouveau », « Mis en
+ * avant » (EF-PRD-05).
+ */
+export function ProductBadges({ product }: { product: BadgeProduct }) {
   const { t } = useTranslation()
   return (
     <span className="inline-flex flex-wrap gap-1">
@@ -53,6 +59,12 @@ export function ProductBadges({ product }: { product: Pick<Product, 'is_active' 
         <Badge tone="success">{t('backoffice.products.status.active')}</Badge>
       ) : (
         <Badge>{t('backoffice.products.status.inactive')}</Badge>
+      )}
+      {product.pending_deactivation_on && (
+        <span title={t('backoffice.products.pendingDeactivation.reason')}>
+          <Badge tone="warning">{t('backoffice.products.pendingDeactivation.badge', { date: formatDate(product.pending_deactivation_on) })}</Badge>
+          <span className="sr-only"> : {t('backoffice.products.pendingDeactivation.reason')}</span>
+        </span>
       )}
       {product.is_new && <Badge tone="brand">{t('backoffice.products.badges.new')}</Badge>}
       {product.is_featured && <Badge tone="warning">{t('backoffice.products.badges.featured')}</Badge>}

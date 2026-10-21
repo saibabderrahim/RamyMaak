@@ -42,6 +42,7 @@ return [
             'valid_from' => 'date d\'effet',
         ],
         'amount_format' => 'Le prix HT doit être un montant positif, avec 2 décimales au plus.',
+        'past_date' => 'La date d\'effet ne peut pas être passée : un prix déjà appliqué ne se modifie pas.',
     ],
 
     'photos' => [

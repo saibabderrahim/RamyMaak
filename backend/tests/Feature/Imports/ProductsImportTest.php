@@ -103,7 +103,7 @@ it('reports invalid product rows', function () {
         $this->header,
         ['P0101', 'Jus pomme 1 L', null, 'JUS', null, null, 6, null, null, 19, null, null],
         ['P0102', 'Jus mangue 1 L', null, 'SODA', null, 'Fardeau', 2.5, 0, '12AB', 120, 'EPUISE', -1],
-        ['P0042', null, str_repeat('x', 61), null, null, null, null, null, null, null, null, null],
+        ['P0042', null, str_repeat('x', 61), null, null, null, null, null, null, null, null, 2000000],
     ];
     $id = ($this->upload)($rows)->json('id');
 
@@ -122,6 +122,8 @@ it('reports invalid product rows', function () {
         'Ligne 3, colonne taux_tva : 120 n\'est pas un taux de TVA valide (de 0 à 100, 2 décimales au plus)',
         'Ligne 3, colonne statut : statut inconnu : EPUISE (ACTIF ou INACTIF)',
         'Ligne 4, colonne designation_courte : 60 caractères au plus',
+        // Mêmes bornes que la fiche produit : le produit reste modifiable.
+        'Ligne 4, colonne ordre_affichage : 2000000 dépasse le maximum autorisé (1000000)',
     ]);
 
     expectProblem($this->postJson("/api/v1/imports/{$id}/apply"), 409, 'IMPORT_HAS_ERRORS');

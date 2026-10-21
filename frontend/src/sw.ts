@@ -6,6 +6,7 @@
  */
 import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching'
 import { NavigationRoute, registerRoute } from 'workbox-routing'
+import { NAVIGATION_DENYLIST } from './shared/pwa/navigation'
 
 declare let self: ServiceWorkerGlobalScope
 
@@ -21,10 +22,6 @@ precacheAndRoute(self.__WB_MANIFEST)
 cleanupOutdatedCaches()
 
 // Application d'une seule page : toute navigation sert index.html, sauf
-// l'API et les points techniques du serveur. Les requêtes d'API ne sont
-// jamais mises en cache (réseau uniquement).
-registerRoute(
-  new NavigationRoute(createHandlerBoundToURL('index.html'), {
-    denylist: [/^\/api\//, /^\/sanctum\//, /^\/broadcasting\//, /^\/app\//, /^\/up$/],
-  }),
-)
+// l'API, les points techniques du serveur et les photos (NAVIGATION_DENYLIST).
+// Les requêtes d'API ne sont jamais mises en cache (réseau uniquement).
+registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html'), { denylist: NAVIGATION_DENYLIST }))

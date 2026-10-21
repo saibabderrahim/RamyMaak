@@ -1,8 +1,10 @@
-import backoffice from './fr/backoffice'
+import distribution from './fr/distribution'
 import field from './fr/field'
+import notifications from './fr/notifications'
 
 // Libellés en français (V1). L'arabe arrive en V1.1 avec un fichier ar.ts de
-// même structure (ENF-12). Les écrans du lot 2 ont leurs propres fichiers.
+// même structure (ENF-12). Les écrans du lot 2 ont leurs propres fichiers ;
+// ceux du back-office sont dans modules/backoffice/i18n.
 const fr = {
   app: {
     name: 'RamyMaak',
@@ -25,6 +27,12 @@ const fr = {
     pagination: 'Page {{page}} sur {{pages}} · {{total}} résultat(s)',
     retry: 'Réessayer',
     all: 'Tous',
+    close: 'Fermer',
+    quantity: {
+      label: 'Quantité de {{name}}',
+      decrease: 'Diminuer la quantité de {{name}}',
+      increase: 'Augmenter la quantité de {{name}}',
+    },
   },
   roles: {
     admin: 'Admin',
@@ -77,6 +85,16 @@ const fr = {
     products: 'Produits',
     imports: 'Imports',
     myClients: 'Mes clients',
+    days: 'Journées',
+    quotas: 'Quotas',
+    distribution: 'Répartition',
+    order: 'Commander',
+    cart: 'Panier',
+    withCount: '{{label}} ({{count}})',
+    orders: 'Commandes',
+    myDay: 'Ma journée',
+    reasons: 'Motifs',
+    notifications: 'Notifications',
     menu: 'Menu principal',
   },
   pwa: {
@@ -101,19 +119,11 @@ const fr = {
         'Notifications de validation et d’expédition',
       ],
     },
-    regional: {
-      items: [
-        'Ma journée : quotas reçus, clients sans commande',
-        'Grille produit × client et répartition des bornes',
-        'Validation des commandes une par une',
-      ],
-    },
+    // Accueil de l'ADV : liens (le régional a « Ma journée », lot 6).
     adv: {
-      items: [
-        'Calendrier des journées et matrice des quotas',
-        'Suivi de la journée en temps réel',
-        'Préparation, expédition, documents et exports',
-      ],
+      shortcuts: 'Journées et quotas',
+      days: 'Calendrier des journées',
+      todayQuotas: 'Quotas du jour',
     },
   },
   profile: {
@@ -133,6 +143,7 @@ const fr = {
         username: 'Identifiant',
         name: 'Nom',
         role: 'Rôle',
+        client: 'Client',
         status: 'Statut',
         lastLogin: 'Dernière connexion',
       },
@@ -143,8 +154,12 @@ const fr = {
         email: 'Adresse e-mail',
         phone: 'Téléphone',
         role: 'Rôle',
-        clientId: 'Identifiant du client',
-        clientIdHint: 'Rattachement au référentiel clients (lot 2).',
+        client: 'Client',
+        clientHint: 'Recherchez le client par son code ou sa raison sociale.',
+        clientPlaceholder: 'Code client ou raison sociale',
+        clientChange: 'Changer de client',
+        clientNone: 'Aucun client ne correspond.',
+        clientInactive: '{{label}} (inactif)',
         active: 'Compte actif',
       },
       status: {
@@ -179,6 +194,8 @@ const fr = {
         auth: 'Connexions et sécurité',
         users: 'Comptes',
         settings: 'Paramètres',
+        referentials: 'Référentiels (régions, clients, produits, prix)',
+        imports: 'Imports Excel',
       },
       columns: {
         date: 'Date',
@@ -227,8 +244,9 @@ const fr = {
       weekdays: ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'],
     },
   },
-  backoffice,
   field,
+  notifications,
+  distribution,
 } as const
 
 export default fr

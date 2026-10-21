@@ -3,43 +3,86 @@ import { NavLink, Outlet, useNavigate } from 'react-router'
 import type { Role } from '../api/types'
 import { LOGIN_PATH } from '../auth/guards'
 import { homePath, useAuthenticatedUser, useLogout } from '../auth/session'
+import { NotificationBell } from '../notifications/NotificationBell'
+import { useAdvToPrepareCount } from '../orders'
 import { OfflineBanner } from '../pwa/components'
+import { useCartLineCount } from '../../modules/client/cart/store'
 
-type NavItem = { to: string; label: string; end?: boolean }
+/** `badge` : pastille (nombre) ; `tabBar: false` : hors de la barre d'onglets du téléphone, lien dans l'en-tête. */
+type NavItem = { to: string; label: string; end?: boolean; badge?: number; tabBar?: boolean }
 
-function useNavItems(role: Role): NavItem[] {
+function useNavItems(role: Role, permissions: readonly string[]): NavItem[] {
   const { t } = useTranslation()
+  const cartLines = useCartLineCount()
+  // Commandes à préparer de l'ADV (N-08) : lues seulement avec le droit de consulter les commandes.
+  const toPrepare = useAdvToPrepareCount(role === 'adv' && permissions.includes('order.view'))
   const profile = { to: '/profil', label: t('nav.profile') }
 
   switch (role) {
     case 'admin':
       return [
         { to: '/admin/comptes', label: t('nav.users') },
+        { to: '/admin/journees', label: t('nav.days') },
+        { to: '/admin/commandes', label: t('nav.orders') },
         { to: '/admin/regions', label: t('nav.regions') },
         { to: '/admin/clients', label: t('nav.clients') },
         { to: '/admin/produits', label: t('nav.products') },
         { to: '/admin/imports', label: t('nav.imports') },
         { to: '/admin/journal', label: t('nav.audit') },
+        { to: '/admin/motifs', label: t('nav.reasons') },
         { to: '/admin/parametres', label: t('nav.settings') },
         profile,
       ]
     case 'adv':
       return [
         { to: '/adv', label: t('nav.home'), end: true },
+        // Commandes validées à préparer (EF-ADV-04), avec la pastille du nombre à préparer (N-08).
+        { to: '/adv/commandes', label: t('nav.orders'), badge: toPrepare },
+        { to: '/adv/journees', label: t('nav.days') },
         { to: '/adv/regions', label: t('nav.regions') },
         { to: '/adv/clients', label: t('nav.clients') },
         { to: '/adv/produits', label: t('nav.products') },
+        // Imports : quotas (quota.edit) et référentiels selon les droits reçus en option.
+        ...(permissions.includes('quota.edit') || permissions.includes('product.manage') || permissions.includes('client.manage')
+          ? [{ to: '/adv/imports', label: t('nav.imports') }]
+          : []),
         profile,
       ]
     case 'regional':
       return [
-        { to: '/regional', label: t('nav.home'), end: true },
+        // « Ma journée » (EF-REG-01) : page d'accueil du régional depuis le lot 6.
+        { to: '/regional', label: t('nav.myDay'), end: true },
+        { to: '/regional/quotas', label: t('nav.quotas') },
+        { to: '/regional/repartition', label: t('nav.distribution') },
+        { to: '/regional/commandes', label: t('nav.orders') },
         { to: '/regional/clients', label: t('nav.myClients') },
-        profile,
+        // Cinq onglets au plus sur un téléphone de 320 px : le profil passe dans l'en-tête.
+        { ...profile, tabBar: false },
       ]
     case 'client':
-      return [{ to: '/client', label: t('nav.home'), end: true }, profile]
+      return [
+        { to: '/client', label: t('nav.home'), end: true },
+        { to: '/client/catalogue', label: t('nav.order') },
+        { to: '/client/panier', label: t('nav.cart'), badge: cartLines },
+        { to: '/client/commandes', label: t('nav.orders') },
+        profile,
+      ]
   }
+}
+
+/** Libellé d'une entrée, avec sa pastille (nombre annoncé dans le nom accessible). */
+function NavLabel({ item }: { item: NavItem }) {
+  const { t } = useTranslation()
+  if (!item.badge) return <>{item.label}</>
+  return (
+    <span className="flex items-center gap-1">
+      <span className="sr-only">{t('nav.withCount', { label: item.label, count: item.badge })}</span>
+      <span aria-hidden="true">{item.label}</span>
+      <span aria-hidden="true" className="min-w-5 rounded-full bg-brand-600 px-1.5 text-center text-xs font-semibold text-white">
+        {item.badge > 99 ? '99+' : item.badge}
+      </span>
+    </span>
+  )
 }
 
 /** Barre d'onglets en bas de l'écran pour les rôles de terrain (téléphone). */
@@ -56,10 +99,12 @@ export function AppShell() {
   const user = useAuthenticatedUser()
   const logout = useLogout()
   const navigate = useNavigate()
-  const items = useNavItems(user.role)
+  const items = useNavItems(user.role, user.permissions)
+  // Entrées hors barre d'onglets (téléphone) : dans l'en-tête.
+  const headerItems = hasTabBar(user.role) ? items.filter((item) => item.tabBar === false) : []
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `flex min-h-11 items-center rounded-lg px-3 text-sm font-medium ${
+    `flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-lg px-3 text-sm font-medium ${
       isActive ? 'bg-brand-50 text-brand-800' : 'text-slate-700 hover:bg-slate-100'
     }`
 
@@ -72,19 +117,31 @@ export function AppShell() {
     <div className="flex min-h-dvh flex-col">
       <OfflineBanner />
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-2">
-          <NavLink to={homePath(user.role)} className="flex items-center gap-2 font-bold text-brand-700">
+        <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-2 sm:gap-4">
+          <NavLink to={homePath(user.role)} className="flex shrink-0 items-center gap-2 font-bold text-brand-700">
             <img src="/icons/icon-192.png" alt="" className="size-8 rounded-lg" />
-            {t('app.name')}
+            {/* Entrée d'en-tête en plus (« Profil » du régional) : sur téléphone, le logo seul tient dans 360 px. */}
+            <span className={headerItems.length > 0 ? 'sr-only sm:not-sr-only' : undefined}>{t('app.name')}</span>
           </NavLink>
-          <nav aria-label={t('nav.menu')} className="hidden flex-1 gap-1 lg:flex">
-            {items.map((item) => (
-              <NavLink key={item.to} to={item.to} end={item.end} className={linkClass}>
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
-          <div className="ms-auto flex items-center gap-3">
+          {/* Rôles de terrain (peu d'entrées) : menu dans l'en-tête sur grand écran.
+              Le back-office, au menu plus long, a sa propre ligne sous l'en-tête. */}
+          {hasTabBar(user.role) && (
+            <nav aria-label={t('nav.menu')} className="hidden min-w-0 flex-1 gap-1 lg:flex">
+              {items.map((item) => (
+                <NavLink key={item.to} to={item.to} end={item.end} className={linkClass}>
+                  <NavLabel item={item} />
+                </NavLink>
+              ))}
+            </nav>
+          )}
+          {headerItems.map((item) => (
+            <NavLink key={item.to} to={item.to} end={item.end} className={`${linkClass({ isActive: false })} lg:hidden`}>
+              {item.label}
+            </NavLink>
+          ))}
+          <div className="ms-auto flex shrink-0 items-center gap-3">
+            {/* Cloche des notifications, pour tous les rôles et sur téléphone (EF-NOT-01). */}
+            <NotificationBell />
             <div className="hidden text-end text-sm leading-tight sm:block">
               <div className="font-medium text-slate-900">{user.name}</div>
               <div className="text-slate-500">{t(`roles.${user.role}`)}</div>
@@ -102,12 +159,14 @@ export function AppShell() {
       </header>
 
       {!hasTabBar(user.role) && (
-        <nav aria-label={t('nav.menu')} className="flex gap-1 overflow-x-auto border-b border-slate-200 bg-white px-2 py-1 lg:hidden">
-          {items.map((item) => (
-            <NavLink key={item.to} to={item.to} end={item.end} className={(state) => `${linkClass(state)} shrink-0`}>
-              {item.label}
-            </NavLink>
-          ))}
+        <nav aria-label={t('nav.menu')} className="border-b border-slate-200 bg-white">
+          <div className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-2 py-1 sm:px-4">
+            {items.map((item) => (
+              <NavLink key={item.to} to={item.to} end={item.end} className={linkClass}>
+                <NavLabel item={item} />
+              </NavLink>
+            ))}
+          </div>
         </nav>
       )}
 
@@ -120,11 +179,13 @@ export function AppShell() {
           aria-label={t('nav.menu')}
           className="fixed inset-x-0 bottom-0 z-40 flex border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] lg:hidden"
         >
-          {items.map((item) => (
-            <NavLink key={item.to} to={item.to} end={item.end} className={tabClass}>
-              {item.label}
-            </NavLink>
-          ))}
+          {items
+            .filter((item) => item.tabBar !== false)
+            .map((item) => (
+              <NavLink key={item.to} to={item.to} end={item.end} className={tabClass}>
+                <NavLabel item={item} />
+              </NavLink>
+            ))}
         </nav>
       )}
     </div>

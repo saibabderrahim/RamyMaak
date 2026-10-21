@@ -205,6 +205,23 @@ describe('resource', function () {
         $this->actingAs($this->admin)->getJson('/api/v1/clients')->assertJsonCount(2, 'data.0.accounts');
     });
 
+    it('gives the regional the accounts of the clients of their perimeter, to reset a password (EF-AUTH-05)', function () {
+        $client = Client::factory()->create(['region_id' => $this->centre->id]);
+        $account = userWithRole(Role::Client, ['client_id' => $client->id, 'username' => 'c0500']);
+        $regional = userWithRole(Role::Regional);
+        RegionAssignment::factory()->create(['user_id' => $regional->id, 'region_id' => $this->centre->id]);
+        $this->actingAs($regional);
+
+        $this->getJson("/api/v1/clients/{$client->id}")
+            ->assertOk()
+            ->assertJsonPath('accounts.0.id', $account->id)
+            ->assertJsonPath('accounts.0.username', 'c0500');
+        $this->getJson('/api/v1/clients')->assertJsonPath('data.0.accounts.0.username', 'c0500');
+        $this->postJson("/api/v1/admin/users/{$account->id}/reset-password")
+            ->assertOk()
+            ->assertJsonStructure(['temporary_password']);
+    });
+
     it('loads a page of clients with a constant number of queries', function () {
         $this->actingAs($this->admin);
         $queries = function (): int {
@@ -495,5 +512,19 @@ describe('status (EF-CLI-04, §3.5)', function () {
             ->assertOk()
             ->assertJsonPath('name', 'Nouveau');
         expect($this->client->fresh()->status)->toBe(ClientStatus::Active);
+    });
+
+    it('keeps the reason when the unchanged status is resent without it, even without client.block', function () {
+        app(ClientRegistry::class)->changeStatus($this->client, ClientStatus::Inactive, 'Fermeture définitive', null);
+        $changedAt = $this->client->fresh()->status_changed_at;
+        SpatieRole::findByName('admin')->revokePermissionTo('client.block');
+        $this->actingAs(admin());
+
+        $this->patchJson("/api/v1/clients/{$this->client->id}", ['name' => 'Nouveau', 'status' => 'INACTIVE'])
+            ->assertOk()
+            ->assertJsonPath('name', 'Nouveau')
+            ->assertJsonPath('status', 'INACTIVE')
+            ->assertJsonPath('status_reason', 'Fermeture définitive');
+        expect($this->client->fresh()->status_changed_at?->toIso8601String())->toBe($changedAt?->toIso8601String());
     });
 });

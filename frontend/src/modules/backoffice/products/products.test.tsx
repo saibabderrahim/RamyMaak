@@ -45,6 +45,7 @@ const product: Product = {
   ean: '6130000000420',
   vat_rate: 19,
   is_active: true,
+  pending_deactivation_on: null,
   is_new: true,
   is_featured: false,
   sort_order: 10,

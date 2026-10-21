@@ -68,6 +68,17 @@ async function ensureCsrfCookie(force = false): Promise<void> {
   await fetch('/sanctum/csrf-cookie', { credentials: 'include', headers: { Accept: 'application/json' } })
 }
 
+/**
+ * En-tête anti-CSRF pour une requête hors de `request()` (autorisation des
+ * canaux temps réel, envois multipart) ; `renew` force un nouveau jeton
+ * après une réponse 419.
+ */
+export async function csrfHeaders(renew = false): Promise<Record<string, string>> {
+  await ensureCsrfCookie(renew)
+  const xsrf = readCookie('XSRF-TOKEN')
+  return xsrf ? { 'X-XSRF-TOKEN': xsrf } : {}
+}
+
 export function buildUrl(path: string, query?: Query): string {
   const params = new URLSearchParams()
   for (const [key, value] of Object.entries(query ?? {})) {

@@ -1,6 +1,6 @@
-import { type InfiniteData, keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
+import { type InfiniteData, keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../../shared/api/client'
-import type { Client, Paginated } from '../../../shared/api/types'
+import type { Client, Paginated, UserWithTemporaryPassword } from '../../../shared/api/types'
 
 /**
  * Clients des écrans terrain : « Mes clients » du régional (EF-CLI-03) et
@@ -50,5 +50,16 @@ export function useFieldClient(id: number, enabled = true) {
       return undefined
     },
     enabled,
+  })
+}
+
+/**
+ * Réinitialisation par le régional du mot de passe d'un compte client de son
+ * périmètre (EF-AUTH-05) : mot de passe temporaire à usage unique, sessions
+ * du compte révoquées par le serveur.
+ */
+export function useResetClientPassword() {
+  return useMutation({
+    mutationFn: (accountId: number) => api.post<UserWithTemporaryPassword>(`/admin/users/${accountId}/reset-password`),
   })
 }

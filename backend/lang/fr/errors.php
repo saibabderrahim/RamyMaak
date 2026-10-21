@@ -18,6 +18,7 @@ return [
     'REGION_QUOTA_EXCEEDED' => 'Quota région dépassé',
     'QUOTA_BELOW_VALIDATED' => 'Valeur inférieure à la quantité déjà validée',
     'MAX_ORDERS_REACHED' => 'Nombre de commandes atteint',
+    'ORDER_BELOW_MINIMUM' => 'Montant minimum de commande non atteint',
     'VERSION_CONFLICT' => 'Modifié entre-temps',
     'INVALID_TRANSITION' => 'Changement de statut non autorisé',
     'IMPORT_HAS_ERRORS' => 'Import non applicable',

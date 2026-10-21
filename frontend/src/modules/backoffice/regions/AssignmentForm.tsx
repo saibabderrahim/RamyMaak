@@ -8,7 +8,7 @@ import { ASSIGNMENT_KINDS, type Assignment } from '../../../shared/api/types'
 import { applyServerErrors } from '../../../shared/forms'
 import { businessToday, formatDate } from '../../../shared/format'
 import { Button, ErrorAlert, Field, Input, Select } from '../../../shared/ui'
-import { ConfirmDialog } from '../shared/ui'
+import { ConfirmDialog } from '../../../shared/ui/ConfirmDialog'
 import { type AssignmentInput, useAssignableUsers, useCreateAssignment } from './api'
 import { overlappingTitulars } from './assignments'
 

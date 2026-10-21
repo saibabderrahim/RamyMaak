@@ -15,6 +15,7 @@ return [
         'replace' => 'remplacement',
     ],
     'code_format' => 'Le code ne peut contenir que des lettres majuscules, des chiffres, des tirets et des tirets bas (2 à 20 caractères).',
+    'code_ambiguous' => 'Code trop proche de la région :code : les imports Excel ne distinguent pas « - » et « _ ».',
     'code_immutable' => 'Le code ne peut pas être modifié : il sert de clé dans les fichiers Excel.',
     'depot_inactive' => 'Ce dépôt est désactivé.',
     'has_clients' => '{1} La région compte encore un client actif ou bloqué, aujourd\'hui ou à partir de demain : changez-le de région ou désactivez-le d\'abord.|[2,*] La région compte encore :count clients actifs ou bloqués, aujourd\'hui ou à partir de demain : changez-les de région ou désactivez-les d\'abord.',

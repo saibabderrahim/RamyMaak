@@ -86,6 +86,7 @@ Précisions (implémentation) :
 - `filter[active]=0` sur l'historique renvoie les affectations non actives aujourd'hui ; ordre : `starts_on` décroissant.
 - `replace: true` révoque immédiatement tous les titulaires non révoqués qui chevauchent (en cours et à venir).
 - Une révocation est journalisée avec l'action `revoked` (« Affectation révoquée »).
+- Périmètre ADV (RG-S05) : toutes les régions tant que l'ADV n'a jamais reçu d'affectation ADV ; dès la première (en cours, à venir, terminée ou révoquée), il est limité à ses affectations **actives du jour**, éventuellement aucune. Mettre fin à une affectation retire une région, sans jamais rendre toutes les régions.
 
 ### Profil (`/auth/me`)
 
@@ -127,7 +128,7 @@ Précisions (implémentation) :
 | GET | `/client-categories` | — | `{ "data": [ClientCategory] }` |
 | POST | `/admin/client-categories` | `code` (unique, majuscules), `name` | 201 `ClientCategory` |
 | PATCH | `/admin/client-categories/{id}` | `name` | `ClientCategory` |
-| POST | `/admin/client-accounts` | `client_ids` (1 à 200 identifiants) | **PDF** `fiches-acces-AAAAMMJJ.pdf` : une fiche par compte créé (raison sociale, code, identifiant = code client en minuscules, mot de passe temporaire, adresse de l'application, aide à l'installation). Les clients qui ont déjà un compte ou qui sont inactifs sont ignorés ; en-tête `X-Accounts-Created` (nombre). Aucun compte créé → 422 sur `client_ids`. |
+| POST | `/admin/client-accounts` | `client_ids` (1 à 100 identifiants) | **PDF** `fiches-acces-AAAAMMJJ.pdf` : une fiche par compte créé (raison sociale, code, identifiant = code client en minuscules, mot de passe temporaire, adresse de l'application, aide à l'installation). Les clients qui ont déjà un compte ou qui sont inactifs sont ignorés ; en-tête `X-Accounts-Created` (nombre). Aucun compte créé → 422 sur `client_ids`. |
 
 Comptes utilisateurs (lot 1, à compléter) :
 - `POST/PATCH /admin/users` : `client_id` **obligatoire** et existant pour le rôle client, interdit pour les autres ;
@@ -141,6 +142,8 @@ Précisions (implémentation) :
 - Le libellé d'une catégorie est unique comme son code (l'import identifie la catégorie par l'un ou l'autre).
 - `POST /admin/client-accounts` : identifiants inconnus → 422 ; doublons fusionnés ; clients hors périmètre ou dont l'identifiant est déjà pris ignorés ; le compte reprend le nom, l'e-mail et le téléphone du client ; réponse `Cache-Control: no-store`.
 - `GET /admin/users` accepte `filter[client_id]` ; `PATCH /admin/users/{id}` avec `is_active=true` sur un compte dont le client est inactif → 422.
+- `accounts` est aussi fourni au régional (droit `user.reset-client-password`) pour les clients de son périmètre : il réinitialise le mot de passe depuis la fiche « Mes clients » (EF-AUTH-05). `POST /admin/users/{id}/reset-password` répond 404 au régional pour tout compte hors de son périmètre ou du personnel.
+- Statut renvoyé à l'identique sans `status_reason` : le motif en place est conservé (ce n'est pas un changement de statut).
 
 ## 5. Produits, familles, prix, photos
 
@@ -180,7 +183,7 @@ Précisions (implémentation) :
 | POST | `/products` | `sku` (requis, unique, `^[A-Za-z0-9_-]{1,30}$`, majuscules), `name` (requis), `short_name` (défaut : `name` tronqué à 60), `family_id` (requis), `format`, `sales_unit_label` (requis), `units_per_sales_unit` (requis, ≥ 1), `sales_units_per_pallet` (≥ 1), `ean` (8 à 14 chiffres), `vat_rate` (requis, 0 à 100), `is_active`, `is_new`, `is_featured`, `sort_order` | 201 `Product` |
 | PATCH | `/products/{id}` | mêmes champs sauf `sku` | `Product` |
 | GET | `/products/{id}/prices` | — | `{ "data": [ProductPrice] }`, plus récents d'abord ; interdit au rôle client |
-| POST | `/products/{id}/prices` | `price_ht` (requis, ≥ 0, 2 décimales), `valid_from` (requis, `AAAA-MM-JJ`) | 201 `ProductPrice` (via `PriceBook::setPrice` ; même date d'effet → remplacée) |
+| POST | `/products/{id}/prices` | `price_ht` (requis, ≥ 0, 2 décimales), `valid_from` (requis, `AAAA-MM-JJ`, aujourd'hui ou plus tard) | 201 `ProductPrice` (via `PriceBook::setPrice` ; même date d'effet → remplacée, `created_by` = auteur du nouveau montant) ; date passée → 422 (RG-P03 : un prix déjà appliqué ne se réécrit pas) |
 | POST | `/products/{id}/media` | multipart : `photo` (requis, JPEG/PNG/WebP, 5 Mo), `main` (bool) | 201 `ProductPhoto` ; 5 photos déjà → 422 sur `photo` |
 | PATCH | `/products/{id}/media/{mediaId}` | `main: true` | `{ "data": [ProductPhoto] }` réordonnées |
 | DELETE | `/products/{id}/media/{mediaId}` | — | 204 |
@@ -233,7 +236,9 @@ Règles :
 - une ligne par clé ; doublon → erreur « déjà présent ligne N » ;
 - mise à jour : une cellule **vide** laisse la valeur inchangée ; une colonne absente aussi ;
 - clients : changement de région via `ClientRegistry` (effet à J+1) ; `statut` `BLOQUE` sans motif → motif « Import Excel du JJ/MM/AAAA » ;
-- prix : via `PriceBook::setPrice` (même date d'effet → remplacée) ;
+- prix : via `PriceBook::setPrice` (même date d'effet → remplacée) ; une ligne qui modifierait un prix à une date d'effet passée est en erreur (RG-P03), une ligne passée inchangée (gabarit réimporté tel quel) est acceptée ;
+- `ordre_affichage` : de 0 à 1 000 000, comme sur la fiche produit ;
+- fichier d'erreurs annoté : aucune formule ni aucun lien du fichier déposé n'y reste actif (valeur calculée ou texte) ;
 - messages d'erreur au format du §8.1 (« Ligne 14, colonne code_region : … ») ;
 - application journalisée : une entrée `imports` / `applied` avec le résumé, et les changements de chaque fiche regroupés par `batch_uuid`.
 
@@ -245,9 +250,11 @@ Règles :
 | Admin | `/admin/clients`, `/admin/clients/nouveau`, `/admin/clients/:id` | Clients (filtres, recherche), création, fiche (modification, changement de région programmé, blocage avec motif, comptes, création de compte), sélection multiple → fiches d'accès PDF ; onglet Catégories |
 | Admin | `/admin/produits`, `/admin/produits/nouveau`, `/admin/produits/:id` | Produits (vignette, prix HT et TTC, statut), création, fiche (modification, photos : envoi, principale, suppression ; prix : historique et prix futur) ; onglet Familles |
 | Admin | `/admin/imports`, `/admin/imports/:id` | Gabarits, dépôt, progression, rapport d'erreurs et fichier annoté, aperçu des changements, application après confirmation, historique |
-| ADV | `/adv/regions`, `/adv/clients`, `/adv/clients/:id`, `/adv/produits`, `/adv/produits/:id` | Mêmes écrans en lecture seule (les actions apparaissent selon les permissions) |
-| Régional | `/regional/clients`, `/regional/clients/:id` | **Mes clients** : recherche, statut, appel en un geste (`tel:`), fiche (EF-CLI-03) |
+| ADV | `/adv/regions`, `/adv/clients`, `/adv/clients/:id`, `/adv/produits`, `/adv/produits/:id` | Mêmes écrans en lecture seule (les actions apparaissent selon les permissions) ; `/adv/produits/nouveau` et `/adv/imports` avec le droit optionnel `product.manage` (ou `client.manage`) |
+| Régional | `/regional/clients`, `/regional/clients/:id` | **Mes clients** : recherche, statut, appel en un geste (`tel:`), fiche (EF-CLI-03), comptes d'accès et réinitialisation du mot de passe (EF-AUTH-05) |
 | Client | `/profil` | Carte « Mon entreprise » : sa fiche en lecture |
+| Admin | `/admin/comptes` | Comptes (lot 1) : client rattaché affiché ; rattachement par recherche du client (code ou raison sociale) |
+| Admin | `/admin/journal` | Journal d'audit (lot 1) : journaux « Référentiels » et « Imports Excel » ajoutés au filtre |
 
 ## 8. Répartition du travail (fichiers possédés)
 

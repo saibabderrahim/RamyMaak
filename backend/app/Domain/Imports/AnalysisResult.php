@@ -2,6 +2,8 @@
 
 namespace App\Domain\Imports;
 
+use App\Http\Problems\ApiException;
+
 /**
  * Résultat du contrôle d'un fichier : compteurs complets, erreurs, résumé
  * et plan d'application des lignes valides.
@@ -29,6 +31,12 @@ final class AnalysisResult
     /** Classeur lu : un fichier d'erreurs annoté peut en être tiré. */
     public bool $readable = false;
 
+    /**
+     * Erreur d'état (journée clôturée) : l'application répond par ce
+     * problème plutôt que par IMPORT_HAS_ERRORS.
+     */
+    public ?ApiException $conflict = null;
+
     public function __construct(public readonly ImportDefinition $definition) {}
 
     public function fileError(?string $column, string $message): void
@@ -44,7 +52,7 @@ final class AnalysisResult
     /**
      * Aperçu des changements : les premières lignes créées ou modifiées.
      *
-     * @return list<array{row: int, key: string, action: string, changes: array<string, array{old: mixed, new: mixed}>}>
+     * @return list<array{row: ?int, key: string, action: string, changes: list<array{field: string, old: mixed, new: mixed}>}>
      */
     public function preview(int $limit): array
     {

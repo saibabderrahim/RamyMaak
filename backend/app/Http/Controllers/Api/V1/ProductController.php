@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Quotas\ProductDeactivation;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Products\StoreProductRequest;
 use App\Http\Requests\Products\UpdateProductRequest;
@@ -10,11 +11,13 @@ use App\Models\Product;
 use App\Models\ProductFamily;
 use App\Models\User;
 use App\Policies\ProductPolicy;
+use App\Support\FilterValue;
 use App\Support\Pagination;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use Spatie\QueryBuilder\AllowedFilter;
@@ -25,9 +28,16 @@ use Spatie\QueryBuilder\QueryBuilder;
  * (un compte client ne voit que les produits actifs), création et
  * modification avec product.manage. Chaque fiche porte le prix en vigueur
  * aujourd'hui et le prochain prix programmé (RG-P01).
+ *
+ * RG-Q07 : un produit doté d'un quota publié > 0 sur la journée ouverte
+ * d'aujourd'hui n'est désactivé qu'à partir de demain (`deactivate_on`,
+ * appliqué par ramymaak:apply-product-deactivations) ; le réactiver annule
+ * cette désactivation programmée.
  */
 class ProductController extends Controller
 {
+    public function __construct(private readonly ProductDeactivation $deactivation) {}
+
     public function index(Request $request): AnonymousResourceCollection
     {
         Gate::authorize('viewAny', Product::class);
@@ -87,7 +97,23 @@ class ProductController extends Controller
     /** Modification partielle ; le code article ne change pas (clé ERP). */
     public function update(UpdateProductRequest $request, Product $product): ProductResource
     {
-        $product->fill($request->safe()->except('sku'))->save();
+        /** @var User $user */
+        $user = $request->user();
+        $attributes = $request->safe()->except(['sku', 'is_active']);
+        $active = $request->requestedActive();
+
+        DB::transaction(function () use ($product, $attributes, $active, $user): void {
+            $product = Product::query()->lockForUpdate()->findOrFail($product->id);
+            $pending = $product->deactivate_on?->format('Y-m-d');
+            $product->fill($attributes);
+
+            if ($active !== null) {
+                // RG-Q07 : quota publié sur la journée en cours → effet à la journée suivante.
+                $this->deactivation->setActive($product, $active);
+            }
+            $product->save();
+            $this->deactivation->logChange($product, $pending, $user);
+        });
 
         return new ProductResource($this->reload($product));
     }
@@ -100,7 +126,7 @@ class ProductController extends Controller
     /** Code article, désignation ou désignation courte. */
     private function search(Builder $query, mixed $value): void
     {
-        $value = trim(is_array($value) ? implode(',', $value) : (string) $value);
+        $value = FilterValue::text($value, 'search');
         if ($value === '') {
             return;
         }

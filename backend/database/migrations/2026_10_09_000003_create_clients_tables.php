@@ -1,7 +1,9 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -49,6 +51,14 @@ return new class extends Migration
         });
 
         // Comptes clients rattachés au référentiel (clé étrangère prévue au lot 1).
+        // Un client_id saisi en v0.1.0, avant le référentiel, ne désigne aucun
+        // client : il est remis à vide (compte à rattacher depuis « Comptes »
+        // après l'import des clients), sinon la clé étrangère est refusée.
+        DB::table('users')
+            ->whereNotNull('client_id')
+            ->whereNotExists(fn (Builder $query) => $query->selectRaw('1')->from('clients')->whereColumn('clients.id', 'users.client_id'))
+            ->update(['client_id' => null]);
+
         Schema::table('users', function (Blueprint $table) {
             $table->foreign('client_id')->references('id')->on('clients')->restrictOnDelete();
         });

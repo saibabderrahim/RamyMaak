@@ -100,6 +100,14 @@ class User extends Authenticatable
         return $this->belongsTo(Client::class);
     }
 
+    /**
+     * Canal privé des notifications de l'utilisateur (§9.6 : `user.{userId}`).
+     */
+    public function receivesBroadcastNotificationsOn(): string
+    {
+        return 'user.'.$this->id;
+    }
+
     /** @return HasMany<RegionAssignment, $this> */
     public function regionAssignments(): HasMany
     {

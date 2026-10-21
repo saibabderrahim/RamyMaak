@@ -7,6 +7,7 @@ use App\Domain\Referentials\ProductPhotos;
 use App\Models\Product;
 use App\Models\ProductPrice;
 use App\Support\BusinessClock;
+use App\Support\Money;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -20,6 +21,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * `price` : prix HT par UV, prix TTC (taux de la fiche, RG-P02) et prix
  * unitaire indicatif (prix de l'UV ÷ unités par UV), arrondis à 2 décimales
  * (RG-P04) ; montants indicatifs, la facture de l'ERP fait foi (RG-P05).
+ *
+ * `pending_deactivation_on` : date d'effet d'une désactivation différée
+ * parce que le produit a un quota publié sur la journée en cours (RG-Q07).
  *
  * @mixin Product
  */
@@ -86,12 +90,14 @@ class ProductResource extends JsonResource
             'ean' => $this->ean,
             'vat_rate' => (float) $this->vat_rate,
             'is_active' => (bool) $this->is_active,
+            // RG-Q07 : désactivation programmée à cette date (quota publié sur la journée de la demande).
+            'pending_deactivation_on' => $this->is_active ? $this->deactivate_on?->format('Y-m-d') : null,
             'is_new' => (bool) $this->is_new,
             'is_featured' => (bool) $this->is_featured,
             'sort_order' => (int) $this->sort_order,
             'price' => $current === null ? null : $this->priceRef($current[0], $current[1]),
             'next_price' => $next === null ? null : [
-                'price_ht' => self::amount(self::cents($next[0])),
+                'price_ht' => Money::amount(Money::cents($next[0])),
                 'valid_from' => $next[1],
             ],
             'photos' => ProductPhotoResource::ordered(app(ProductPhotos::class)->photos($this->resource)),
@@ -135,27 +141,14 @@ class ProductResource extends JsonResource
      */
     private function priceRef(mixed $priceHt, string $validFrom): array
     {
-        $cents = self::cents($priceHt);
-        // Taux en points de base (19,00 % → 1 900) : calcul exact en entiers, arrondi au centime supérieur à partir de 0,5.
-        $vat = (int) round((float) $this->vat_rate * 100);
-        $units = max(1, (int) $this->units_per_sales_unit);
+        $cents = Money::cents($priceHt);
+        $vat = Money::basisPoints($this->vat_rate);
 
         return [
-            'price_ht' => self::amount($cents),
-            'price_ttc' => self::amount(intdiv($cents * (10000 + $vat) + 5000, 10000)),
-            'unit_price_ht' => self::amount(intdiv(2 * $cents + $units, 2 * $units)),
+            'price_ht' => Money::amount($cents),
+            'price_ttc' => Money::amount(Money::ttcCents($cents, $vat)),
+            'unit_price_ht' => Money::amount(Money::unitCents($cents, (int) $this->units_per_sales_unit)),
             'valid_from' => $validFrom,
         ];
-    }
-
-    /** Montant DECIMAL(12,2) lu en base (chaîne ou nombre selon le moteur) → centimes. */
-    private static function cents(mixed $amount): int
-    {
-        return (int) round((float) $amount * 100);
-    }
-
-    private static function amount(int $cents): float
-    {
-        return $cents / 100;
     }
 }

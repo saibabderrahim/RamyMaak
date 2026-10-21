@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useParams } from 'react-router'
 import type { Product } from '../../../shared/api/types'
+import { formatDate } from '../../../shared/format'
 import { Alert, Card, ErrorAlert, PageHeader, Spinner } from '../../../shared/ui'
 import { useBackoffice } from '../shared/access'
 import { type DetailItem, DetailList } from '../shared/ui'
@@ -10,10 +11,12 @@ import { formatRate } from './numbers'
 import { PhotoManager } from './PhotoManager'
 import { PricesPanel } from './PricesPanel'
 import { ProductForm } from './ProductForm'
+import { shownActive } from './status'
 
 /**
  * Fiche produit back-office (§7.3) : modification (product.manage), photos
- * et prix ; en lecture seule sans ce droit (ADV par défaut).
+ * et prix ; en lecture seule sans ce droit (ADV par défaut). Désactivation
+ * programmée au lendemain quand un quota publié court aujourd'hui (RG-Q07).
  */
 export default function ProductDetailPage() {
   const { id } = useParams()
@@ -49,6 +52,8 @@ function ProductDetail({ id }: { id: number }) {
   }
 
   const item = product.data
+  // Enregistrement qui a programmé (ou maintenu) une désactivation : avis à la place de « enregistrée ».
+  const savedPending = update.isSuccess ? update.data.pending_deactivation_on : null
 
   return (
     <>
@@ -63,22 +68,35 @@ function ProductDetail({ id }: { id: number }) {
           {t('backoffice.products.created')}
         </Alert>
       )}
+      {item.pending_deactivation_on && !savedPending && (
+        <Alert tone="warning" className="mb-6">
+          {t('backoffice.products.pendingDeactivation.notice', { date: formatDate(item.pending_deactivation_on) })}
+        </Alert>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
         <Card title={t('backoffice.products.edit')}>
           {canManage ? (
             <>
-              {update.isSuccess && (
-                <Alert tone="success" className="mb-4">
-                  {t('backoffice.products.updated')}
-                </Alert>
-              )}
+              {update.isSuccess &&
+                (savedPending ? (
+                  <Alert tone="warning" className="mb-4">
+                    {t('backoffice.products.pendingDeactivation.saved', { date: formatDate(savedPending) })}
+                  </Alert>
+                ) : (
+                  <Alert tone="success" className="mb-4">
+                    {t('backoffice.products.updated')}
+                  </Alert>
+                ))}
               <ProductForm
-                key={item.updated_at}
+                key={`${item.updated_at}|${item.pending_deactivation_on ?? ''}`}
                 product={item}
                 submitting={update.isPending}
                 error={update.error}
-                onSubmit={({ sku: _sku, ...values }) => update.mutateAsync(values)}
+                // Statut envoyé seulement s'il change : réenregistrer la fiche n'annule pas une désactivation programmée.
+                onSubmit={({ sku: _sku, is_active, ...values }) =>
+                  update.mutateAsync(is_active === shownActive(item) ? values : { ...values, is_active })
+                }
               />
             </>
           ) : (

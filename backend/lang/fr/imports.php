@@ -1,14 +1,24 @@
 <?php
 
-// Imports Excel des référentiels (§8.3, Annexes B.3 à B.5) : dépôt, rapport
-// d'analyse au format du §8.1, application, gabarits.
+// Imports Excel des quotas et des référentiels (§8.1, §8.3, Annexes B.1, B.3 à
+// B.5) : dépôt, rapport d'analyse au format du §8.1, application, gabarits.
 return [
     'attributes' => [
         'type' => 'type de fichier',
         'file' => 'fichier',
+        'business_day' => 'journée',
+        'mode' => 'mode',
+        'day' => 'journée',
     ],
     'unknown_type' => 'Type d\'import inconnu.',
     'unknown_status' => 'Statut inconnu.',
+    'mode_invalid' => 'Mode attendu : REPLACE (remplacer) ou COMPLETE (compléter).',
+    // Journée d'un import de quotas (§8.1) : ouverte et non clôturée.
+    'day' => [
+        'format' => 'Date attendue au format AAAA-MM-JJ.',
+        'not_open' => 'La journée du :day n\'est pas ouverte.',
+        'closed' => 'La journée du :day est clôturée : ses quotas ne sont plus modifiables.',
+    ],
     'failed' => 'L\'analyse du fichier a été interrompue par un incident technique. Déposez à nouveau le fichier ; si le problème persiste, contactez l\'administrateur.',
     // Motif d'un blocage importé sans motif (EF-CLI-04).
     'status_reason' => 'Import Excel du :date',
@@ -44,6 +54,7 @@ return [
             'CLIENTS' => 'clients',
             'PRODUCTS' => 'produits',
             'PRICES' => 'prix',
+            'QUOTAS' => 'quotas',
         ],
         'information' => ':column (information)',
         'required' => 'Colonne obligatoire (et valeur obligatoire pour une création).',
@@ -74,6 +85,7 @@ return [
         'natural_integer' => ':value n\'est pas un entier positif ou nul',
         'integer_max' => ':value dépasse le maximum autorisé (:max)',
         'date' => ':value n\'est pas une date valide (JJ/MM/AAAA)',
+        'past_price_date' => 'date d\'effet passée : un prix déjà appliqué ne se modifie pas',
         'duplicate' => ':subject déjà présent ligne :first',
         'client_out_of_perimeter' => 'client :value hors de votre périmètre',
         'unknown_region' => 'code région inconnu : :value',
@@ -91,6 +103,17 @@ return [
         'vat_rate' => ':value n\'est pas un taux de TVA valide (de 0 à 100, 2 décimales au plus)',
         'product_status' => 'statut inconnu : :value (ACTIF ou INACTIF)',
         'unknown_product' => 'code produit inconnu : :value',
+        // Quotas (§8.1).
+        'day_closed' => 'La journée du :day est clôturée : ses quotas ne sont plus modifiables.',
+        'unknown_region_column' => 'code région inconnu',
+        'inactive_region_column' => 'région inactive',
+        'region_column_out_of_perimeter' => 'région hors de votre périmètre',
+        'ambiguous_region_column' => 'code région ambigu (:codes)',
+        'region_day_closed' => 'la journée de cette région est clôturée',
+        'no_region_column' => 'Aucune colonne de région : ajoutez une colonne par code région (ex. CENTRE), comme dans le gabarit.',
+        'unknown_or_inactive_product' => 'code produit :value inconnu ou inactif',
+        'below_validated' => ':value inférieur aux :validated déjà validés',
+        'absent_below_validated' => 'produit :product absent du fichier (0 en mode Remplacer) : inférieur aux :validated déjà validés',
         'amount' => ':value n\'est pas un montant valide (nombre positif, 2 décimales au plus)',
     ],
 ];

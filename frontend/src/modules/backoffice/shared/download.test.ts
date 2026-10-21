@@ -65,6 +65,16 @@ describe('backoffice/shared/download', () => {
     await expect(fetchFile('/imports/9/error-report')).rejects.toMatchObject({ status: 404, code: 'NOT_FOUND' })
   })
 
+  it('sends the query of a GET download, skipping empty values (lot 6 documents and exports)', async () => {
+    const { fetchMock } = mockApi({ 'GET /api/v1/adv/days/2026-10-08/picking-list': () => pdf() })
+
+    await fetchFile('/adv/days/2026-10-08/picking-list', { query: { format: 'pdf', group: 'depot', region: undefined, 'filter[status]': 'VALIDATED,PREPARED' } })
+
+    const url = new URL(String(fetchMock.mock.calls[0]?.[0]), 'http://localhost')
+    expect(url.pathname).toBe('/api/v1/adv/days/2026-10-08/picking-list')
+    expect(Object.fromEntries(url.searchParams)).toEqual({ format: 'pdf', group: 'depot', 'filter[status]': 'VALIDATED,PREPARED' })
+  })
+
   it('reports a network failure', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))))
     await expect(fetchFile('/imports/templates/clients')).rejects.toBeInstanceOf(NetworkError)

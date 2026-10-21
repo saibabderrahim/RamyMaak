@@ -3,17 +3,33 @@
 use App\Http\Controllers\Api\V1\Admin\AuditLogController;
 use App\Http\Controllers\Api\V1\Admin\ClientAccountController;
 use App\Http\Controllers\Api\V1\Admin\DepotController;
+use App\Http\Controllers\Api\V1\Admin\ReasonCodeController as AdminReasonCodeController;
 use App\Http\Controllers\Api\V1\Admin\RegionAssignmentController;
 use App\Http\Controllers\Api\V1\Admin\SettingsController;
 use App\Http\Controllers\Api\V1\Admin\UserController;
+use App\Http\Controllers\Api\V1\Adv\AdvOrderController;
+use App\Http\Controllers\Api\V1\Adv\DayController;
+use App\Http\Controllers\Api\V1\Adv\DayDocumentController;
+use App\Http\Controllers\Api\V1\Adv\DayMonitoringController;
+use App\Http\Controllers\Api\V1\Adv\QuotaController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\Client\ClientOrderController;
+use App\Http\Controllers\Api\V1\Client\ClientTodayController;
 use App\Http\Controllers\Api\V1\ClientCategoryController;
 use App\Http\Controllers\Api\V1\ClientController;
 use App\Http\Controllers\Api\V1\ImportController;
+use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\ProductFamilyController;
 use App\Http\Controllers\Api\V1\ProductMediaController;
 use App\Http\Controllers\Api\V1\ProductPriceController;
+use App\Http\Controllers\Api\V1\ReasonCodeController;
+use App\Http\Controllers\Api\V1\Regional\DistributionGridController;
+use App\Http\Controllers\Api\V1\Regional\LimitController;
+use App\Http\Controllers\Api\V1\Regional\RegionalDashboardController;
+use App\Http\Controllers\Api\V1\Regional\RegionalOrderController;
+use App\Http\Controllers\Api\V1\Regional\RegionalOrderDecisionController;
+use App\Http\Controllers\Api\V1\RegionalQuotaController;
 use App\Http\Controllers\Api\V1\RegionController;
 use App\Http\Middleware\EnforceSessionPolicy;
 use App\Http\Middleware\EnsurePasswordIsChanged;
@@ -61,7 +77,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::get('product-families', [ProductFamilyController::class, 'index'])->name('product-families.index');
 
             Route::get('imports/templates/{type}', [ImportController::class, 'template'])
-                ->whereIn('type', ['clients', 'products', 'prices'])
+                ->whereIn('type', ['clients', 'products', 'prices', 'quotas'])
                 ->name('imports.template');
             Route::get('imports', [ImportController::class, 'index'])->name('imports.index');
             Route::post('imports', [ImportController::class, 'store'])->name('imports.store');
@@ -70,6 +86,72 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::get('imports/{import}/error-report', [ImportController::class, 'errorReport'])
                 ->whereNumber('import')
                 ->name('imports.error-report');
+
+            // Journées et quotas (lot 3) — contrat : docs/lot-3-contrat-api.md
+            // {businessDay} : journée « AAAA-MM-JJ » (liaison dans AppServiceProvider).
+            Route::prefix('adv')->name('adv.')->group(function () {
+                Route::get('days', [DayController::class, 'index'])->name('days.index');
+                Route::post('days', [DayController::class, 'store'])->name('days.store');
+                Route::get('days/{businessDay}', [DayController::class, 'show'])->name('days.show');
+                Route::patch('days/{businessDay}', [DayController::class, 'update'])->name('days.update');
+                Route::post('days/{businessDay}/regions/{region}/extend-cutoff', [DayController::class, 'extendCutoff'])
+                    ->name('days.extend-cutoff');
+                Route::get('days/{businessDay}/quotas', [QuotaController::class, 'index'])->name('quotas.index');
+                Route::put('days/{businessDay}/quotas', [QuotaController::class, 'update'])->name('quotas.update');
+                Route::post('days/{businessDay}/quotas/publish', [QuotaController::class, 'publish'])->name('quotas.publish');
+                Route::post('days/{businessDay}/quotas/copy', [QuotaController::class, 'copy'])->name('quotas.copy');
+            });
+            Route::get('regional/quotas', [RegionalQuotaController::class, 'index'])->name('regional.quotas.index');
+
+            // Répartition (lot 4) — contrat : docs/lot-4-contrat-api.md
+            Route::prefix('regional/days/{businessDay}')->name('regional.')->group(function () {
+                Route::get('grid', [DistributionGridController::class, 'show'])->name('grid.show');
+                Route::put('limits', [LimitController::class, 'update'])->name('limits.update');
+                Route::post('limits/copy-previous', [LimitController::class, 'copyPrevious'])->name('limits.copy-previous');
+                Route::post('distribution/publish', [LimitController::class, 'publish'])->name('distribution.publish');
+            });
+            // Répartition en lecture pour l'ADV et l'Admin.
+            Route::get('adv/days/{businessDay}/regions/{region}/grid', [DistributionGridController::class, 'showForBackOffice'])
+                ->name('adv.grid.show');
+
+            // Commandes client (lot 5) — contrat : docs/lot-5-contrat-api.md
+            // {order} : ULID public, résolu par les contrôleurs (403 avant 404).
+            Route::prefix('client')->name('client.')->group(function () {
+                Route::get('today', [ClientTodayController::class, 'show'])->name('today.show');
+                Route::get('orders', [ClientOrderController::class, 'index'])->name('orders.index');
+                Route::post('orders', [ClientOrderController::class, 'store'])->name('orders.store');
+                Route::get('orders/{order}', [ClientOrderController::class, 'show'])->name('orders.show');
+                Route::patch('orders/{order}', [ClientOrderController::class, 'update'])->name('orders.update');
+                Route::post('orders/{order}/cancel', [ClientOrderController::class, 'cancel'])->name('orders.cancel');
+            });
+            // Commandes reçues par le régional.
+            Route::get('regional/orders', [RegionalOrderController::class, 'index'])->name('regional.orders.index');
+            Route::get('regional/orders/{order}', [RegionalOrderController::class, 'show'])->name('regional.orders.show');
+
+            // Validation et traitement ADV (lot 6) — contrat : docs/lot-6-contrat-api.md
+            // {order} : ULID public, résolu par les requêtes (403 avant 404).
+            Route::post('regional/orders/{order}/validate', [RegionalOrderDecisionController::class, 'validate'])->name('regional.orders.validate');
+            Route::post('regional/orders/{order}/reject', [RegionalOrderDecisionController::class, 'reject'])->name('regional.orders.reject');
+            Route::get('regional/dashboard', [RegionalDashboardController::class, 'show'])->name('regional.dashboard.show');
+            Route::get('reason-codes', [ReasonCodeController::class, 'index'])->name('reason-codes.index');
+            Route::prefix('adv')->name('adv.')->group(function () {
+                Route::get('orders', [AdvOrderController::class, 'index'])->name('orders.index');
+                Route::post('orders/bulk-status', [AdvOrderController::class, 'bulkStatus'])->name('orders.bulk-status');
+                Route::get('orders/{order}', [AdvOrderController::class, 'show'])->name('orders.show');
+                Route::patch('orders/{order}/shipping', [AdvOrderController::class, 'shipping'])->name('orders.shipping');
+                Route::post('orders/{order}/cancel', [AdvOrderController::class, 'cancel'])->name('orders.cancel');
+                Route::get('orders/{order}/pdf', [AdvOrderController::class, 'pdf'])->name('orders.pdf');
+                Route::get('days/{businessDay}/picking-list', [DayDocumentController::class, 'pickingList'])->name('days.picking-list');
+                Route::get('days/{businessDay}/orders/export', [DayDocumentController::class, 'export'])->name('days.orders.export');
+                Route::get('days/{businessDay}/monitoring', [DayMonitoringController::class, 'show'])->name('days.monitoring');
+            });
+
+            // Centre de notifications (EF-NOT-01).
+            Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
+            Route::post('notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.read-all');
+            Route::post('notifications/{notification}/read', [NotificationController::class, 'read'])
+                ->whereUuid('notification')
+                ->name('notifications.read');
 
             Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('depots', [DepotController::class, 'index'])->name('depots.index');
@@ -106,6 +188,15 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
                 Route::get('audit-logs', [AuditLogController::class, 'index'])
                     ->middleware('can:audit.view')
                     ->name('audit-logs.index');
+
+                // Motifs (EF-ADM-05, lot 6) : pas de suppression, on désactive.
+                Route::middleware('can:settings.manage')->group(function () {
+                    Route::get('reason-codes', [AdminReasonCodeController::class, 'index'])->name('reason-codes.index');
+                    Route::post('reason-codes', [AdminReasonCodeController::class, 'store'])->name('reason-codes.store');
+                    Route::patch('reason-codes/{reasonCode}', [AdminReasonCodeController::class, 'update'])
+                        ->whereNumber('reasonCode')
+                        ->name('reason-codes.update');
+                });
             });
         });
     });

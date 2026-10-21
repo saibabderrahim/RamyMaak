@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Reader\Xlsx as XlsxReader;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx as XlsxWriter;
@@ -35,6 +36,7 @@ final class ErrorReport
 
         $reader = new XlsxReader;
         $spreadsheet = $reader->load($disk->path($import->file_path));
+        $this->neutralize($spreadsheet);
         $sheet = $spreadsheet->getSheet(0);
 
         $reportColumn = Coordinate::columnIndexFromString($sheet->getHighestDataColumn()) + 1;
@@ -69,7 +71,7 @@ final class ErrorReport
 
         try {
             $writer = new XlsxWriter($spreadsheet);
-            // Le fichier est restitué tel quel : aucune formule recalculée.
+            // Aucune formule recalculée (il n'en reste d'ailleurs aucune).
             $writer->setPreCalculateFormulas(false);
             $writer->save($temporary);
             $spreadsheet->disconnectWorksheets();
@@ -84,6 +86,41 @@ final class ErrorReport
         }
 
         return $path;
+    }
+
+    /**
+     * Le rapport peut être ouvert par un autre utilisateur que l'auteur du
+     * fichier (Admin) : aucune formule ni aucun lien du fichier déposé n'y reste
+     * actif (§8.4, §12). Une formule devient sa dernière valeur calculée, ou
+     * son texte quand le fichier n'en contient pas ; jamais recalculée ici.
+     */
+    private function neutralize(Spreadsheet $spreadsheet): void
+    {
+        foreach ($spreadsheet->getWorksheetIterator() as $worksheet) {
+            foreach (array_keys($worksheet->getHyperlinkCollection()) as $coordinate) {
+                $worksheet->setHyperlink($coordinate);
+            }
+
+            foreach ($worksheet->getCoordinates() as $coordinate) {
+                $cell = $worksheet->getCell($coordinate);
+                if (! $cell->isFormula()) {
+                    continue;
+                }
+
+                $value = $cell->getOldCalculatedValue();
+                if (is_int($value) || is_float($value)) {
+                    $cell->setValueExplicit($value, DataType::TYPE_NUMERIC);
+
+                    continue;
+                }
+
+                $text = is_scalar($value) ? (string) $value : (string) $cell->getValue();
+                $cell->setValueExplicit($text, DataType::TYPE_STRING);
+                if ($text !== '' && in_array($text[0], ['=', '+', '-', '@'], true)) {
+                    $cell->getStyle()->setQuotePrefix(true);
+                }
+            }
+        }
     }
 
     private function annotate(Worksheet $sheet, int $column, int $line, string $text): void

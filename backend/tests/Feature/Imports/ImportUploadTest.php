@@ -122,7 +122,7 @@ it('rejects a file over 5 MB', function () {
 });
 
 it('requires a known type and a file', function () {
-    $response = $this->actingAs($this->admin)->post('/api/v1/imports', ['type' => 'QUOTAS']);
+    $response = $this->actingAs($this->admin)->post('/api/v1/imports', ['type' => 'ORDERS']);
 
     expectProblem($response, 422, 'VALIDATION_FAILED');
     $response->assertJsonValidationErrors(['type', 'file']);

@@ -42,7 +42,8 @@ beforeEach(function () {
 });
 
 describe('upload and application rights', function () {
-    it('refuses the regional, the client and the default ADV before any validation', function (Role $role) {
+    // L'ADV par défaut importe les quotas (quota.edit, lot 3) : voir tests/Feature/Imports/QuotaImport*.
+    it('refuses the regional and the client before any validation', function (Role $role) {
         $this->actingAs(userWithRole($role));
 
         expectProblem($this->post('/api/v1/imports', []), 403, 'FORBIDDEN');
@@ -50,7 +51,7 @@ describe('upload and application rights', function () {
         expectProblem($this->getJson('/api/v1/imports'), 403, 'FORBIDDEN');
         expectProblem($this->get('/api/v1/imports/templates/clients'), 403, 'FORBIDDEN');
         expect(Import::query()->count())->toBe(0);
-    })->with([Role::Regional, Role::Client, Role::Adv]);
+    })->with([Role::Regional, Role::Client]);
 
     it('checks the right of the type: client.manage for clients, product.manage for products and prices', function () {
         $adv = ($this->catalogAdv)();
@@ -145,7 +146,7 @@ describe('reading', function () {
         $this->getJson('/api/v1/imports?filter[status]=PENDING')->assertJsonPath('data.*.id', [$this->advImport->id]);
         $this->getJson('/api/v1/imports?filter[type]=PRODUCTS&filter[status]=INVALID')->assertJsonPath('meta.total', 0);
 
-        expectProblem($this->getJson('/api/v1/imports?filter[type]=QUOTAS'), 422, 'VALIDATION_FAILED');
+        expectProblem($this->getJson('/api/v1/imports?filter[type]=ORDERS'), 422, 'VALIDATION_FAILED');
         expectProblem($this->getJson('/api/v1/imports?filter[status]=DONE'), 422, 'VALIDATION_FAILED');
         expectProblem($this->getJson('/api/v1/imports?filter[user_id]=1'), 422, 'VALIDATION_FAILED');
         expectProblem($this->getJson('/api/v1/imports?sort=status'), 422, 'VALIDATION_FAILED');

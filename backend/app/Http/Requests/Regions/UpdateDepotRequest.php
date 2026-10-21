@@ -46,7 +46,7 @@ class UpdateDepotRequest extends FormRequest
                 /** @var Depot $depot */
                 $depot = $this->route('depot');
 
-                if ($this->has('code') && (string) $this->input('code') !== $depot->code) {
+                if ($this->has('code') && (! is_string($this->input('code')) || $this->input('code') !== $depot->code)) {
                     $validator->errors()->add('code', __('regions.code_immutable'));
                 }
             },

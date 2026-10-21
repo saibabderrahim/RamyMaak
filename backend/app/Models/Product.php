@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Casts\BusinessDate;
 use App\Models\Concerns\LogsReferentialChanges;
+use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -31,6 +33,7 @@ use Spatie\MediaLibrary\MediaCollections\Models\Media;
  * @property ?string $ean
  * @property string $vat_rate
  * @property bool $is_active
+ * @property ?CarbonImmutable $deactivate_on désactivation programmée (RG-Q07)
  * @property bool $is_new
  * @property bool $is_featured
  * @property int $sort_order
@@ -62,6 +65,7 @@ class Product extends Model implements HasMedia
             'sales_units_per_pallet' => 'integer',
             'vat_rate' => 'decimal:2',
             'is_active' => 'boolean',
+            'deactivate_on' => BusinessDate::class,
             'is_new' => 'boolean',
             'is_featured' => 'boolean',
             'sort_order' => 'integer',
@@ -78,6 +82,27 @@ class Product extends Model implements HasMedia
     public function prices(): HasMany
     {
         return $this->hasMany(ProductPrice::class)->orderBy('valid_from');
+    }
+
+    /**
+     * Produits actifs le jour donné (RG-Q02) : actifs, sans désactivation
+     * programmée à cette date ou avant (RG-Q07).
+     *
+     * @param  Builder<Product>  $query
+     */
+    public function scopeActiveOn(Builder $query, CarbonInterface $day): void
+    {
+        $query->where('products.is_active', true)
+            ->where(fn (Builder $query) => $query
+                ->whereNull('products.deactivate_on')
+                ->orWhere('products.deactivate_on', '>', $day->format('Y-m-d')));
+    }
+
+    /** Actif le jour donné (RG-Q02, RG-Q07) : voir scopeActiveOn. */
+    public function isActiveOn(CarbonInterface $day): bool
+    {
+        return $this->is_active
+            && ($this->deactivate_on === null || $this->deactivate_on->format('Y-m-d') > $day->format('Y-m-d'));
     }
 
     /**

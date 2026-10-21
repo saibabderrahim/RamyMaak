@@ -48,15 +48,15 @@ it('reserves price entry to product.manage', function (Role $role) {
 it('records a price through the price book and journals it', function () {
     $this->actingAs($this->admin);
 
-    $this->postJson("/api/v1/products/{$this->product->id}/prices", ['price_ht' => 900, 'valid_from' => '2026-10-01'])
+    $this->postJson("/api/v1/products/{$this->product->id}/prices", ['price_ht' => 900, 'valid_from' => '2026-10-08'])
         ->assertCreated()
         ->assertJsonPath('price_ht', 900)
-        ->assertJsonPath('valid_from', '2026-10-01')
+        ->assertJsonPath('valid_from', '2026-10-08')
         ->assertJsonPath('valid_to', null)
         ->assertJsonPath('created_by.id', $this->admin->id);
 
     $this->getJson("/api/v1/products/{$this->product->id}")
-        ->assertJsonPath('price', ['price_ht' => 900, 'price_ttc' => 1071, 'unit_price_ht' => 150, 'valid_from' => '2026-10-01']);
+        ->assertJsonPath('price', ['price_ht' => 900, 'price_ttc' => 1071, 'unit_price_ht' => 150, 'valid_from' => '2026-10-08']);
 
     $price = ProductPrice::query()->sole();
     $log = AuditLog::query()->where('subject_type', 'product_price')->where('subject_id', $price->id)->sole();
@@ -68,7 +68,7 @@ it('records a price through the price book and journals it', function () {
 
 it('schedules a future price and recomputes the validity periods', function () {
     $this->actingAs($this->admin);
-    $this->postJson("/api/v1/products/{$this->product->id}/prices", ['price_ht' => '900.00', 'valid_from' => '2026-10-01'])->assertCreated();
+    $this->postJson("/api/v1/products/{$this->product->id}/prices", ['price_ht' => '900.00', 'valid_from' => '2026-10-08'])->assertCreated();
 
     $this->postJson("/api/v1/products/{$this->product->id}/prices", ['price_ht' => '950.5', 'valid_from' => '2026-11-01'])
         ->assertCreated()
@@ -79,8 +79,33 @@ it('schedules a future price and recomputes the validity periods', function () {
         ->assertJsonPath('next_price', ['price_ht' => 950.5, 'valid_from' => '2026-11-01']);
 
     $this->getJson("/api/v1/products/{$this->product->id}/prices")
-        ->assertJsonPath('data.*.valid_from', ['2026-11-01', '2026-10-01'])
+        ->assertJsonPath('data.*.valid_from', ['2026-11-01', '2026-10-08'])
         ->assertJsonPath('data.1.valid_to', '2026-10-31');
+});
+
+it('refuses a past effective date: a price already applied is never rewritten (RG-P03)', function () {
+    app(PriceBook::class)->setPrice($this->product, '900', BusinessClock::parseDay('2026-10-01'), $this->admin);
+    $this->actingAs($this->admin);
+
+    foreach (['2026-10-01', '2026-10-07'] as $day) {
+        $this->postJson("/api/v1/products/{$this->product->id}/prices", ['price_ht' => 950, 'valid_from' => $day])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.valid_from.0', 'La date d\'effet ne peut pas être passée : un prix déjà appliqué ne se modifie pas.');
+    }
+    expect(ProductPrice::query()->sole()->price_ht)->toBe('900.00');
+
+    $this->postJson("/api/v1/products/{$this->product->id}/prices", ['price_ht' => 950, 'valid_from' => '2026-10-08'])->assertCreated();
+});
+
+it('credits the replacement of a scheduled price to its new author', function () {
+    $this->actingAs($this->admin);
+    $this->postJson("/api/v1/products/{$this->product->id}/prices", ['price_ht' => 900, 'valid_from' => '2026-11-01'])->assertCreated();
+
+    $other = admin(['username' => 'admin.bis', 'name' => 'Admin Bis']);
+    $this->actingAs($other);
+    $this->postJson("/api/v1/products/{$this->product->id}/prices", ['price_ht' => 920, 'valid_from' => '2026-11-01'])
+        ->assertCreated()
+        ->assertJsonPath('created_by.id', $other->id);
 });
 
 it('replaces the price of an existing effective date', function () {

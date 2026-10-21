@@ -37,6 +37,15 @@ class UpdateProductRequest extends FormRequest
         ];
     }
 
+    /**
+     * Statut demandé, ou null si `is_active` n'est pas envoyé. Une
+     * désactivation peut être différée à la journée suivante (RG-Q07).
+     */
+    public function requestedActive(): ?bool
+    {
+        return $this->has('is_active') ? $this->boolean('is_active') : null;
+    }
+
     public function targetProduct(): Product
     {
         /** @var Product */

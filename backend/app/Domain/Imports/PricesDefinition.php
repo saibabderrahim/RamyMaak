@@ -105,6 +105,14 @@ final class PricesDefinition extends ImportDefinition
 
         $current = $this->prices[$product->id.'|'.$day] ?? null;
         $changes = $current === $amount ? [] : ['price_ht' => ['old' => $current === null ? null : (float) $current, 'new' => (float) $amount]];
+
+        // RG-P03 : un prix déjà appliqué ne se réécrit pas ; une ligne passée
+        // inchangée (gabarit réimporté tel quel) reste acceptée.
+        if ($changes !== [] && $day < BusinessClock::today()->format('Y-m-d')) {
+            $row->fail('date_effet', __('imports.errors.past_price_date'));
+
+            return null;
+        }
         if ($current === null) {
             $changes['valid_from'] = ['old' => null, 'new' => $day];
         }

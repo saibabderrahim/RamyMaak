@@ -1,19 +1,33 @@
+import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router'
+import '../backoffice/i18n'
 import ClientCreatePage from '../backoffice/clients/ClientCreatePage'
 import ClientDetailPage from '../backoffice/clients/ClientDetailPage'
 import ClientsPage from '../backoffice/clients/ClientsPage'
+import DayDetailPage from '../backoffice/days/DayDetailPage'
+import DaysPage from '../backoffice/days/DaysPage'
 import ImportDetailPage from '../backoffice/imports/ImportDetailPage'
 import ImportsPage from '../backoffice/imports/ImportsPage'
+import DayMonitoringPage from '../backoffice/monitoring/DayMonitoringPage'
+import OrderPage from '../backoffice/orders/OrderPage'
+import OrdersQueuePage from '../backoffice/orders/OrdersQueuePage'
 import ProductCreatePage from '../backoffice/products/ProductCreatePage'
 import ProductDetailPage from '../backoffice/products/ProductDetailPage'
 import ProductsPage from '../backoffice/products/ProductsPage'
+import QuotaMatrixPage from '../backoffice/quotas/QuotaMatrixPage'
 import RegionDetailPage from '../backoffice/regions/RegionDetailPage'
+import ReasonCodesPage from '../backoffice/reasons/ReasonCodesPage'
 import RegionsPage from '../backoffice/regions/RegionsPage'
 import AuditLogPage from './AuditLogPage'
 import SettingsPage from './SettingsPage'
 import UserCreatePage from './UserCreatePage'
 import UserDetailPage from './UserDetailPage'
 import UsersPage from './UsersPage'
+import { NotFound } from '../../shared/layout/NotFound'
+import { Spinner } from '../../shared/ui'
+
+// Grille de répartition (lot 4) chargée à la demande : lourde, rarement ouverte depuis le back-office.
+const BackOfficeDistributionPage = lazy(() => import('../backoffice/distribution/BackOfficeDistributionPage'))
 
 /**
  * Module Admin (back-office PC, §7.2). Chargé à la demande et exclu du
@@ -34,10 +48,28 @@ export default function AdminModule() {
       <Route path="produits" element={<ProductsPage />} />
       <Route path="produits/nouveau" element={<ProductCreatePage />} />
       <Route path="produits/:id" element={<ProductDetailPage />} />
+      {/* Journées et quotas en lecture ; « Prolonger » selon day.extend-cutoff. */}
+      <Route path="journees" element={<DaysPage />} />
+      <Route path="journees/:day" element={<DayDetailPage />} />
+      <Route path="journees/:day/quotas" element={<QuotaMatrixPage />} />
+      <Route path="journees/:day/suivi" element={<DayMonitoringPage />} />
+      <Route
+        path="journees/:day/repartition/:regionId"
+        element={
+          <Suspense fallback={<Spinner />}>
+            <BackOfficeDistributionPage />
+          </Suspense>
+        }
+      />
+      {/* Commandes et suivi en lecture (lot 6, I-87) : les actions dépendent des permissions. */}
+      <Route path="commandes" element={<OrdersQueuePage />} />
+      <Route path="commandes/:id" element={<OrderPage />} />
       <Route path="imports" element={<ImportsPage />} />
       <Route path="imports/:id" element={<ImportDetailPage />} />
       <Route path="journal" element={<AuditLogPage />} />
+      <Route path="motifs" element={<ReasonCodesPage />} />
       <Route path="parametres" element={<SettingsPage />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   )
 }

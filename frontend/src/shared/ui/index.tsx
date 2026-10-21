@@ -1,4 +1,12 @@
-import { type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, forwardRef, useId } from 'react'
+import {
+  type ButtonHTMLAttributes,
+  type InputHTMLAttributes,
+  type ReactNode,
+  type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
+  forwardRef,
+  useId,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import { useErrorMessage } from './useErrorMessage'
 
@@ -82,6 +90,18 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
   return <select ref={ref} className={cx(INPUT_CLASSES, className)} {...props} />
 })
 
+const TEXTAREA_CLASSES =
+  'min-h-24 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base text-slate-900 shadow-xs ' +
+  'focus:border-brand-600 focus:outline-2 focus:outline-brand-600/30 aria-[invalid=true]:border-red-600 disabled:bg-slate-100'
+
+/** Zone de texte (motif, commentaire) : mêmes repères que `Input`. */
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(function Textarea(
+  { className, ...props },
+  ref,
+) {
+  return <textarea ref={ref} className={cx(TEXTAREA_CLASSES, className)} {...props} />
+})
+
 export const Checkbox = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { label: string }>(
   function Checkbox({ label, className, ...props }, ref) {
     return (
@@ -137,7 +157,7 @@ export function Card({ title, actions, children, className }: { title?: string; 
 export function PageHeader({ title, actions }: { title: string; actions?: ReactNode }) {
   return (
     <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-      <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
+      <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{title}</h1>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
     </div>
   )

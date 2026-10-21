@@ -572,6 +572,21 @@ describe('back-office — region detail and assignments', () => {
     expect(calls.find((call) => call.method === 'PATCH')?.body).toEqual({ name: 'Centre-Alger', depot_id: 1, is_active: false })
   })
 
+  it('keeps the current depot selected when the depots arrive after the region', async () => {
+    mockApi({
+      'GET /api/v1/auth/me': () => json(admin()),
+      'GET /api/v1/regions/3': () => json(centre),
+      'GET /api/v1/admin/depots': () => new Promise<Response>((resolve) => setTimeout(() => resolve(json({ data: [depot] })), 50)),
+      'GET /api/v1/admin/regions/3/assignments': () => json({ data: [titular] }),
+      'GET /api/v1/admin/users': () => json(page(regionals)),
+    })
+
+    renderApp('/admin/regions/3')
+    const form = (await screen.findByRole('heading', { name: 'Modifier la région' }, slow)).closest('section')!
+
+    expect(await within(form).findByLabelText('Dépôt d’expédition', undefined, slow)).toHaveValue(String(depot.id))
+  })
+
   it('gives the ADV a read-only detail page', async () => {
     regionDetailApi(adv())
 

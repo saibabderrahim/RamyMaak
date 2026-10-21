@@ -2,6 +2,7 @@
 
 namespace App\Domain\Imports;
 
+use App\Domain\Quotas\ProductDeactivation;
 use App\Models\Product;
 use App\Models\ProductFamily;
 
@@ -19,11 +20,12 @@ final class ProductsDefinition extends ImportDefinition
         'libelle_uv' => ['sales_unit_label', 60],
     ];
 
-    /** Colonne → [champ, minimum, maximum] (bornes des colonnes en base). */
+    /** Colonne → [champ, minimum, maximum]. */
     private const INTEGER_COLUMNS = [
         'unites_par_uv' => ['units_per_sales_unit', 1, 65535],
         'uv_par_palette' => ['sales_units_per_pallet', 1, 65535],
-        'ordre_affichage' => ['sort_order', 0, 4294967295],
+        // Mêmes bornes que la fiche produit (ProductFicheRules) : un produit importé reste modifiable.
+        'ordre_affichage' => ['sort_order', 0, 1000000],
     ];
 
     /** @var array<string, ProductFamily> code → famille */
@@ -129,7 +131,26 @@ final class ProductsDefinition extends ImportDefinition
     public function apply(RowPlan $plan): void
     {
         $product = $plan->record instanceof Product ? $plan->record : new Product;
-        $product->fill($plan->attributes)->save();
+        $attributes = $plan->attributes;
+        $active = $attributes['is_active'] ?? null;
+
+        // RG-Q07 : désactiver un produit dont un quota publié court aujourd'hui
+        // prend effet demain, comme depuis la fiche produit. « ACTIF » sur un
+        // produit actif ne change rien (gabarit réimporté tel quel).
+        if ($product->exists && is_bool($active)) {
+            unset($attributes['is_active']);
+            $before = $product->deactivate_on?->format('Y-m-d');
+            $deactivation = app(ProductDeactivation::class);
+            if ($active !== $product->is_active) {
+                $deactivation->setActive($product, $active);
+            }
+            $product->fill($attributes)->save();
+            $deactivation->logChange($product, $before, $this->actor);
+
+            return;
+        }
+
+        $product->fill($attributes)->save();
     }
 
     public function templateRows(): iterable

@@ -47,7 +47,7 @@ class ClientAccountController extends Controller
             }
 
             // Polices réduites aux caractères utilisés : quelques dizaines de Ko
-            // au lieu de plus d'un Mo ; 200 fiches se produisent en une quinzaine de secondes.
+            // au lieu de plus d'un Mo (100 fiches au plus par lot).
             $pdf = Pdf::loadView('pdf.client-access', [
                 'sheets' => $sheets,
                 'appUrl' => rtrim((string) config('app.url'), '/'),

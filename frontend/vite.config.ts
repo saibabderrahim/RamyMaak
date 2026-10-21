@@ -37,6 +37,8 @@ function backOfficeIsolation(): Plugin {
 
 // Back-end Laravel en développement (`php artisan serve`).
 const API_TARGET = process.env.VITE_API_TARGET ?? 'http://localhost:8000'
+// Reverb en développement (`php artisan reverb:start`), protocole Pusher sur /app.
+const REVERB_TARGET = process.env.VITE_REVERB_TARGET ?? 'http://localhost:8080'
 
 export default defineConfig({
   plugins: [
@@ -99,6 +101,7 @@ export default defineConfig({
       '/sanctum': API_TARGET,
       '/broadcasting': API_TARGET,
       '/media': API_TARGET,
+      '/app': { target: REVERB_TARGET, ws: true },
     },
   },
   test: {

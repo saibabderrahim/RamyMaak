@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { API_BASE, api } from '../../../shared/api/client'
-import type { Import, ImportStatus, ImportType, Paginated } from '../../../shared/api/types'
+import type { Import, ImportMode, ImportStatus, ImportType, Paginated } from '../../../shared/api/types'
+import { daysKey } from '../days/api'
 import type { BackofficePermission } from '../shared/access'
 import { formData, postMultipart } from './multipart'
 
@@ -9,6 +10,7 @@ export const IMPORT_PERMISSIONS: Record<ImportType, BackofficePermission> = {
   CLIENTS: 'client.manage',
   PRODUCTS: 'product.manage',
   PRICES: 'product.manage',
+  QUOTAS: 'quota.edit',
 }
 
 /** Statuts d'un import dont l'analyse n'est pas terminée. */
@@ -63,12 +65,23 @@ export function useImport(id: number) {
   })
 }
 
-export type ImportUpload = { type: ImportType; file: File }
+/** Import des quotas (§8.1) : journée ouverte et mode en plus du fichier. */
+export type ImportUpload =
+  | { type: 'QUOTAS'; file: File; business_day: string; mode: ImportMode }
+  | { type: Exclude<ImportType, 'QUOTAS'>; file: File }
 
 export function useUploadImport() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ type, file }: ImportUpload) => postMultipart<Import>('/imports', formData({ type, file })),
+    mutationFn: (upload: ImportUpload) =>
+      postMultipart<Import>(
+        '/imports',
+        formData(
+          upload.type === 'QUOTAS'
+            ? { type: upload.type, business_day: upload.business_day, mode: upload.mode, file: upload.file }
+            : { type: upload.type, file: upload.file },
+        ),
+      ),
     onSuccess: (created) => {
       queryClient.setQueryData(importKey(created.id), created)
       void queryClient.invalidateQueries({ queryKey: [...importsKey, 'list'] })
@@ -87,14 +100,27 @@ export function useApplyImport(id: number) {
     onSuccess: (applied) => {
       queryClient.setQueryData(importKey(id), applied)
       void queryClient.invalidateQueries({ queryKey: [...importsKey, 'list'] })
+      // Données modifiées par l'import : listes, fiches et compteurs à relire ;
+      // quotas : brouillons de la matrice et du calendrier (RG-Q09).
+      const changed: ReadonlyArray<readonly string[]> = {
+        CLIENTS: [['backoffice', 'clients'], ['backoffice', 'client-categories'], ['backoffice', 'regions']],
+        PRODUCTS: [['backoffice', 'products'], ['backoffice', 'product-families']],
+        PRICES: [['backoffice', 'products']],
+        QUOTAS: [daysKey, ['backoffice', 'quotas']],
+      }[applied.type]
+      for (const queryKey of changed) void queryClient.invalidateQueries({ queryKey })
     },
     onError: () => queryClient.invalidateQueries({ queryKey: importKey(id) }),
   })
 }
 
-/** Gabarit pré-rempli avec les données actuelles (Annexes B.3 à B.5). */
-export function templateUrl(type: ImportType): string {
-  return `${API_BASE}/imports/templates/${type.toLowerCase()}`
+/**
+ * Gabarit pré-rempli avec les données actuelles (Annexes B.3 à B.5) ; celui
+ * des quotas, avec les valeurs d'une journée (Annexe B.1, `?day=`).
+ */
+export function templateUrl(type: ImportType, day?: string): string {
+  const url = `${API_BASE}/imports/templates/${type.toLowerCase()}`
+  return type === 'QUOTAS' && day ? `${url}?day=${encodeURIComponent(day)}` : url
 }
 
 /** Fichier d'origine annoté : colonne « erreurs », cellules fautives surlignées. */

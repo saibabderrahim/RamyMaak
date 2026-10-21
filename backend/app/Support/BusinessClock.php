@@ -26,6 +26,18 @@ final class BusinessClock
         return self::now()->startOfDay();
     }
 
+    /**
+     * Instant d'une heure « HH:MM » de la journée donnée, dans le fuseau
+     * métier ; à convertir en UTC (->utc()) avant tout enregistrement.
+     */
+    public static function at(DateTimeInterface $day, string $time): CarbonImmutable
+    {
+        [$hours, $minutes] = array_map('intval', explode(':', $time, 2));
+
+        return CarbonImmutable::createFromFormat('!Y-m-d', $day->format('Y-m-d'), self::timezone())
+            ->setTime($hours, $minutes);
+    }
+
     public static function toLocal(DateTimeInterface $moment): CarbonImmutable
     {
         return CarbonImmutable::instance($moment)->setTimezone(self::timezone());

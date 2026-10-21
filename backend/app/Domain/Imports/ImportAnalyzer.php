@@ -8,14 +8,18 @@ use Closure;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * Contrôle d'un fichier importé (§8.1, §8.3), sans rien écrire : en-tête
- * (colonnes obligatoires, doublons de colonnes), lignes une à une, doublons
- * de clé dans le fichier. Rejoué à l'application avec les données du moment.
+ * Contrôle d'un fichier importé (§8.1, §8.3), sans rien écrire : contexte
+ * (journée ouverte pour les quotas), en-tête (colonnes obligatoires, doublons
+ * de colonnes), lignes une à une, doublons de clé dans le fichier. Rejoué à
+ * l'application avec les données du moment.
  */
 final class ImportAnalyzer
 {
-    /** Garde-fou mémoire, largement au-dessus des volumes attendus (§13.1). */
-    public const MAX_ROWS = 10000;
+    /**
+     * Lignes de données par fichier : 2,5 fois les volumes attendus (§13.1 :
+     * 2 000 clients, 200 produits), dans la mémoire allouée à PHP (256 Mo).
+     */
+    public const MAX_ROWS = 5000;
 
     /** Fréquence de mise à jour de la progression (lignes). */
     public const PROGRESS_EVERY = 100;
@@ -25,11 +29,18 @@ final class ImportAnalyzer
      */
     public function run(Import $import, User $actor, ?Closure $progress = null): AnalysisResult
     {
-        $definition = ImportDefinition::for($import->type, $actor);
+        $definition = ImportDefinition::forImport($import, $actor);
         $result = new AnalysisResult($definition);
 
+        $definition->checkContext($result);
+        if ($result->hasErrors()) {
+            return $result;
+        }
+
         try {
-            $sheet = ImportSheet::open(Storage::disk('local')->path($import->file_path), self::MAX_ROWS);
+            // Seules les colonnes de l'annexe B sont chargées : les autres sont ignorées.
+            $columns = array_map(ImportSheet::normalizeHeader(...), $definition->columns());
+            $sheet = ImportSheet::open(Storage::disk('local')->path($import->file_path), self::MAX_ROWS, $columns);
         } catch (UnreadableSheet $e) {
             $result->fileError(null, $e->getMessage());
 
@@ -52,7 +63,7 @@ final class ImportAnalyzer
      */
     private function analyze(ImportSheet $sheet, ImportDefinition $definition, AnalysisResult $result, ?Closure $progress): void
     {
-        $result->columns = $this->columns($sheet, $definition, $result);
+        $result->columns = $definition->resolveHeader($sheet->header(), $result);
         if ($result->hasErrors()) {
             return;
         }
@@ -123,43 +134,6 @@ final class ImportAnalyzer
         }
 
         $result->summary = $summary;
-    }
-
-    /**
-     * Colonnes reconnues de l'en-tête ; les colonnes inconnues sont ignorées.
-     *
-     * @return array<string, int>
-     */
-    private function columns(ImportSheet $sheet, ImportDefinition $definition, AnalysisResult $result): array
-    {
-        $known = array_flip($definition->columns());
-        $columns = [];
-        $duplicates = [];
-
-        foreach ($sheet->header() as $index => $name) {
-            if (! isset($known[$name])) {
-                continue;
-            }
-
-            if (isset($columns[$name])) {
-                $duplicates[$name] = true;
-
-                continue;
-            }
-
-            $columns[$name] = $index;
-        }
-
-        foreach (array_keys($duplicates) as $name) {
-            $result->fileError($name, __('imports.errors.header', ['column' => $name, 'message' => __('imports.errors.duplicate_column')]));
-        }
-
-        foreach ($definition->requiredColumns() as $name) {
-            if (! isset($columns[$name])) {
-                $result->fileError($name, __('imports.errors.header', ['column' => $name, 'message' => __('imports.errors.missing_column')]));
-            }
-        }
-
-        return $columns;
+        $definition->finish($result);
     }
 }

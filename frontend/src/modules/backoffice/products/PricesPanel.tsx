@@ -128,7 +128,11 @@ function PriceForm({ productId }: { productId: number }) {
       .transform(numericInput)
       .pipe(z.string().regex(/^\d{1,10}(\.\d{1,2})?$/, t('backoffice.products.prices.invalidAmount')))
       .transform(Number),
-    valid_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, t('backoffice.products.prices.invalidDate')),
+    valid_from: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, t('backoffice.products.prices.invalidDate'))
+      // RG-P03 : un prix déjà appliqué ne se réécrit pas (contrôlé aussi par le serveur).
+      .refine((day) => day >= businessToday(), t('backoffice.products.prices.pastDate')),
   })
 
   const {
@@ -163,7 +167,7 @@ function PriceForm({ productId }: { productId: number }) {
           {(props) => <Input {...props} {...register('price_ht')} inputMode="decimal" autoComplete="off" />}
         </Field>
         <Field label={t('backoffice.products.prices.validFrom')} hint={t('backoffice.products.prices.validFromHint')} error={errors.valid_from?.message}>
-          {(props) => <Input {...props} {...register('valid_from')} type="date" />}
+          {(props) => <Input {...props} {...register('valid_from')} type="date" min={businessToday()} />}
         </Field>
       </div>
       <Button type="submit" className="self-start" disabled={addPrice.isPending}>

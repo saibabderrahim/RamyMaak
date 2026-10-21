@@ -129,7 +129,9 @@ describe('creation', function () {
             ->and($entry->event)->toBe('created')
             ->and($entry->description)->toBe('Affectation créée')
             ->and($entry->causer_id)->toBe($this->admin->id)
-            ->and($entry->properties['attributes']['user_id'])->toBe($this->karim->id);
+            ->and($entry->properties['attributes']['user_id'])->toBe($this->karim->id)
+            // Date calendaire journalisée telle quelle, pas l'instant UTC de la veille.
+            ->and($entry->properties['attributes']['starts_on'])->toBe($this->today->format('Y-m-d'));
 
         $this->getJson("/api/v1/regions/{$this->centre->id}")->assertJsonPath('titular.id', $assignment->id);
     });

@@ -1,0 +1,42 @@
+<?php
+
+// Journées commerciales (§4, §6.1, EF-ADV-01).
+return [
+    'attributes' => [
+        'from' => 'date de début',
+        'to' => 'date de fin',
+        'day' => 'journée',
+        'delivery_date' => 'date de livraison',
+        'cutoffs' => 'heures limites',
+        'cutoffs.distribution' => 'heure limite de répartition',
+        'cutoffs.ordering' => 'heure limite de commande',
+        'cutoffs.validation' => 'heure limite de validation',
+        'cutoffs.closing' => 'heure de clôture',
+        'kind' => 'heure limite à prolonger',
+        'until' => 'nouvelle heure limite',
+    ],
+    'date_format' => 'Date attendue au format AAAA-MM-JJ.',
+    'time_format' => 'Heure attendue au format HH:MM (ex. 10:30).',
+    'cutoffs_format' => 'Heures limites attendues : distribution, ordering, validation ou closing, au format HH:MM.',
+    'range_order' => 'La date de fin doit être postérieure ou égale à la date de début.',
+    'range_too_long' => 'L\'intervalle ne peut pas dépasser :days jours.',
+    'open_in_past' => 'Une journée passée ne peut pas être ouverte.',
+    'open_too_far' => 'Une journée s\'ouvre au plus :days jours à l\'avance (jusqu\'au :max).',
+    'delivery_before_day' => 'La date de livraison ne peut pas précéder la journée (:day).',
+    'extension_in_past' => 'La prolongation doit porter sur une heure à venir.',
+    'already_open' => 'La journée du :day est déjà ouverte.',
+    'closed' => 'La journée du :day est clôturée : elle n\'est plus modifiable.',
+    'region_closed' => 'La journée de la région :region est clôturée.',
+    'cutoff_order' => 'Les heures limites doivent se suivre : répartition, commande, validation, puis clôture.',
+    'closing_in_past' => 'L\'heure de clôture doit être à venir.',
+    'override_after_closing' => 'Une prolongation accordée à une région dépasse cette heure de clôture.',
+    'not_extendable' => 'Seules les heures limites de répartition, de commande et de validation se prolongent par région.',
+    'extension_not_later' => 'La prolongation doit être postérieure à l\'heure limite actuelle (:current).',
+    'extension_after_closing' => 'La prolongation ne peut pas dépasser l\'heure de clôture (:closing).',
+    'audit' => [
+        'opened' => 'Journée ouverte',
+        'schedule' => 'Heures limites de la journée modifiées',
+        'extended' => 'Heure limite prolongée',
+        'closed' => 'Journée clôturée',
+    ],
+];

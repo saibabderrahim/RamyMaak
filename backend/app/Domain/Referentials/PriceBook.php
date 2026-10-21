@@ -38,7 +38,8 @@ final class PriceBook
 
     /**
      * Enregistre le prix à partir d'une date d'effet ; un prix existant à la
-     * même date est remplacé.
+     * même date est remplacé. Les dates passées sont refusées en amont (saisie
+     * et import, RG-P03) ; le jeu de démonstration en enregistre.
      */
     public function setPrice(Product $product, string|int|float $priceHt, CarbonInterface $validFrom, ?User $by): ProductPrice
     {
@@ -53,9 +54,9 @@ final class PriceBook
                 'valid_from' => $validFrom->format('Y-m-d'),
             ]);
             $price->price_ht = $amount;
-            if (! $price->exists) {
-                $price->created_by = $by?->getKey();
-            }
+            // Auteur du montant enregistré, y compris quand il en remplace un
+            // autre à la même date ; le journal garde l'historique complet.
+            $price->created_by = $by?->getKey() ?? $price->created_by;
             $price->save();
 
             $this->recomputeValidity($product);

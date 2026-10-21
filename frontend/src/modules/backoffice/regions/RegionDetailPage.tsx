@@ -4,8 +4,9 @@ import { Link, useLocation, useParams } from 'react-router'
 import type { Assignment } from '../../../shared/api/types'
 import { businessToday } from '../../../shared/format'
 import { Alert, Card, ErrorAlert, PageHeader, Spinner } from '../../../shared/ui'
+import { ConfirmDialog } from '../../../shared/ui/ConfirmDialog'
 import { useBackoffice } from '../shared/access'
-import { ConfirmDialog, DetailList } from '../shared/ui'
+import { DetailList } from '../shared/ui'
 import { useAssignments, useDepots, useEndAssignment, useRegion, useUpdateRegion } from './api'
 import { AssignmentForm } from './AssignmentForm'
 import { AssignmentHistory, CurrentAssignments } from './AssignmentLists'
@@ -124,14 +125,20 @@ export default function RegionDetailPage() {
                   {t('backoffice.regions.detail.updated')}
                 </Alert>
               )}
-              <RegionForm
-                key={`${current.name}|${current.depot?.id ?? ''}|${current.is_active}`}
-                region={current}
-                depots={depots.data}
-                submitting={updateRegion.isPending}
-                error={updateRegion.error}
-                onSubmit={({ name, depot_id, is_active }) => updateRegion.mutateAsync({ name, depot_id, is_active })}
-              />
+              {/* Liste des dépôts attendue : une liste déroulante non contrôlée
+                  perdrait sinon le dépôt actuel à l'arrivée des options. */}
+              {depots.isPending ? (
+                <Spinner />
+              ) : (
+                <RegionForm
+                  key={`${current.name}|${current.depot?.id ?? ''}|${current.is_active}`}
+                  region={current}
+                  depots={depots.data}
+                  submitting={updateRegion.isPending}
+                  error={updateRegion.error}
+                  onSubmit={({ name, depot_id, is_active }) => updateRegion.mutateAsync({ name, depot_id, is_active })}
+                />
+              )}
             </Card>
           )}
         </div>

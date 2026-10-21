@@ -1,7 +1,24 @@
 import { useAuthenticatedUser } from '../../../shared/auth/session'
 
 /** Permissions qui conditionnent les actions des écrans back-office (§3.2). */
-export type BackofficePermission = 'region.manage' | 'client.manage' | 'client.block' | 'user.manage' | 'product.manage'
+export type BackofficePermission =
+  | 'region.manage'
+  | 'client.manage'
+  | 'client.block'
+  | 'user.manage'
+  | 'product.manage'
+  | 'quota.view'
+  | 'quota.edit'
+  | 'quota.publish'
+  | 'day.manage'
+  | 'day.extend-cutoff'
+  | 'limit.view'
+  // Lot 6 : commandes (lecture ADV et Admin, traitement et annulation ADV), suivi et exports, motifs (Admin).
+  | 'order.view'
+  | 'order.process'
+  | 'order.cancel-validated'
+  | 'dashboard.view'
+  | 'settings.manage'
 
 /**
  * Contexte des écrans back-office partagés entre l'Admin et l'ADV : chemin

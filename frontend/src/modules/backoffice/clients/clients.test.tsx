@@ -418,6 +418,26 @@ describe('back-office — client detail', () => {
     expect(screen.getByText(`Changement de région programmé : Centre → Est, effectif le ${formatDate(tomorrow)}.`)).toBeInTheDocument()
   })
 
+  it('keeps the current category and region once the option lists arrive', async () => {
+    // Listes de choix plus lentes que la fiche : la valeur actuelle reste sélectionnée.
+    const late = (body: unknown) => () => new Promise<Response>((resolve) => setTimeout(() => resolve(json(body)), 50))
+    mockApi({
+      'GET /api/v1/regions': late(page(regions)),
+      'GET /api/v1/client-categories': late({ data: categories }),
+      'GET /api/v1/auth/me': () => json(admin()),
+      'GET /api/v1/clients/12': () => json(baraka),
+    })
+    const user = userEvent.setup()
+
+    renderApp('/admin/clients/12')
+    await user.click(await screen.findByRole('button', { name: 'Modifier la fiche' }, slow))
+
+    await screen.findByRole('option', { name: 'Grossiste' }, slow)
+    await screen.findByRole('option', { name: 'EST — Est' })
+    expect(screen.getByLabelText('Catégorie')).toHaveValue('3')
+    expect(screen.getByLabelText('Région')).toHaveValue(String(centreRef.id))
+  })
+
   it('does not send the region when it was not changed', async () => {
     const { calls } = mockApi({
       ...referenceRoutes,
@@ -462,6 +482,22 @@ describe('back-office — client detail', () => {
     expect(await screen.findByText('Changement de région annulé.')).toBeInTheDocument()
     expect(calls.find((call) => call.method === 'PATCH')?.body).toEqual({ region_id: 3 })
     expect(screen.queryByText(/Changement de région programmé/)).not.toBeInTheDocument()
+  })
+
+  it('does not offer to cancel the region change while the fiche is being edited', async () => {
+    mockApi({
+      ...referenceRoutes,
+      'GET /api/v1/auth/me': () => json(admin()),
+      'GET /api/v1/clients/13': () => json(benali),
+    })
+    const user = userEvent.setup()
+
+    renderApp('/admin/clients/13')
+    expect(await screen.findByRole('button', { name: 'Annuler le changement de région' }, slow)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Modifier la fiche' }))
+
+    // Le formulaire ouvert renverrait sinon l'ancienne région cible et reprogrammerait le changement.
+    expect(screen.queryByRole('button', { name: 'Annuler le changement de région' })).not.toBeInTheDocument()
   })
 
   it('validates the coordinates pair and shows server errors on the fields', async () => {
