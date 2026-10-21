@@ -223,8 +223,11 @@ export function TableHead({ children }: { children: ReactNode }) {
 }
 
 export function Th({ children, className }: { children?: ReactNode; className?: string }) {
+  // Alignement par défaut au début, sauf si l'appelant en impose un (quantités et montants à droite) :
+  // deux classes text-* sur le même élément, c'est l'ordre de la feuille de style qui gagne.
+  const aligned = /(^|\s)text-(end|center|right|left)(\s|$)/.test(className ?? '')
   return (
-    <th scope="col" className={cx('py-2 pe-4 text-start font-medium', className)}>
+    <th scope="col" className={cx('py-2 pe-4 font-medium', !aligned && 'text-start', className)}>
       {children}
     </th>
   )

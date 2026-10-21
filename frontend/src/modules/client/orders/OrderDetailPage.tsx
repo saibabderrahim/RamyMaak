@@ -1,6 +1,6 @@
 import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useLocation, useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 import { ApiError } from '../../../shared/api/client'
 import type { Order } from '../../../shared/api/types'
 import { formatDate, formatDateTime } from '../../../shared/format'
@@ -10,7 +10,8 @@ import { ModifyOrderButton } from '../cart/ModifyOrderButton'
 import { useCart } from '../cart/store'
 import { CancelOrderButton, ReorderButton } from './actions'
 import { OrderDecision, OrderHistory, OrderLines, OrderShipping, OrderStatusBadge, OrderTotals, StatusTimeline } from './components'
-import { type Feedback, formatTime, locationNotice, weekdayOf } from './view'
+import { useLocationNotice } from './useLocationNotice'
+import { type Feedback, formatTime, weekdayOf } from './view'
 
 const BACK_LINK =
   'inline-flex min-h-11 items-center gap-1 self-start rounded-lg px-1 text-sm font-semibold text-brand-700 hover:text-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
@@ -37,11 +38,10 @@ export default function OrderDetailPage() {
 
 function OrderDetail({ id }: { id: string }) {
   const { t } = useTranslation()
-  const location = useLocation()
   const query = useClientOrder(id)
   // Résultat de l'action faite ici (annulation), sinon message de l'écran précédent (envoi).
   const [feedback, setFeedback] = useState<Feedback | null>(null)
-  const notice = locationNotice(location.state)
+  const notice = useLocationNotice()
   const order = query.data
 
   const backLink = (

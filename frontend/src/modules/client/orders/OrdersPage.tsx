@@ -1,11 +1,12 @@
 import { useTranslation } from 'react-i18next'
-import { Link, useLocation, useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import type { OrderSummary, Paginated } from '../../../shared/api/types'
 import { formatAmount, formatDate } from '../../../shared/format'
 import { Alert, Button, ErrorAlert, PageHeader, Spinner } from '../../../shared/ui'
 import { useClientOrders } from '../api'
 import { OrderStatusBadge } from './components'
-import { locationNotice, pageParam } from './view'
+import { useLocationNotice } from './useLocationNotice'
+import { pageParam } from './view'
 
 const PRIMARY_LINK =
   'inline-flex min-h-11 items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
@@ -19,11 +20,10 @@ const PRIMARY_LINK =
  */
 export default function OrdersPage() {
   const { t } = useTranslation()
-  const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const page = pageParam(searchParams.get('page'))
   const query = useClientOrders({ page })
-  const notice = locationNotice(location.state)
+  const notice = useLocationNotice()
   const data = query.data
 
   const goTo = (next: number) =>

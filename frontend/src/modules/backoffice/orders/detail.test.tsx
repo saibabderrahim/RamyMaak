@@ -100,6 +100,8 @@ describe('ADV — order detail (EF-ADV-04)', () => {
     // Client : identité complète, téléphones en lien d'appel.
     const client = within(screen.getByRole('heading', { name: 'Client', level: 2 }).closest('section')!)
     expect(client.getByText('Superette El Baraka')).toBeInTheDocument()
+    // Statut toujours renseigné, « Actif » compris (pas de valeur vide).
+    expect(client.getByText('Actif')).toBeInTheDocument()
     expect(client.getByText('12 rue des Frères Bouchama')).toBeInTheDocument()
     expect(client.getByText('Alger — Bab Ezzouar')).toBeInTheDocument()
     expect(client.getByText('000216001234567')).toBeInTheDocument()

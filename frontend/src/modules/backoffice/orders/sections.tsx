@@ -80,7 +80,10 @@ export function ClientCard({ order }: { order: AdvOrder }) {
         items={[
           { label: t('backoffice.orders.client.code'), value: client.code },
           { label: t('backoffice.orders.client.name'), value: client.name },
-          { label: t('backoffice.orders.client.status'), value: <ClientStatusFlag status={client.status} /> },
+          {
+            label: t('backoffice.orders.client.status'),
+            value: client.status === 'ACTIVE' ? t('backoffice.clients.status.ACTIVE') : <ClientStatusFlag status={client.status} />,
+          },
           { label: t('backoffice.orders.client.address'), value: client.address, wide: true },
           { label: t('backoffice.orders.client.area'), value: area || null },
           {

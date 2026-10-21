@@ -246,15 +246,18 @@ function OrderRow({
   return (
     <tr className={checked ? 'bg-brand-50' : 'hover:bg-slate-50'} data-order={order.number}>
       {selectable && (
-        <td className="py-2 pe-4">
-          <input
-            type="checkbox"
-            className={CHECKBOX_CLASSES}
-            aria-label={t('backoffice.orders.bulk.selectOne', { number: order.number })}
-            checked={checked}
-            disabled={!checked && full}
-            onChange={onToggle}
-          />
+        <td className="py-2 pe-4 align-top">
+          {/* Même hauteur que le lien du numéro : la case reste sur sa ligne. */}
+          <span className="flex min-h-11 items-center">
+            <input
+              type="checkbox"
+              className={CHECKBOX_CLASSES}
+              aria-label={t('backoffice.orders.bulk.selectOne', { number: order.number })}
+              checked={checked}
+              disabled={!checked && full}
+              onChange={onToggle}
+            />
+          </span>
         </td>
       )}
       <td className="py-2 pe-4 align-top">

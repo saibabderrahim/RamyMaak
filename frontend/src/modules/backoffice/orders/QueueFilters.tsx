@@ -95,7 +95,7 @@ export function QueueFilters({ params, search, onSearch, onChange, onReset }: Pr
 
   return (
     <div className="mb-4 flex flex-col gap-3">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Field label={t('backoffice.orders.filters.day')}>
           {(props) => <Input {...props} type="date" value={params.day} onChange={(event) => onChange({ day: event.target.value })} />}
         </Field>
