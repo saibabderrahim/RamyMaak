@@ -232,7 +232,7 @@ Le résumé, plus :
 
 ## 6. Documents, exports et suivi
 
-Téléchargements synchrones, en flux, jamais écrits sur le disque, `Cache-Control: no-store` (I-83). Dates JJ/MM/AAAA, heure d'Alger, montants en DA avec la mention « Montants indicatifs : la facture ERP fait foi » (RG-P05). Toute cellule qui commencerait une formule est neutralisée.
+Téléchargements synchrones, en flux, jamais conservés sur le disque (l'XLSX passe par un dossier de travail propre au téléchargement, retiré à la fin, même si le client coupe la connexion), `Cache-Control: no-store` (I-83). Dates JJ/MM/AAAA, heure d'Alger, montants en DA avec la mention « Montants indicatifs : la facture ERP fait foi » (RG-P05). Toute cellule qui commencerait une formule est neutralisée.
 
 - **Bon de commande** : `GET /adv/orders/{id}/pdf` → `application/pdf`, `bon-de-commande-RMK-….pdf`. Identité du client (NIF, RC, adresse), numéro, journée, date de livraison ; lignes (SKU, produit, UV, demandé, validé, motif, expédié et écart quand ils existent, prix unitaire HT, TVA, montant HT sur la quantité validée) ; totaux. Une commande annulée porte la mention « ANNULÉE ».
 - **Bon de préparation** : `GET /adv/days/{day}/picking-list?format=pdf|xlsx&group=region|depot&status=…&region=…`.

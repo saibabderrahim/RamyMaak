@@ -5,6 +5,7 @@ import type { DecisionViolation, RegionalOrder } from '../../../../shared/api/ty
 import { disconnectRealtime } from '../../../../shared/realtime'
 import { createQueryClient } from '../../../../shared/api/queryClient'
 import { json, problem } from '../../../../test/utils'
+import { meQueryKey } from '../../../../shared/auth/session'
 import { DAY, decidable, makeOrder, ORDER_ID, orderUrl, regional, rejectUrl, renderOrders, validateUrl } from '../testing'
 import { draftStore } from './drafts'
 
@@ -800,6 +801,7 @@ describe('regional order — draft and live updates', () => {
 
   it('starts again from the order, without banner, when it comes back after a modification and nothing was entered', async () => {
     const queryClient = createQueryClient()
+    queryClient.setQueryData(meQueryKey, regional()) // Brouillon du même compte.
     draftStore(queryClient).set(ORDER_ID, { version: 2, touched: false, lines: {} })
     renderOrders({ path: DETAIL, queryClient, routes: { [orderUrl(ORDER_ID)]: () => json(roomy({ version: 3 })) } })
     await findPanel()
@@ -811,6 +813,7 @@ describe('regional order — draft and live updates', () => {
 
   it('announces the modification when it comes back to a draft where something was entered', async () => {
     const queryClient = createQueryClient()
+    queryClient.setQueryData(meQueryKey, regional()) // Brouillon du même compte.
     draftStore(queryClient).set(ORDER_ID, { version: 2, touched: true, lines: { 57: { quantity: 700, reason: 'QUOTA_INSUFFISANT', comment: '' } } })
     renderOrders({ path: DETAIL, queryClient, routes: { [orderUrl(ORDER_ID)]: () => json(roomy({ version: 3 })) } })
     await findPanel().catch(() => undefined)
@@ -831,6 +834,21 @@ describe('regional order — draft and live updates', () => {
     expect(store.get(ORDER_ID)).toMatchObject({ version: 2 })
     first.unmount()
     expect(store.get(ORDER_ID)?.lines[57]).toMatchObject({ quantity: 700, reason: 'QUOTA_INSUFFISANT' })
+  })
+
+  it('drops the drafts when the account changes on the device (logout, another regional)', async () => {
+    const user = userEvent.setup()
+    const first = renderOrders({ path: DETAIL, routes: { [orderUrl(ORDER_ID)]: () => json(roomy()) } })
+    await findPanel()
+    await typeQuantity(user, 'Lben 1 L', 700)
+    await chooseReason(user, 'Lben 1 L', 'Quota insuffisant')
+    expect(draftStore(first.queryClient).has(ORDER_ID)).toBe(true)
+
+    // Déconnexion : plus de compte, plus de brouillon ; un autre régional ne reprend pas la saisie.
+    first.queryClient.setQueryData(meQueryKey, null)
+    expect(draftStore(first.queryClient).has(ORDER_ID)).toBe(false)
+    first.queryClient.setQueryData(meQueryKey, { ...first.queryClient.getQueryData(meQueryKey), id: 999 })
+    expect(draftStore(first.queryClient).has(ORDER_ID)).toBe(false)
   })
 
   it('shows the reason of an adjusted line by its label, a reason deactivated since included', async () => {

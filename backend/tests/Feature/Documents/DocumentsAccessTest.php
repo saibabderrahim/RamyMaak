@@ -2,6 +2,8 @@
 
 use App\Domain\Access\Permission;
 use App\Domain\Access\Role;
+use App\Domain\Documents\WorkFolder;
+use App\Domain\Documents\XlsxLayout;
 use App\Domain\Referentials\AssignmentKind;
 use App\Models\Order;
 use App\Models\Region;
@@ -315,5 +317,31 @@ describe('downloads', function () {
         // Les fichiers de travail d'OpenSpout sont retirés à la fermeture de l'écrivain.
         expect(array_values(array_diff($leftovers(), $before)))->toBe([]);
         rmdir($temp);
+    });
+
+    it('leaves no file behind when the writing stops half-way', function () {
+        $temp = sys_get_temp_dir().'/ramymaak-docs-'.bin2hex(random_bytes(6));
+        mkdir($temp);
+        config(['ramymaak.documents.temp_dir' => $temp]);
+        $broken = (function () {
+            yield from [];
+            throw new RuntimeException('Connexion coupée');
+        })();
+
+        expect(fn () => (new XlsxLayout)->write($broken, $temp.'/../ramymaak-ignored.xlsx'))->toThrow(RuntimeException::class);
+        // Dossier propre au téléchargement, retiré malgré l'erreur ; un arrêt brutal du script le retire à l'arrêt.
+        expect(glob($temp.'/*') ?: [])->toBe([]);
+        @unlink(sys_get_temp_dir().'/ramymaak-ignored.xlsx');
+        rmdir($temp);
+    });
+
+    it('gives each download its own work folder, removed on demand', function () {
+        $first = WorkFolder::create();
+        $second = WorkFolder::create();
+
+        expect($first)->not->toBe($second)->and(is_dir($first))->toBeTrue();
+        WorkFolder::remove($first);
+        WorkFolder::remove($second);
+        expect(is_dir($first))->toBeFalse()->and(is_dir($second))->toBeFalse();
     });
 });

@@ -35,11 +35,9 @@ final class XlsxLayout implements ExportLayout
     public function write(iterable $lines, string $target = 'php://output'): void
     {
         $options = new Options;
-        // Dossier de travail d'OpenSpout : celui du système, sauf configuration (tests en parallèle).
-        $temp = config('ramymaak.documents.temp_dir');
-        if (is_string($temp) && $temp !== '') {
-            $options->setTempFolder($temp);
-        }
+        // Dossier de travail propre à ce téléchargement, retiré même si la copie est interrompue.
+        $folder = WorkFolder::create();
+        $options->setTempFolder($folder);
         foreach (self::WIDTHS as $index => $width) {
             $options->setColumnWidth($width, $index + 1);
         }
@@ -71,7 +69,11 @@ final class XlsxLayout implements ExportLayout
             $writer->addRow(Cells::row([Cells::text(Formats::amountNotice())]));
             $writer->addRow(Cells::row([Cells::text((string) __('documents.generated_at', ['date' => Formats::dateTime(BusinessClock::now())]))]));
         } finally {
-            $writer->close();
+            try {
+                $writer->close();
+            } finally {
+                WorkFolder::remove($folder);
+            }
         }
     }
 }

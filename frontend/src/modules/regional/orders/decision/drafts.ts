@@ -1,6 +1,7 @@
 import { type QueryClient, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useState } from 'react'
-import type { RegionalOrder } from '../../../../shared/api/types'
+import type { CurrentUser, RegionalOrder } from '../../../../shared/api/types'
+import { meQueryKey } from '../../../../shared/auth/session'
 import { type Draft, initialDraft, isStale } from './model'
 
 /**
@@ -8,17 +9,20 @@ import { type Draft, initialDraft, isStale } from './model'
  * ouverte (sortie de l'écran pour appeler le client, puis retour), une
  * décision enregistrée ou une commande déjà traitée les efface. Seuls ceux où
  * le régional a saisi quelque chose sont gardés. Attachés au client de
- * requêtes : rien ne passe d'une session ou d'un test à l'autre.
+ * requêtes et au compte connecté : une déconnexion, ou un autre compte sur le
+ * même appareil, repart sans brouillon (la décision serait enregistrée au nom
+ * de celui qui valide, pas de celui qui a saisi).
  */
-const stores = new WeakMap<QueryClient, Map<string, Draft>>()
+const stores = new WeakMap<QueryClient, { userId: number | null; drafts: Map<string, Draft> }>()
 
 export function draftStore(queryClient: QueryClient): Map<string, Draft> {
+  const userId = queryClient.getQueryData<CurrentUser | null>(meQueryKey)?.id ?? null
   let store = stores.get(queryClient)
-  if (!store) {
-    store = new Map()
+  if (!store || store.userId !== userId) {
+    store = { userId, drafts: new Map() }
     stores.set(queryClient, store)
   }
-  return store
+  return store.drafts
 }
 
 /** Commande décidée (ou déjà traitée) : son brouillon n'a plus d'objet. */

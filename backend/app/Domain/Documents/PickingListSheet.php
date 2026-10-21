@@ -25,11 +25,9 @@ final class PickingListSheet
     public function write(PickingReport $report, string $target = 'php://output'): void
     {
         $options = new Options;
-        // Dossier de travail d'OpenSpout : celui du système, sauf configuration (tests en parallèle).
-        $temp = config('ramymaak.documents.temp_dir');
-        if (is_string($temp) && $temp !== '') {
-            $options->setTempFolder($temp);
-        }
+        // Dossier de travail propre à ce téléchargement, retiré même si la copie est interrompue.
+        $folder = WorkFolder::create();
+        $options->setTempFolder($folder);
         foreach (self::WIDTHS as $index => $width) {
             $options->setColumnWidth($width, $index + 1);
         }
@@ -70,7 +68,11 @@ final class PickingListSheet
             }
             $writer->addRow($this->total((string) __('documents.picking.total'), $report->totals, $bold));
         } finally {
-            $writer->close();
+            try {
+                $writer->close();
+            } finally {
+                WorkFolder::remove($folder);
+            }
         }
     }
 
