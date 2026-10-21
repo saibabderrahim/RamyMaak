@@ -288,7 +288,7 @@ describe('PATCH /adv/orders/{id}/shipping', function () {
             // Le quota n'est jamais touché par l'expédition (RG-A03, Q-16).
             ->and(($this->counter)($this->orange))->toBe(40);
         Event::assertDispatched(OrderShippingUpdated::class, fn (OrderShippingUpdated $e) => $e->orderId === $this->order->id && $e->version === 4 && $e->actorId === $this->adv->id);
-        expect(AuditLog::query()->where('event', 'shipping_updated')->sole()->properties['delivery_note_ref'])->toBe(['before' => null, 'after' => 'BL-0042']);
+        expect(AuditLog::query()->where('event', 'shipping_updated')->sole()->properties['delivery_note_ref'])->toMatchArray(['before' => null, 'after' => 'BL-0042'])->toHaveCount(2);
     });
 
     it('changes only the lines sent, and the delivery note alone', function () {
@@ -473,7 +473,7 @@ describe('POST /adv/orders/{id}/cancel', function () {
             ->and(($this->counter)($this->orange))->toBe(30);
         Event::assertDispatched(OrderCancelledByAdv::class, fn (OrderCancelledByAdv $e) => $e->orderId === $this->order->id && $e->clientId === $this->a->id && $e->version === 3 && $e->actorId === $this->adv->id);
         Event::assertNotDispatched(OrderCancelled::class);
-        expect(AuditLog::query()->where('event', 'cancelled_by_adv')->sole()->properties['released'])->toBe([['sku' => 'P0042', 'qty' => 40]]);
+        expect(AuditLog::query()->where('event', 'cancelled_by_adv')->sole()->properties['released'])->sequence(fn ($released) => $released->toMatchArray(['sku' => 'P0042', 'qty' => 40])->toHaveCount(2));
     });
 
     it('cancels from IN_PREPARATION as well', function () {

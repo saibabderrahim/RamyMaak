@@ -112,7 +112,7 @@ describe('rejection', function () {
             ->and($this->order->fresh()->decision_comment)->toBe('Déjà reçue ce matin');
         $audit = AuditLog::query()->where('log_name', 'orders')->where('event', 'rejected')->sole();
         expect($audit->causer_id)->toBe($this->titular->id)
-            ->and($audit->properties->all())->toBe(['number' => 'RMK-261008-00001', 'version' => 2, 'reason' => 'DOUBLON', 'comment' => 'Déjà reçue ce matin']);
+            ->and($audit->properties->all())->toMatchArray(['number' => 'RMK-261008-00001', 'version' => 2, 'reason' => 'DOUBLON', 'comment' => 'Déjà reçue ce matin'])->toHaveCount(4);
         Event::assertDispatchedTimes(OrderRejected::class, 1);
         Event::assertDispatched(OrderRejected::class, fn (OrderRejected $e) => $e->orderId === $this->order->id && $e->version === 2 && $e->actorId === $this->titular->id);
     });

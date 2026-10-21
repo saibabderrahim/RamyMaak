@@ -115,19 +115,18 @@ it('sends N-07 « validée » to every active client account of the client, once
     expect(($this->countOf)())->toBe(2);
 
     // Dans le centre de notifications du client, au format du contrat.
-    $this->actingAs($this->secondA)
-        ->getJson('/api/v1/notifications')
-        ->assertOk()
-        ->assertJsonPath('data.0', [
-            'id' => ($this->notificationsOf)($this->secondA)->sole()->id,
-            'type' => 'ORDER_DECIDED',
-            'code' => 'N-07',
-            'title' => "Commande {$order->number} validée",
-            'body' => "Votre commande {$order->number} est validée.",
-            'url' => "/client/commandes/{$order->public_id}",
-            'read_at' => null,
-            'created_at' => '2026-10-08T08:30:00+00:00',
-        ]);
+    // N-03 de la publication porte le même horodatage : l'ordre entre les deux n'est pas garanti.
+    $center = $this->actingAs($this->secondA)->getJson('/api/v1/notifications')->assertOk();
+    expect(collect($center->json('data'))->firstWhere('type', 'ORDER_DECIDED'))->toBe([
+        'id' => ($this->notificationsOf)($this->secondA)->sole()->id,
+        'type' => 'ORDER_DECIDED',
+        'code' => 'N-07',
+        'title' => "Commande {$order->number} validée",
+        'body' => "Votre commande {$order->number} est validée.",
+        'url' => "/client/commandes/{$order->public_id}",
+        'read_at' => null,
+        'created_at' => '2026-10-08T08:30:00+00:00',
+    ]);
 });
 
 it('sends N-07 « validée avec n lignes ajustées » when lines are validated under the quantity requested', function () {

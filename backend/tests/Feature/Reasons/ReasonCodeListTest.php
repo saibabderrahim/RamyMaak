@@ -110,7 +110,7 @@ describe('list', function () {
         DB::flushQueryLog();
         DB::enableQueryLog();
         ($this->list)('?type=ADJUSTMENT,REJECTION,SHIPPING_GAP,CANCELLATION')->assertOk();
-        $queries = collect(DB::getQueryLog())->pluck('query')->filter(fn (string $query) => str_contains($query, '"reason_codes"'));
+        $queries = collect(DB::getQueryLog())->pluck('query')->filter(fn (string $query) => preg_match('/["`]reason_codes["`]/', $query) === 1);
         DB::disableQueryLog();
 
         expect($queries)->toHaveCount(1);
