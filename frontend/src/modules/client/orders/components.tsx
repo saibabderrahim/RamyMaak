@@ -27,7 +27,7 @@ const SECTION = 'flex flex-col gap-3 rounded-lg border border-slate-200 bg-white
 export function OrderStatusBadge({ status }: { status: OrderStatus }) {
   const { t } = useTranslation()
   return (
-    <span className={`inline-flex min-h-6 items-center rounded px-2 text-xs font-semibold whitespace-nowrap ${STATUS_CLASSES[status]}`} data-status={status}>
+    <span className={`inline-flex min-h-6 items-center rounded-full px-2.5 text-xs font-semibold whitespace-nowrap ${STATUS_CLASSES[status]}`} data-status={status}>
       {t(`orders.status.${status}`)}
     </span>
   )

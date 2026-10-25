@@ -183,8 +183,8 @@ export function Tabs<T extends string>({ id, label, tabs, value, onChange }: Tab
             onClick={() => onChange(tab.id)}
             onKeyDown={(event) => onKeyDown(event, index)}
             className={cx(
-              '-mb-px min-h-11 shrink-0 border-b-2 px-4 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-focus',
-              selected ? 'border-brand-600 text-brand-800' : 'border-transparent text-slate-600 hover:text-slate-900',
+              '-mb-px min-h-11 shrink-0 border-b-[3px] px-4 text-sm focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
+              selected ? 'border-brand-600 font-semibold text-slate-900' : 'border-transparent text-slate-600 hover:text-slate-900',
             )}
           >
             {tab.label}
@@ -216,7 +216,7 @@ export function DataTable({ label, children, className }: { label?: string; chil
 
 export function TableHead({ children }: { children: ReactNode }) {
   return (
-    <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
+    <thead className="border-b border-slate-300 text-xs text-slate-600">
       <tr>{children}</tr>
     </thead>
   )
@@ -227,7 +227,7 @@ export function Th({ children, className }: { children?: ReactNode; className?: 
   // deux classes text-* sur le même élément, c'est l'ordre de la feuille de style qui gagne.
   const aligned = /(^|\s)text-(end|center|right|left)(\s|$)/.test(className ?? '')
   return (
-    <th scope="col" className={cx('py-2 pe-4 font-medium', !aligned && 'text-start', className)}>
+    <th scope="col" className={cx('py-2 pe-4 font-semibold whitespace-nowrap', !aligned && 'text-start', className)}>
       {children}
     </th>
   )

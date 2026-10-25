@@ -148,25 +148,13 @@ export default function OrdersQueuePage() {
           />
 
           {report && <BulkReportPanel report={report} onClose={() => setReport(null)} />}
-          {selectable && (
-            <BulkBar
-              target={tab.next}
-              selected={selection.size}
-              plan={plan}
-              pending={bulk.isPending}
-              online={online}
-              error={bulk.error}
-              onRun={() => tab.next && run(tab.next)}
-              onClear={() => setSelection(NO_SELECTION)}
-            />
-          )}
 
           <ErrorAlert error={orders.error} className="mb-4" />
           {(orders.isPending || switching) && <Spinner label={t('backoffice.orders.list.loading')} />}
 
           {orders.data && !switching && (
             <>
-              <DataTable label={t('backoffice.orders.list.label')} className="min-w-[960px]">
+              <DataTable label={t('backoffice.orders.list.label')} className={`min-w-[960px] ${STACKED_TABLE}`}>
                 <TableHead>
                   {selectable && (
                     <Th className="w-10">
@@ -194,7 +182,7 @@ export default function OrdersQueuePage() {
                     <Th>{t(`backoffice.orders.columns.${tab.status}`)}</Th>
                   )}
                 </TableHead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-200">
                   {rows.map((order) => (
                     <OrderRow
                       key={order.id}
@@ -214,6 +202,20 @@ export default function OrdersQueuePage() {
               <Pagination meta={orders.data.meta} onPage={(page) => update({ page })} />
             </>
           )}
+          {/* Après le tableau : la barre reste collée en bas de l'écran tant que la liste est visible (charte Ramy, lot 7). */}
+          {selectable && (
+            <BulkBar
+              target={tab.next}
+              selected={selection.size}
+              plan={plan}
+              pending={bulk.isPending}
+              online={online}
+              error={bulk.error}
+              onRun={() => tab.next && run(tab.next)}
+              onClear={() => setSelection(NO_SELECTION)}
+            />
+          )}
+
         </Card>
       </TabPanel>
 
@@ -223,6 +225,12 @@ export default function OrdersQueuePage() {
     </>
   )
 }
+
+// Téléphone et tablette étroite (charte Ramy, lot 7) : chaque commande en bloc à trois lignes — case, numéro et
+// total TTC, client et validation, région ; journée et nombre de lignes masqués (la journée est dans le numéro).
+const STACKED_TABLE = 'max-md:min-w-0 max-md:[&_thead]:sr-only'
+const STACKED_ROW = 'max-md:grid max-md:grid-cols-[2.75rem_minmax(0,1fr)_auto] max-md:gap-x-3 max-md:pb-3'
+const STACKED_CELL = 'max-md:block max-md:py-0 max-md:pe-0'
 
 function OrderRow({
   order,
@@ -244,9 +252,9 @@ function OrderRow({
   const milestone = tab === 'IN_PREPARATION' ? order.prep_started_at : tab === 'PREPARED' ? order.prepared_at : tab === 'SHIPPED' ? order.shipped_at : null
 
   return (
-    <tr className={checked ? 'bg-brand-50' : 'hover:bg-slate-50'} data-order={order.number}>
+    <tr className={`${STACKED_ROW} ${checked ? 'bg-brand-50' : 'hover:bg-slate-50'}`} data-order={order.number}>
       {selectable && (
-        <td className="py-2 pe-4 align-top">
+        <td className={`py-2 pe-4 align-top ${STACKED_CELL} max-md:row-span-3`}>
           {/* Même hauteur que le lien du numéro : la case reste sur sa ligne. */}
           <span className="flex min-h-11 items-center">
             <input
@@ -260,9 +268,12 @@ function OrderRow({
           </span>
         </td>
       )}
-      <td className="py-2 pe-4 align-top">
+      <td className={`py-2 pe-4 align-top ${STACKED_CELL} max-md:col-start-2`}>
         <span className="flex flex-col items-start gap-1">
-          <Link to={`${base}/commandes/${order.id}`} className="inline-flex min-h-11 items-center font-medium text-brand-700 hover:underline">
+          <Link
+            to={`${base}/commandes/${order.id}`}
+            className="inline-flex min-h-11 items-center font-semibold tabular-nums text-slate-900 underline decoration-1 underline-offset-4 hover:decoration-2"
+          >
             {order.number}
           </Link>
           <span className="flex flex-wrap gap-1">
@@ -271,31 +282,33 @@ function OrderRow({
           </span>
         </span>
       </td>
-      <td className="py-2 pe-4 align-top whitespace-nowrap tabular-nums">
+      <td className="py-2 pe-4 align-top whitespace-nowrap tabular-nums max-md:hidden">
         {can('dashboard.view') ? (
-          <Link to={`${base}/journees/${order.day}/suivi`} className="text-brand-700 hover:underline">
+          <Link to={`${base}/journees/${order.day}/suivi`} className="text-slate-900 underline decoration-1 underline-offset-4 hover:decoration-2">
             {formatDate(order.day)}
           </Link>
         ) : (
           formatDate(order.day)
         )}
       </td>
-      <td className="py-2 pe-4 align-top">
-        <span className="font-medium">{order.client.code}</span> <span className="text-slate-700">{order.client.name}</span>{' '}
+      <td className={`py-2 pe-4 align-top ${STACKED_CELL} max-md:col-start-2 max-md:row-start-2`}>
+        <span className="font-semibold">{order.client.code}</span> <span className="text-slate-700">{order.client.name}</span>{' '}
         <ClientStatusFlag status={order.client.status} />
       </td>
-      <td className="py-2 pe-4 align-top">
+      <td className={`py-2 pe-4 align-top ${STACKED_CELL} max-md:col-start-2 max-md:row-start-3 max-md:text-xs`}>
         {order.region.name}
         {order.depot && <span className="block text-xs text-slate-600">{order.depot.name}</span>}
       </td>
-      <td className="py-2 pe-4 text-end align-top tabular-nums">{order.lines_count}</td>
-      <td className="py-2 pe-4 text-end align-top whitespace-nowrap tabular-nums">{formatAmount(order.total_ttc)}</td>
-      <td className="py-2 pe-4 align-top whitespace-nowrap">
+      <td className="py-2 pe-4 text-end align-top tabular-nums max-md:hidden">{order.lines_count}</td>
+      <td className={`py-2 pe-4 text-end align-top whitespace-nowrap tabular-nums ${STACKED_CELL} max-md:col-start-3 max-md:row-start-1 max-md:pt-3 max-md:font-semibold`}>
+        {formatAmount(order.total_ttc)}
+      </td>
+      <td className={`py-2 pe-4 align-top whitespace-nowrap ${STACKED_CELL} max-md:col-start-3 max-md:row-start-2 max-md:text-end max-md:text-xs`}>
         {formatDateTime(order.decided_at)}
         {order.decided_by && <span className="block text-xs text-slate-600">{t('backoffice.orders.list.validatedBy', { name: order.decided_by.name })}</span>}
       </td>
       {(tab === 'IN_PREPARATION' || tab === 'PREPARED' || tab === 'SHIPPED') && (
-        <td className="py-2 pe-4 align-top whitespace-nowrap">
+        <td className={`py-2 pe-4 align-top whitespace-nowrap ${STACKED_CELL} max-md:col-start-3 max-md:row-start-3 max-md:text-end max-md:text-xs`}>
           {formatDateTime(milestone)}
           {tab === 'SHIPPED' && order.delivery_note_ref && (
             <span className="block text-xs text-slate-600">{t('backoffice.orders.list.deliveryNote', { ref: order.delivery_note_ref })}</span>

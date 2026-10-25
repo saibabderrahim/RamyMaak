@@ -4,7 +4,7 @@ import { Link } from 'react-router'
 import type { RegionalDashboard, RegionalDashboardRegion } from '../../../shared/api/types'
 import { businessToday, formatQuantity } from '../../../shared/format'
 import { Alert } from '../../../shared/ui'
-import { businessMinutes, minutesOf } from '../../../shared/ui/clock'
+import { minutesOf, useBusinessNowOn } from '../../../shared/ui/clock'
 import { DayRail } from '../../../shared/ui/DayRail'
 import { CallLink } from '../clients/components'
 import { phonesOf } from '../clients/contact'
@@ -18,11 +18,6 @@ const LINK =
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'
 const PRIMARY = 'border border-brand-600 bg-brand-600 text-white hover:border-brand-700 hover:bg-brand-700'
 const SECONDARY = 'border border-slate-300 bg-white text-slate-900 hover:border-field hover:bg-slate-50'
-
-/** Minute du jour métier à l'heure de l'appareil, pour la journée en cours seulement (repère du fil, alerte de retard). */
-function nowOnDay(day: string): number | null {
-  return day === businessToday() ? businessMinutes(Date.now()) : null
-}
 
 /** Chiffres en colonnes séparées par un filet (charte Ramy, lot 7) ; la phrase équivalente est lue par les lecteurs d'écran. */
 function Figures({ items }: { items: { label: string; value: number }[] }) {
@@ -63,7 +58,8 @@ export function RegionDayCard({
   const parts = cutoffParts(region, validationBlocking)
   const action = distributionAction(region)
   const actionLabel = action === null ? '' : t(`orders.myDay.region.${action === 'view' ? 'seeDistribution' : 'distribute'}`)
-  const now = nowOnDay(day)
+  // Heure de l'appareil, journée en cours seulement : repère du fil et alerte indicative de retard.
+  const now = useBusinessNowOn(day, businessToday())
   const distributionCutoff = minutesOf(region.cutoffs.distribution)
   // Quotas publiés, répartition non envoyée et heure limite de répartition passée (comme l'alerte du suivi ADV).
   const late =

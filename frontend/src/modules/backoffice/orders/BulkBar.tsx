@@ -24,28 +24,29 @@ export function BulkBar({ target, selected, plan, pending, online, error, onRun,
   const { t } = useTranslation()
   if (selected === 0) return <ErrorAlert error={error} className="mb-4" />
 
+  // Collée en bas de l'écran (charte Ramy, lot 7) : l'action reste à portée pendant le défilement de la liste.
   return (
-    <div className="mb-4 flex flex-col gap-2">
+    <div className="sticky bottom-4 z-30 mt-4 flex flex-col gap-2">
       <div
         role="region"
         aria-label={t('backoffice.orders.bulk.region')}
-        className="flex flex-col gap-2 rounded-lg border border-brand-200 bg-brand-50 p-3"
+        className="flex flex-col gap-2 rounded-lg bg-white p-3 shadow-[0_12px_32px_rgb(20_16_13/0.22)] sm:px-4"
       >
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-sm font-semibold text-brand-900" aria-live="polite">
+          <span className="me-auto text-sm font-semibold text-slate-900" aria-live="polite">
             {t('backoffice.orders.bulk.selected', { count: selected })}
           </span>
+          <Button variant="ghost" onClick={onClear} disabled={pending}>
+            {t('backoffice.orders.bulk.clear')}
+          </Button>
           {target && (
             <Button disabled={pending || !online || plan.items.length === 0} onClick={onRun}>
               {pending ? t('backoffice.orders.bulk.pending') : t(`backoffice.orders.bulk.actions.${target}`, { count: plan.items.length })}
             </Button>
           )}
-          <Button variant="ghost" onClick={onClear} disabled={pending}>
-            {t('backoffice.orders.bulk.clear')}
-          </Button>
         </div>
-        {plan.skipped.length > 0 && <p className="text-xs font-medium text-amber-800">{t('backoffice.orders.bulk.skipped', { count: plan.skipped.length })}</p>}
-        {selected >= MAX_SELECTION && <p className="text-xs font-medium text-amber-800">{t('backoffice.orders.bulk.max', { max: MAX_SELECTION })}</p>}
+        {plan.skipped.length > 0 && <p className="text-xs font-semibold text-warning">{t('backoffice.orders.bulk.skipped', { count: plan.skipped.length })}</p>}
+        {selected >= MAX_SELECTION && <p className="text-xs font-semibold text-warning">{t('backoffice.orders.bulk.max', { max: MAX_SELECTION })}</p>}
         {!online && <p className="text-xs text-slate-700">{t('backoffice.orders.offline')}</p>}
       </div>
       <ErrorAlert error={error} />

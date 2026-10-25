@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router'
 import { ApiError } from '../../../shared/api/client'
-import { formatDateTime } from '../../../shared/format'
+import { businessToday, formatDateTime } from '../../../shared/format'
 import { useCoalescedRefresh } from '../../../shared/orders'
 import { Alert, Button, ErrorAlert, PageHeader, Spinner } from '../../../shared/ui'
+import { minutesOf, useBusinessNowOn } from '../../../shared/ui/clock'
+import { DayRail } from '../../../shared/ui/DayRail'
 import { DayStatusBadge } from '../days/components'
 import { formatDayLong, isDay } from '../days/dates'
 import { useBackoffice } from '../shared/access'
@@ -40,6 +42,7 @@ function Monitoring({ day }: { day: string }) {
   const query = useDayMonitoring(day, { enabled: valid, refetchInterval })
   const data = query.data
   const [dialog, setDialog] = useState<'picking' | 'export' | null>(null)
+  const now = useBusinessNowOn(day, businessToday())
 
   const links = (
     <>
@@ -107,6 +110,18 @@ function Monitoring({ day }: { day: string }) {
       <div className="flex flex-col gap-6">
         {/* Échec d'une relecture en arrière-plan : le dernier suivi reçu reste affiché. */}
         <ErrorAlert error={query.error} />
+        {/* Fil de la journée (charte Ramy, lot 7) : heures limites de la journée, heure courante le jour même. */}
+        <section aria-label={t('backoffice.monitoring.rail')} className="rounded-lg border border-slate-200 bg-white px-4 pt-2 pb-4">
+          <DayRail
+            label={t('backoffice.monitoring.rail')}
+            now={now}
+            stops={(['distribution', 'ordering', 'validation', 'closing'] as const).map((kind) => ({
+              label: t(`backoffice.monitoring.railStops.${kind}`),
+              time: data.cutoffs[kind],
+              minutes: minutesOf(data.cutoffs[kind]),
+            }))}
+          />
+        </section>
         <KeyFigures data={data} />
         <RegionsTable data={data} />
         <ProductMatrix data={data} />

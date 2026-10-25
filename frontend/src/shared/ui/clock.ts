@@ -60,3 +60,17 @@ export function useServerNow(serverTime: string | null | undefined, receivedAt: 
   }, [])
   return offset === null || Number.isNaN(offset) ? null : tick + offset
 }
+
+/**
+ * Minute du jour métier à l'heure de l'appareil, relue toutes les 30 s ; null
+ * si `day` n'est pas la journée en cours. Sert au repère « maintenant » du fil
+ * et aux alertes indicatives, jamais à une décision (D-10 : le serveur fait foi).
+ */
+export function useBusinessNowOn(day: string, today: string): number | null {
+  const [tick, setTick] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = window.setInterval(() => setTick(Date.now()), 30_000)
+    return () => window.clearInterval(timer)
+  }, [])
+  return day === today ? businessMinutes(tick) : null
+}
