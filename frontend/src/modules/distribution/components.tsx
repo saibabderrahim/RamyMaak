@@ -91,8 +91,8 @@ export function ModeSwitch({ mode, onChange }: { mode: DisplayMode; onChange: (m
           type="button"
           aria-pressed={mode === option}
           onClick={() => onChange(option)}
-          className={`min-h-9 rounded-md px-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
-            mode === option ? 'bg-white text-brand-800 shadow-xs' : 'text-slate-700 hover:bg-slate-200'
+          className={`min-h-9 rounded-md px-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ${
+            mode === option ? 'bg-white text-brand-800' : 'text-slate-700 hover:bg-slate-200'
           }`}
         >
           {t(`distribution.modes.${option}`)}

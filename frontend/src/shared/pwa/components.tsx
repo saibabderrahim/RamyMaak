@@ -18,7 +18,7 @@ export function UpdateBanner() {
   if (!needRefresh) return null
 
   return (
-    <div className="fixed inset-x-0 bottom-20 z-50 mx-auto flex max-w-md items-center justify-between gap-3 rounded-xl bg-slate-900 px-4 py-3 text-sm text-white shadow-lg md:bottom-6">
+    <div className="fixed inset-x-0 bottom-20 z-50 mx-auto flex max-w-md items-center justify-between gap-3 rounded-lg bg-slate-900 px-4 py-3 text-sm text-white shadow-lg md:bottom-6">
       <span>{t('pwa.updateAvailable')}</span>
       <Button variant="secondary" className="min-h-9" onClick={() => void updateServiceWorker(true)}>
         {t('pwa.reload')}

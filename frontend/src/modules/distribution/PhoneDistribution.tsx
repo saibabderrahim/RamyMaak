@@ -68,7 +68,7 @@ export function PhoneDistribution({ grid, edits, summaries, readOnly, highlights
 
   return (
     <div className="flex flex-col gap-4">
-      <div role="group" aria-label={t('distribution.phone.view')} className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
+      <div role="group" aria-label={t('distribution.phone.view')} className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1">
         {(['product', 'client'] as const).map((option) => (
           <button
             key={option}
@@ -76,8 +76,8 @@ export function PhoneDistribution({ grid, edits, summaries, readOnly, highlights
             aria-pressed={view === option}
             onClick={() => setView(option)}
             className={cx(
-              'min-h-11 rounded-lg px-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600',
-              view === option ? 'bg-white text-brand-800 shadow-xs' : 'text-slate-700 hover:bg-slate-200',
+              'min-h-11 rounded-lg px-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+              view === option ? 'bg-white text-brand-800' : 'text-slate-700 hover:bg-slate-200',
             )}
           >
             {t(`distribution.phone.${option}`)}
@@ -167,7 +167,7 @@ function ByProduct({ grid, product, summary, summaries, edits, readOnly, highlig
       {clients.length === 0 ? (
         <p className="text-sm text-slate-600">{t('distribution.grid.noMatch')}</p>
       ) : (
-        <ul aria-label={t('distribution.phone.clientsOf', { product: product.short_name })} className="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white">
+        <ul aria-label={t('distribution.phone.clientsOf', { product: product.short_name })} className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
           {clients.map((client) => (
             <PhoneLimitRow
               key={client.id}
@@ -196,7 +196,7 @@ function ByProduct({ grid, product, summary, summaries, edits, readOnly, highlig
         title={summary.overallocated ? t('distribution.summary.overallocatedHint', { sum: formatQuantity(summary.sumLimits), quota: formatQuantity(summary.quota) }) : undefined}
         data-overallocated={summary.overallocated || undefined}
         className={cx(
-          'sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-30 grid grid-cols-4 gap-1 rounded-xl border px-2 py-2 text-center text-sm shadow-lg',
+          'sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-30 grid grid-cols-4 gap-1 rounded-lg border px-2 py-2 text-center text-sm shadow-lg',
           summary.overallocated ? 'border-orange-300 bg-orange-100 text-orange-950' : 'border-slate-200 bg-white text-slate-900',
         )}
       >
@@ -273,7 +273,7 @@ function ByClient({ grid, clientId, onClient, edits, readOnly, highlights, onInp
           {groups.map((group) => (
             <section key={group.family.id} className="flex flex-col gap-2">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-700">{group.family.name}</h3>
-              <ul aria-label={t('distribution.phone.productsOf', { client: client.name, family: group.family.name })} className="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white">
+              <ul aria-label={t('distribution.phone.productsOf', { client: client.name, family: group.family.name })} className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
                 {group.columns.map((col) => {
                   const product = grid.products[col]!
                   return (
@@ -431,7 +431,7 @@ const PhoneLimitRow = memo(function PhoneLimitRow({
           }}
           onKeyDown={onKeyDown}
           className={cx(
-            'h-12 w-28 shrink-0 rounded-lg border bg-white px-3 text-end text-lg tabular-nums text-slate-900 focus:outline-2 focus:outline-brand-600/40 disabled:bg-slate-100 disabled:text-slate-700',
+            'h-12 w-28 shrink-0 rounded-lg border bg-white px-3 text-end text-lg tabular-nums text-slate-900 focus:outline-2 focus:outline-focus disabled:bg-slate-100 disabled:text-slate-700',
             error || highlighted ? 'border-red-600' : warning ? 'border-amber-500' : draft ? 'border-sky-500' : 'border-slate-300',
           )}
         />

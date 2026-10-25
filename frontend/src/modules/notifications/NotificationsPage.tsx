@@ -68,15 +68,15 @@ export default function NotificationsPage() {
 
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div role="group" aria-label={t('notifications.filter.label')} className="inline-flex rounded-xl bg-slate-100 p-1">
+          <div role="group" aria-label={t('notifications.filter.label')} className="inline-flex rounded-lg bg-slate-100 p-1">
             {FILTERS.map((value) => (
               <button
                 key={value}
                 type="button"
                 aria-pressed={filter === value}
                 onClick={() => selectFilter(value)}
-                className={`min-h-11 rounded-lg px-4 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
-                  filter === value ? 'bg-white text-brand-800 shadow-xs' : 'text-slate-700 hover:bg-slate-200'
+                className={`min-h-11 rounded-lg px-4 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ${
+                  filter === value ? 'bg-white text-brand-800' : 'text-slate-700 hover:bg-slate-200'
                 }`}
               >
                 {t(`notifications.filter.${value}`)}
@@ -106,7 +106,7 @@ export default function NotificationsPage() {
               {filter === 'unread' ? t('notifications.emptyUnread') : t('notifications.empty')}
             </p>
           ) : (
-            <ul aria-label={t('notifications.list')} className="divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <ul aria-label={t('notifications.list')} className="divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-white">
               {items.map((notification) => (
                 <NotificationItem
                   key={notification.id}
@@ -130,7 +130,7 @@ export default function NotificationsPage() {
 }
 
 const ITEM_CLASSES =
-  'flex w-full min-h-11 items-start gap-3 px-4 py-3 text-start focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-600'
+  'flex w-full min-h-11 items-start gap-3 px-4 py-3 text-start focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus'
 
 /**
  * Une notification : non lue en gras, avec une pastille. Avec un écran à

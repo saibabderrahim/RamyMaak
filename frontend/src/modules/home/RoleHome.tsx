@@ -13,7 +13,7 @@ type Shortcut = { to: string; label: string; primary?: boolean }
 // Zones tactiles d'au moins 44 px (§7.3), mêmes styles que les boutons.
 const LINK_CLASSES =
   'inline-flex min-h-11 items-center justify-center rounded-lg px-4 text-sm font-semibold transition-colors ' +
-  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'
 const PRIMARY_LINK = 'bg-brand-600 text-white hover:bg-brand-700'
 const SECONDARY_LINK = 'border border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
 

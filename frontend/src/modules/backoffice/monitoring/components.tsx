@@ -19,8 +19,8 @@ const QUEUE_TAB: Partial<Record<(typeof MONITORING_ORDER_STATUSES)[number], stri
   CANCELLED: 'annulees',
 }
 
-const TILE = 'flex min-h-20 flex-col justify-between gap-1 rounded-xl border border-slate-200 bg-white p-3 shadow-xs'
-const TILE_LINK = `${TILE} hover:border-brand-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600`
+const TILE = 'flex min-h-20 flex-col justify-between gap-1 rounded-lg border border-slate-200 bg-white p-3'
+const TILE_LINK = `${TILE} hover:border-brand-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus`
 
 /** Chiffres clés : commandes par statut (lien vers la file quand elle les contient), clients ayant commandé, quotas validés. */
 export function KeyFigures({ data }: { data: DayMonitoring }) {

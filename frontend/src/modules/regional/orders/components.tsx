@@ -20,7 +20,7 @@ const STATUS_TONES: Record<OrderStatus, 'warning' | 'success' | 'danger' | 'neut
   EXPIRED: 'neutral',
 }
 
-const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
+const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'
 
 /** Statut d'une commande (§6.2) : à valider, validée et suivantes, rejetée, fins sans décision. */
 export function OrderStatusBadge({ status }: { status: OrderStatus }) {
@@ -51,7 +51,7 @@ export function DayToggle({
 }) {
   const { t } = useTranslation()
   return (
-    <div role="group" aria-label={label ?? t('orders.regional.dayChoice')} className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 sm:max-w-md">
+    <div role="group" aria-label={label ?? t('orders.regional.dayChoice')} className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1 sm:max-w-md">
       {[
         { value: today, label: t('orders.regional.today') },
         { value: tomorrow, label: t('orders.regional.tomorrow') },
@@ -62,7 +62,7 @@ export function DayToggle({
           aria-pressed={day === value}
           onClick={() => onChange(value)}
           className={`flex min-h-12 flex-col items-center justify-center rounded-lg px-3 py-1 text-sm font-semibold ${FOCUS} ${
-            day === value ? 'bg-white text-brand-800 shadow-xs' : 'text-slate-700 hover:bg-slate-200'
+            day === value ? 'bg-white text-brand-800' : 'text-slate-700 hover:bg-slate-200'
           }`}
         >
           {label}
@@ -139,7 +139,7 @@ export function OrderTabs({
     <div
       role="tablist"
       aria-label={t('orders.regional.tabs.label')}
-      className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 sm:flex sm:flex-wrap"
+      className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1 sm:flex sm:flex-wrap"
     >
       {ORDER_TABS.map((tab, index) => {
         const selected = tab.key === active.key
@@ -159,7 +159,7 @@ export function OrderTabs({
             onClick={() => onSelect(tab)}
             onKeyDown={(event) => onKeyDown(event, index)}
             className={`flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 py-1 text-sm font-semibold sm:flex-1 ${FOCUS} ${
-              selected ? 'bg-white text-brand-800 shadow-xs' : 'text-slate-700 hover:bg-slate-200'
+              selected ? 'bg-white text-brand-800' : 'text-slate-700 hover:bg-slate-200'
             }`}
           >
             <span>{t(`orders.regional.tabs.${tab.key}`)}</span>
@@ -236,7 +236,7 @@ export function OrderCards({ orders, day, label, showRegion, listSearch }: ListP
           <Link
             to={orderPath(order.id)}
             state={{ list: listSearch }}
-            className={`flex min-h-11 flex-col gap-1 rounded-xl border border-slate-200 bg-white p-3 shadow-xs hover:bg-slate-50 ${FOCUS}`}
+            className={`flex min-h-11 flex-col gap-1 rounded-lg border border-slate-200 bg-white p-3 hover:bg-slate-50 ${FOCUS}`}
           >
             <span className="flex flex-wrap items-center justify-between gap-2">
               <span className="font-semibold text-slate-900">{order.number}</span>
@@ -268,7 +268,7 @@ export function OrdersTable({ orders, day, label, showRegion, listSearch }: List
   const { t } = useTranslation()
   const header = 'px-4 py-3 text-left text-xs font-semibold text-slate-600'
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-xs">
+    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
       <table className="w-full text-sm">
         <caption className="sr-only">{label}</caption>
         <thead className="bg-slate-50">

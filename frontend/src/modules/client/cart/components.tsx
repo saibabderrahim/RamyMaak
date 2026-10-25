@@ -13,7 +13,7 @@ import type { CartNotice } from './sync'
 
 const LINK_BUTTON =
   'inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold transition-colors ' +
-  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'
 export const PRIMARY_LINK = `${LINK_BUTTON} bg-brand-600 text-white hover:bg-brand-700`
 export const SECONDARY_LINK = `${LINK_BUTTON} border border-slate-300 bg-white text-slate-800 hover:bg-slate-50`
 
@@ -59,7 +59,7 @@ export function TodayLoading({ paused, label }: { paused: boolean; label?: strin
 export function CartNoticeAlert({ notice, onDismiss }: { notice: CartNotice; onDismiss: () => void }) {
   const { t } = useTranslation()
   return (
-    <div role="status" className="flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+    <div role="status" className="flex items-start justify-between gap-3 rounded-lg bg-warning-soft px-4 py-3 text-sm text-slate-900">
       <div className="min-w-0">
         {notice.kind === 'reconciled' ? (
           <>
@@ -84,7 +84,7 @@ export function CartNoticeAlert({ notice, onDismiss }: { notice: CartNotice; onD
         type="button"
         onClick={onDismiss}
         aria-label={t('orders.client.sync.dismiss')}
-        className="-me-2 -mt-2 inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-xl hover:bg-amber-100 focus-visible:outline-2 focus-visible:outline-brand-600"
+        className="-me-2 -mt-2 inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-xl hover:bg-white/60 focus-visible:outline-2 focus-visible:outline-focus"
       >
         <span aria-hidden="true">×</span>
       </button>
@@ -96,7 +96,7 @@ export function CartNoticeAlert({ notice, onDismiss }: { notice: CartNotice; onD
 export function EditingBanner({ number, modifiable, onAbandon }: { number: string; modifiable: boolean; onAbandon: () => void }) {
   const { t } = useTranslation()
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-900">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-slate-100 px-4 py-3 text-sm text-slate-900">
       <div className="min-w-0">
         <p className="font-semibold">{t('orders.client.editing.banner', { number })}</p>
         <p>{modifiable ? t('orders.client.editing.hint') : t('orders.client.editing.notModifiable')}</p>
@@ -117,16 +117,19 @@ export function TotalsList({ totals }: { totals: Totals }) {
     { label: t('orders.client.cart.totalTtc'), value: totals.ttc, strong: true },
   ]
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-2">
       <dl className="flex flex-col gap-1 text-sm" aria-label={t('orders.client.cart.totals')}>
         {rows.map((row) => (
-          <div key={row.label} className={`flex justify-between gap-3 ${row.strong ? 'text-base font-semibold text-slate-900' : 'text-slate-700'}`}>
+          <div
+            key={row.label}
+            className={`flex justify-between gap-3 ${row.strong ? 'mt-1 border-t border-slate-300 pt-2 text-lg font-semibold text-slate-900' : 'text-slate-700'}`}
+          >
             <dt>{row.label}</dt>
             <dd className="tabular-nums">{formatAmount(row.value)}</dd>
           </div>
         ))}
       </dl>
-      <p className="text-xs text-slate-500">{t('orders.amountsHint')}</p>
+      <p className="text-xs text-slate-600">{t('orders.amountsHint')}</p>
     </div>
   )
 }
@@ -136,7 +139,7 @@ export function CartPanel({ items }: { items: readonly CartItem[] }) {
   const { t } = useTranslation()
   const titleId = useId()
   return (
-    <aside aria-labelledby={titleId} className="sticky top-20 flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+    <aside aria-labelledby={titleId} className="sticky top-20 flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-4">
       <h2 id={titleId} className="text-base font-semibold text-slate-900">
         {t('orders.client.panel.title')}
       </h2>

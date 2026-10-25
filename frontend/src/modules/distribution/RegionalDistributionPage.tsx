@@ -47,7 +47,7 @@ export default function RegionalDistributionPage() {
       <PageHeader title={t('distribution.title')} />
 
       <div className="flex flex-col gap-4">
-        <div role="group" aria-label={t('distribution.page.dayChoice')} className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 sm:max-w-md">
+        <div role="group" aria-label={t('distribution.page.dayChoice')} className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1 sm:max-w-md">
           {[
             { value: today, label: t('distribution.page.today') },
             { value: tomorrow, label: t('distribution.page.tomorrow') },
@@ -57,8 +57,8 @@ export default function RegionalDistributionPage() {
               type="button"
               aria-pressed={day === value}
               onClick={() => update('day', value)}
-              className={`flex min-h-12 flex-col items-center justify-center rounded-lg px-3 py-1 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
-                day === value ? 'bg-white text-brand-800 shadow-xs' : 'text-slate-700 hover:bg-slate-200'
+              className={`flex min-h-12 flex-col items-center justify-center rounded-lg px-3 py-1 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ${
+                day === value ? 'bg-white text-brand-800' : 'text-slate-700 hover:bg-slate-200'
               }`}
             >
               {label}

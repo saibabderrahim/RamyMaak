@@ -4,6 +4,17 @@ const client = {
   day: {
     title: 'Commande du {{date}}',
     delivery: 'Livraison le {{date}}',
+    // Temps restant avant l'heure limite et fil de la journée (charte Ramy, lot 7).
+    leftHours: '{{hours}} h {{minutes}}',
+    leftMinutes: '{{minutes}} min',
+    leftHint: 'pour envoyer votre commande',
+    rail: {
+      label: 'Fil de votre journée',
+      cutoff: 'Heure limite',
+      validation: 'Validation',
+      validationTime: 'Ensuite',
+      delivery: 'Livraison',
+    },
   },
   home: {
     blocked: 'Commande suspendue',
@@ -19,6 +30,8 @@ const client = {
     cartEditing_one: 'Modification de la commande {{number}} en cours : {{count}} produit',
     cartEditing_other: 'Modification de la commande {{number}} en cours : {{count}} produits',
     seeCart: 'Voir le panier',
+    featured: 'Mis en avant',
+    featuredOpen: 'Voir la fiche de {{name}}',
   },
   modify: {
     title: 'Modifier la commande {{number}}',

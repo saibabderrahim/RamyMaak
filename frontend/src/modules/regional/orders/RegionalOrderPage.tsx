@@ -12,7 +12,7 @@ import { OrderDetail } from './OrderDetail'
 
 const LINK_CLASSES =
   'inline-flex min-h-11 items-center gap-2 self-start rounded-lg font-medium text-brand-700 hover:underline ' +
-  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'
 
 /**
  * Détail d'une commande reçue et décision (EF-REG-04, EF-REG-05) :

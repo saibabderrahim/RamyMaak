@@ -16,8 +16,11 @@ import { type CatalogueView, filterProducts, useCatalogueView, useDesktop, withP
 
 // Liste compacte sur téléphone, galerie à partir de la tablette : 3 colonnes, 4 sur PC à côté du panier
 // latéral (§7.3 : 4 à 6) ; la page étant limitée à 1 152 px, 5 colonnes n'y laisseraient plus la place du sélecteur.
+// Charte Ramy (lot 7) : la liste du téléphone est un seul bloc à filets, une carte par produit à partir de la tablette.
 const GRID: Record<CatalogueView, string> = {
-  list: 'flex flex-col gap-2 sm:grid sm:grid-cols-3 sm:gap-3 lg:grid-cols-4',
+  list:
+    'flex flex-col divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white px-3 ' +
+    'sm:grid sm:grid-cols-3 sm:gap-3 sm:divide-y-0 sm:rounded-none sm:border-0 sm:bg-transparent sm:px-0 lg:grid-cols-4',
   gallery: 'grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4',
 }
 
@@ -129,16 +132,14 @@ function Catalogue({ today, cart, store, notice }: { today: ClientToday; cart: C
           </Alert>
         ) : (
           <>
-            <div className="flex items-center gap-2">
-              <div className="min-w-0 flex-1">
-                <SearchBox value={search} onChange={setSearch} />
-              </div>
+            <SearchBox value={search} onChange={setSearch} />
+            <FamilyTabs families={today.families} selected={familyId} onSelect={selectFamily} />
+            <div className="flex min-h-10 items-center justify-between gap-3">
+              <p className="text-sm text-slate-600" aria-live="polite">
+                {visible.length === 0 ? t('orders.client.catalogue.noMatch') : t('orders.client.catalogue.results', { count: visible.length })}
+              </p>
               <ViewToggle view={view} onChange={setView} />
             </div>
-            <FamilyTabs families={today.families} selected={familyId} onSelect={selectFamily} />
-            <p className="text-sm text-slate-600" aria-live="polite">
-              {visible.length === 0 ? t('orders.client.catalogue.noMatch') : t('orders.client.catalogue.results', { count: visible.length })}
-            </p>
             {visible.length > 0 && (
               <ul aria-label={t('orders.client.catalogue.products')} className={GRID[view]}>
                 {visible.map((product) => (

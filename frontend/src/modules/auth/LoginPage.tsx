@@ -47,19 +47,26 @@ export default function LoginPage() {
 
   const missing = errors.username || errors.password
 
+  // Charte Ramy (lot 7) : photo produit à côté du formulaire sur grand écran, en bandeau au-dessus sur téléphone.
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-slate-50 px-4 py-10">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 flex flex-col items-center gap-3 text-center">
-          <img src="/icons/icon-192.png" alt="" className="size-16 rounded-2xl shadow-sm" />
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">{t('app.name')}</h1>
+    <div className="grid min-h-dvh grid-cols-1 bg-white lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+      <div className="flex h-52 items-center justify-center overflow-hidden border-b border-slate-200 bg-photo lg:order-2 lg:h-auto lg:border-b-0 lg:border-s">
+        <img
+          src="/brand/bouteille-hibiscus-menthe.webp"
+          alt={t('auth.login.photo')}
+          width={560}
+          height={700}
+          className="h-full w-auto max-w-none lg:h-auto lg:w-3/4 lg:max-w-[520px]"
+        />
+      </div>
+
+      <div className="flex justify-center px-4 py-8 lg:items-center lg:px-10">
+        <form onSubmit={onSubmit} noValidate className="flex w-full max-w-sm flex-col gap-4">
+          <div className="flex flex-col items-start gap-2">
+            <img src="/brand/ramy-logo.png" alt="Ramy" width={120} height={62} className="h-14 w-auto" />
             <p className="text-sm text-slate-600">{t('app.tagline')}</p>
           </div>
-        </div>
-
-        <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-900">{t('auth.login.title')}</h2>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{t('auth.login.title')}</h1>
 
           {expired && <Alert tone="warning">{t('errors.sessionExpired')}</Alert>}
           {missing && <Alert tone="error">{t('auth.login.required')}</Alert>}
@@ -77,11 +84,11 @@ export default function LoginPage() {
 
           <Checkbox label={t('auth.login.remember')} {...register('remember')} />
 
-          <Button type="submit" disabled={login.isPending}>
+          <Button type="submit" className="min-h-12 text-base" disabled={login.isPending}>
             {login.isPending ? t('auth.login.submitting') : t('auth.login.submit')}
           </Button>
 
-          <p className="text-xs text-slate-500">{t('auth.login.forgotten')}</p>
+          <p className="text-sm text-slate-600">{t('auth.login.forgotten')}</p>
         </form>
       </div>
     </div>

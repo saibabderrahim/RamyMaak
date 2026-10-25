@@ -113,7 +113,7 @@ export const DecisionLine = memo(function DecisionLine({
     <li>
       <article
         aria-label={line.name}
-        className={`flex flex-col gap-3 rounded-xl border bg-white p-3 shadow-xs ${message !== null ? 'border-red-300' : 'border-slate-200'}`}
+        className={`flex flex-col gap-3 rounded-lg border bg-white p-3 ${message !== null ? 'border-red-300' : 'border-slate-200'}`}
       >
         <div className="flex gap-3">
           <ProductImage photo={line.photo ? { urls: line.photo } : null} alt="" size={56} className="w-14 shrink-0" />

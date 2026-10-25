@@ -40,14 +40,14 @@ export function ProductSheet({ product, quantity, onQuantity, readOnly, onClose 
     <Dialog title={product.name} onClose={onClose} size="lg">
       <div className="flex flex-col gap-4">
         {count === 0 ? (
-          <ProductImage photo={null} alt={product.name} size={600} className="mx-auto w-full max-w-sm" />
+          <ProductImage photo={null} alt={product.name} size={600} format={product.format} className="mx-auto aspect-[4/3] w-full max-w-sm" />
         ) : (
           <div>
             <div
               role="group"
               aria-label={t('orders.client.sheet.photos', { name: product.name })}
               tabIndex={0}
-              className="flex snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain rounded-lg focus-visible:outline-2 focus-visible:outline-brand-600"
+              className="flex snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain rounded-lg bg-slate-100 focus-visible:outline-2 focus-visible:outline-focus"
             >
               {product.photos.map((photo, index) => (
                 <img
@@ -58,7 +58,7 @@ export function ProductSheet({ product, quantity, onQuantity, readOnly, onClose 
                   alt={t('orders.client.sheet.photo', { name: product.name, index: index + 1, count })}
                   loading={index === 0 ? 'eager' : 'lazy'}
                   decoding="async"
-                  className="aspect-square w-full shrink-0 snap-center rounded-lg bg-slate-100 object-contain"
+                  className="aspect-[4/3] w-full shrink-0 snap-center object-contain mix-blend-multiply sm:aspect-square"
                 />
               ))}
             </div>
@@ -69,27 +69,27 @@ export function ProductSheet({ product, quantity, onQuantity, readOnly, onClose 
         <div className="flex flex-wrap items-center gap-1">
           {product.sold_out && <Badge tone="danger">{t('orders.client.catalogue.soldOut')}</Badge>}
           {product.is_new && <Badge tone="brand">{t('orders.client.catalogue.isNew')}</Badge>}
-          {product.is_featured && <Badge tone="warning">{t('orders.client.catalogue.featured')}</Badge>}
+          {product.is_featured && <Badge>{t('orders.client.catalogue.featured')}</Badge>}
         </div>
 
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
           {details.map((detail) => (
             <div key={detail.label} className="contents">
               <dt className="text-slate-600">{detail.label}</dt>
-              <dd className="text-slate-900">{detail.value}</dd>
+              <dd className="text-end font-semibold tabular-nums text-slate-900">{detail.value}</dd>
             </div>
           ))}
         </dl>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
           <div className="flex flex-col">
-            <span className="text-sm font-medium text-slate-800">{t('orders.client.sheet.quantity')}</span>
-            {product.limit !== null && <span className="text-xs text-slate-600">{limitText(t, product)}</span>}
+            <span className="text-sm font-semibold text-slate-900">{t('orders.client.sheet.quantity')}</span>
+            {product.limit !== null && <span className="text-xs font-semibold text-slate-900">{limitText(t, product)}</span>}
           </div>
           <QuantityStepper name={product.name} value={quantity} onChange={onQuantity} max={product.available} disabled={readOnly || product.sold_out} />
         </div>
 
-        <Button variant="secondary" onClick={onClose}>
+        <Button variant="secondary" className="min-h-12" onClick={onClose}>
           {t('orders.client.sheet.done')}
         </Button>
       </div>

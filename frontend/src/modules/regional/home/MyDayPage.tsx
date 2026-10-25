@@ -23,7 +23,7 @@ const DASHBOARD_NOTIFICATIONS: readonly NotificationType[] = ['CUTOFF_EXTENDED',
 
 const SHORTCUT =
   'inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 ' +
-  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'
 
 /**
  * « Ma journée » du régional (EF-REG-01), page d'accueil `/regional?day=AAAA-MM-JJ` :

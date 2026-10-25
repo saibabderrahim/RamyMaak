@@ -32,4 +32,4 @@ npm run build      # build de production dans dist/
 
 **Back-office hors du téléphone client** : tout fichier JavaScript contenant du code ADV ou Admin est nommé `backoffice-*`, exclu du pré-cache du service worker, et le build échoue si le reste de l'application l'importe statiquement (plugin `backOfficeIsolation` de `vite.config.ts`).
 
-**Couleurs et icônes provisoires** : `#0B6E4F` et le monogramme « RM » sont à remplacer par la charte Ramy (`vite.config.ts`, `index.html`, `src/index.css`, `public/icons`).
+**Charte Ramy** (lot 7) : rouge `#E30613` mesuré sur le logo, neutres et couleurs d'état de [DESIGN.md](../Design.md), police Rubik auto-hébergée (`src/index.css`, `src/main.tsx`). Logo, logo blanc et photo de la page de connexion dans `public/brand`, icônes dans `public/icons`. Le logo blanc et les icônes sont dérivés du logo fourni : à remplacer par les fichiers officiels de Ramy dès qu'ils sont disponibles.
