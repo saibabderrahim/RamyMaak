@@ -49,7 +49,7 @@ export function CallLink({ phone, name }: { phone: string | null; name: string }
     <a
       href={href}
       aria-label={t('field.callLabel', { name, phone })}
-      className="inline-flex min-h-12 min-w-12 shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+      className="inline-flex min-h-12 min-w-12 shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-900 hover:border-field hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
     >
       <PhoneIcon />
       {t('field.call')}

@@ -15,6 +15,7 @@ import {
   adjustedCount,
   blockerOf,
   buildValidateBody,
+  isAboveMax,
   isAllZero,
   lineIssues,
   lineProblems,
@@ -61,6 +62,8 @@ export function DecisionPanel({ order, onOutcome }: { order: RegionalOrder; onOu
   const adjusted = adjustedCount(order, draft)
   const allZero = isAllZero(order, draft)
   const belowMaximum = order.lines.some((line) => quantityOf(draft, line) !== maxOf(line))
+  // Ligne au-dessus du maximum validable : signalée sous la barre, sans bloquer (le serveur reste seul juge).
+  const aboveMax = order.lines.some((line) => isAboveMax(line, quantityOf(draft, line)))
 
   const onQuantity = useCallback((line: RegionalOrderLine, quantity: number) => setDraft((current) => setQuantity(current, line, quantity)), [setDraft])
   const onReason = useCallback((line: RegionalOrderLine, reason: string) => setDraft((current) => setReason(current, line, reason)), [setDraft])
@@ -107,7 +110,7 @@ export function DecisionPanel({ order, onOutcome }: { order: RegionalOrder; onOu
         {canValidate && (
           <p className="mb-3 text-sm text-slate-700">
             {cutoff.passed ? t('orders.decision.cutoff.passed', { time: cutoff.cutoff }) : t('orders.decision.cutoff.before', { time: cutoff.cutoff })}
-            {cutoff.extended && <span className="font-semibold text-amber-800"> ({t('orders.extended')})</span>}
+            {cutoff.extended && <span className="font-semibold text-warning"> ({t('orders.extended')})</span>}
           </p>
         )}
         {canValidate && allZero && (
@@ -122,7 +125,7 @@ export function DecisionPanel({ order, onOutcome }: { order: RegionalOrder; onOu
             </Alert>
           </div>
         )}
-        <ul ref={lines} aria-label={t('orders.regional.detail.lines.title')} className="flex flex-col gap-3">
+        <ul ref={lines} aria-label={t('orders.regional.detail.lines.title')} className="-mb-4 flex flex-col divide-y divide-slate-200 sm:-mb-5">
           {order.lines.map((line) =>
             canValidate ? (
               <DecisionLine
@@ -149,17 +152,20 @@ export function DecisionPanel({ order, onOutcome }: { order: RegionalOrder; onOu
       {(canValidate || canReject) && (
         <ActionBar label={t('orders.decision.actions.label')}>
           {!online && (
-            <p role="status" className="basis-full text-sm font-medium text-amber-900 sm:basis-auto sm:me-auto">
+            <p role="status" className="basis-full text-sm font-semibold text-warning sm:basis-auto sm:me-auto">
               {t('orders.decision.offline')}
             </p>
           )}
           {canReject && (
-            <Button variant="secondary" className="shrink-0 border-red-300 text-red-700 hover:bg-red-50" disabled={!online || decision.pending} onClick={openReject}>
+            <Button variant="danger" className="min-h-12 shrink-0" disabled={!online || decision.pending} onClick={openReject}>
               {t('orders.decision.actions.reject')}
             </Button>
           )}
+          {canValidate && aboveMax && !allZero && (
+            <p className="basis-full text-xs text-slate-600 sm:order-first sm:basis-auto sm:me-auto">{t('orders.decision.aboveHint')}</p>
+          )}
           {canValidate && (
-            <Button className="flex-1 sm:flex-none" disabled={!online || decision.pending || allZero} onClick={validate}>
+            <Button className="min-h-12 flex-1 text-base sm:flex-none" disabled={!online || decision.pending || allZero} onClick={validate}>
               {decision.validating
                 ? t('orders.decision.actions.validating')
                 : adjusted > 0

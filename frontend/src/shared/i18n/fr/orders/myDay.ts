@@ -33,6 +33,23 @@ const myDay = {
     distribute: 'Répartir',
     seeDistribution: 'Voir la répartition',
     distributionLabel: '{{action}} — {{name}}',
+    // Fil de la journée, chiffres en colonnes et alerte de retard (charte Ramy, lot 7).
+    rail: {
+      distribution: 'Répartition',
+      ordering: 'Commande',
+      validation: 'Validation',
+      closing: 'Clôture',
+    },
+    figures: {
+      validated: 'Validées',
+      rejected: 'Rejetées',
+      closed: 'Annulées ou expirées',
+      notified: 'Clients notifiés',
+      ordered: 'Ont commandé',
+      without: 'Sans commande',
+    },
+    lateTitle: 'Répartition en retard',
+    lateBody: 'Quotas publiés, heure limite de répartition ({{time}}) dépassée : vos clients ne peuvent pas encore commander.',
   },
   withoutOrder: {
     title: 'Clients sans commande',
