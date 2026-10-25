@@ -42,7 +42,7 @@ export function QuantityStepper({ name, value, onChange, max = null, disabled = 
 
   return (
     <div
-      className={`flex h-11 items-stretch overflow-hidden rounded-lg border bg-white ${value > 0 && !disabled ? 'border-slate-900' : 'border-field'} ${
+      className={`inline-flex h-11 items-stretch overflow-hidden rounded-lg border bg-white ${value > 0 && !disabled ? 'border-slate-900' : 'border-field'} ${
         disabled ? 'opacity-55' : ''
       }`}
     >

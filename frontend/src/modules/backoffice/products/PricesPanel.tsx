@@ -75,7 +75,7 @@ export function PricesPanel({ product, canManage }: { product: Product; canManag
             (prices.data.data.length === 0 ? (
               <p className="py-4 text-sm text-slate-500">{t('backoffice.products.prices.historyEmpty')}</p>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="relative overflow-x-auto">
                 <table className="w-full min-w-[600px] text-start text-sm">
                   <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
                     <tr>

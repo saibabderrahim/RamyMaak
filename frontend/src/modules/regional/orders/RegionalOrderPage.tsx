@@ -39,7 +39,10 @@ function OrderScreen({ id }: { id: string }) {
   const [outcome, setOutcome] = useState<Outcome | null>(null)
 
   // Une commande par écran (« Commande suivante » en ouvre une autre) : toujours lue depuis le haut.
-  useEffect(() => window.scrollTo({ top: 0 }), [])
+  // Accolades : window.scrollTo renvoie une promesse dans les navigateurs récents, qu'un effet ne doit pas renvoyer.
+  useEffect(() => {
+    window.scrollTo({ top: 0 })
+  }, [])
 
   const state: unknown = location.state
   const listSearch = state !== null && typeof state === 'object' && 'list' in state && typeof state.list === 'string' ? state.list : null

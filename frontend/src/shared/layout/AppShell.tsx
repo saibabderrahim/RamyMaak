@@ -160,7 +160,9 @@ function FieldShell() {
           >
             <img src="/brand/ramy-logo-blanc.png" alt="" width={64} height={33} className="h-8 w-auto" />
             {/* Entrée d'en-tête en plus (« Profil » du régional) : sur téléphone, le logo seul tient dans 360 px. */}
-            <span className={`border-s border-white/60 ps-3 text-sm ${headerItems.length > 0 ? 'sr-only sm:not-sr-only' : ''}`}>{t('app.name')}</span>
+            {/* Filet séparé du nom : « sm:not-sr-only » remet les marges du nom à zéro. */}
+            <span aria-hidden="true" className={`h-5 w-px bg-white/60 ${headerItems.length > 0 ? 'hidden sm:block' : ''}`} />
+            <span className={`text-sm ${headerItems.length > 0 ? 'sr-only sm:not-sr-only' : ''}`}>{t('app.name')}</span>
           </NavLink>
           {/* Grand écran : le menu passe dans la barre, les onglets du bas disparaissent. */}
           <nav aria-label={t('nav.menu')} className="hidden min-w-0 flex-1 lg:flex">

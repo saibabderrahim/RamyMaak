@@ -73,9 +73,9 @@ export function ProductItem({ product, quantity, onQuantity, readOnly, view, onO
           </div>
         )}
         {/* Sans borne, aucune quantité n'est montrée (RG-C09). */}
-        <div className={`mt-auto flex items-center gap-3 pt-1 ${list ? 'justify-between sm:flex-col sm:items-stretch' : 'flex-col items-stretch'}`}>
-          {limit ? <span className="text-xs font-semibold tabular-nums text-slate-900">{limit}</span> : <span aria-hidden="true" />}
-          <div className={list ? FLUID_FROM_TABLET : FLUID}>
+        {limit && <p className="text-xs font-semibold tabular-nums text-slate-900">{limit}</p>}
+        <div className={`mt-auto flex pt-1 ${list ? 'justify-end sm:justify-stretch' : ''}`}>
+          <div className={list ? `${FLUID_FROM_TABLET} sm:w-full` : `${FLUID} w-full`}>
             <QuantityStepper name={product.name} value={quantity} onChange={onQuantity} max={product.available} disabled={readOnly || product.sold_out} />
           </div>
         </div>

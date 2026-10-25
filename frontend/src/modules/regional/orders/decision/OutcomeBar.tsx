@@ -35,7 +35,9 @@ export function OutcomeBar({
   const queryClient = useQueryClient()
   const status = useRef<HTMLParagraphElement>(null)
   // Le bouton de la décision a disparu avec le panneau : le focus passe au compte rendu, lu par les lecteurs d'écran.
-  useEffect(() => status.current?.focus(), [])
+  useEffect(() => {
+    status.current?.focus()
+  }, [])
   const [next] = useState(() => {
     const region = listSearch === null ? null : regionParam(new URLSearchParams(listSearch).get('region'))
     return nextSubmitted(queryClient, order.day, region, order.id)

@@ -257,7 +257,7 @@ function CartLineRow({ item, issue, onQuantity }: { item: CartItem; issue: LineI
   return (
     <li>
       <article aria-label={product.name} className={`-mx-4 flex gap-3 px-4 py-4 ${shown ? 'bg-danger-soft' : ''}`}>
-        <ProductImage photo={product.photos[0] ?? null} alt="" size={56} format={product.format} className="w-14 shrink-0" />
+        <ProductImage photo={product.photos[0] ?? null} alt="" size={56} format={product.format} className="w-14 shrink-0 self-start" />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <p className="font-semibold leading-snug text-slate-900">{product.name}</p>
           <p className="text-xs text-slate-600">

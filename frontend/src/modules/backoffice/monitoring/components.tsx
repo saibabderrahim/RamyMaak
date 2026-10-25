@@ -155,7 +155,7 @@ function RegionRow({ day, item }: { day: string; item: DayMonitoringRegion }) {
           <ul className="flex flex-wrap gap-1">
             {counted.map((status) => (
               <li key={status} data-count={status}>
-                <Badge tone={status === 'SUBMITTED' ? 'warning' : status === 'REJECTED' || status === 'CANCELLED' || status === 'EXPIRED' ? 'neutral' : 'brand'}>
+                <Badge tone={status === 'SUBMITTED' ? 'warning' : 'neutral'}>
                   {item.orders[status]} {t(`backoffice.monitoring.tiles.${status}`).toLowerCase()}
                 </Badge>
               </li>

@@ -47,7 +47,7 @@ export function ProductSheet({ product, quantity, onQuantity, readOnly, onClose 
               role="group"
               aria-label={t('orders.client.sheet.photos', { name: product.name })}
               tabIndex={0}
-              className="flex snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain rounded-lg bg-slate-100 focus-visible:outline-2 focus-visible:outline-focus"
+              className="flex snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain rounded-lg bg-photo focus-visible:outline-2 focus-visible:outline-focus"
             >
               {product.photos.map((photo, index) => (
                 <img
@@ -58,7 +58,7 @@ export function ProductSheet({ product, quantity, onQuantity, readOnly, onClose 
                   alt={t('orders.client.sheet.photo', { name: product.name, index: index + 1, count })}
                   loading={index === 0 ? 'eager' : 'lazy'}
                   decoding="async"
-                  className="aspect-[4/3] w-full shrink-0 snap-center object-contain mix-blend-multiply sm:aspect-square"
+                  className="aspect-[4/3] w-full shrink-0 snap-center object-contain sm:aspect-square"
                 />
               ))}
             </div>

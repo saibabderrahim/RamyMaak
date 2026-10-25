@@ -206,7 +206,9 @@ export function TabPanel({ id, tab, children }: { id: string; tab: string; child
 /** Tableau défilant horizontalement sur petit écran (tablette). */
 export function DataTable({ label, children, className }: { label?: string; children: ReactNode; className?: string }) {
   return (
-    <div className="overflow-x-auto">
+    // relative : les textes réservés aux lecteurs d'écran (position absolue) restent dans la zone de défilement
+    // au lieu d'élargir la page sur téléphone.
+    <div className="relative overflow-x-auto">
       <table aria-label={label} className={cx('w-full text-start text-sm', className ?? 'min-w-[720px]')}>
         {children}
       </table>
