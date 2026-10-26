@@ -44,17 +44,19 @@ Le logo blanc (`public/brand/ramy-logo-blanc.png`) et les icônes (`public/icons
 
 ## Mettre à jour la production (v0.6.0 → v0.7.0)
 
-Procédure habituelle ([deploiement.md](deploiement.md), « Livraisons suivantes »), entre 20:00 et 06:00 (heure d'Alger), hors du créneau 22:55 – 23:05. Le lot est sur la branche `claude/epic-hamilton-2tjasz` :
+La charte est fusionnée avec les correctifs de la revue du lot 6 dans la branche `claude/new-session-lhmuq1` : la v0.7.0 porte les deux ([lot-6-validation-adv.md](lot-6-validation-adv.md)). La branche `claude/epic-hamilton-2tjasz` est gardée telle quelle.
+
+Procédure habituelle ([deploiement.md](deploiement.md), « Livraisons suivantes »), entre 20:00 et 06:00 (heure d'Alger), hors du créneau 22:55 – 23:05 :
 
 ```bash
 cd /opt/ramymaak
 git fetch origin
-git tag v0.7.0 origin/claude/epic-hamilton-2tjasz
-git show --no-patch --oneline v0.7.0     # doit afficher le dernier commit du lot 7
+git tag v0.7.0 origin/claude/new-session-lhmuq1
+git show --no-patch --oneline v0.7.0     # doit afficher le dernier commit de la branche (lot 6 et charte)
 git push origin v0.7.0                   # facultatif
 scripts/deploy.sh v0.7.0
 ```
 
 Contrôle après déploiement : barre rouge et logo Ramy sur tous les écrans (après « Recharger » sur le bandeau « Nouvelle version disponible », ou un rechargement forcé). Sur un téléphone où l'application est installée, la nouvelle icône peut demander de la réinstaller.
 
-Aucune migration, aucune variable d'environnement, aucun nouveau service. Retour arrière : `scripts/deploy.sh v0.6.0`.
+La charte seule n'ajoute ni migration, ni variable d'environnement, ni service ; les changements du lot 6 sont décrits dans sa note. Retour arrière : `scripts/deploy.sh v0.6.0`.

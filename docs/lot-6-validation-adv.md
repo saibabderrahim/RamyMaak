@@ -73,19 +73,19 @@ Valeurs par défaut de la spécification retenues :
   - La barre d'actions fixe masquait le bas de l'historique ; un échec de chargement des motifs ne proposait pas de réessayer ; une erreur de quantité expédiée n'était pas reliée à son champ.
 - **Dépendances** : deux avis de sécurité publiés depuis la v0.5.0 (`zod`, élevé ; `fast-uri`, modéré) ; versions corrigées, l'audit de la CI est vert.
 
-## Mettre à jour la production (v0.5.0 → v0.6.0)
+## Mettre à jour la production (→ v0.7.0, avec la charte Ramy)
 
-La v0.5.0 (lot 5) doit être déployée et validée avant ; à défaut, la v0.6.0 l'inclut et peut être déployée directement depuis la v0.4.0.
+Le lot 6 est livré avec la charte Ramy ([lot-7-charte-ramy.md](lot-7-charte-ramy.md)), fusionnée dans la même branche : une seule version, **v0.7.0**, porte les deux. L'étiquette v0.6.0 est déjà prise sur le serveur (charte seule, sans les correctifs de la revue du lot 6) : elle reste comme point de retour. La v0.7.0 contient aussi le lot 5 et se déploie depuis n'importe quelle version précédente.
 
 Procédure habituelle ([deploiement.md](deploiement.md), « Livraisons suivantes »), entre 20:00 et 06:00 (heure d'Alger), **hors du créneau 22:55 – 23:05** (clôture des journées) :
 
 ```bash
 cd /opt/ramymaak
 git fetch origin
-git tag v0.6.0 origin/claude/new-session-lhmuq1
-git show --no-patch --oneline v0.6.0     # doit afficher le dernier commit du lot 6
-git push origin v0.6.0                   # facultatif
-scripts/deploy.sh v0.6.0
+git tag v0.7.0 origin/claude/new-session-lhmuq1
+git show --no-patch --oneline v0.7.0     # doit afficher le dernier commit de la branche (lot 6 et charte)
+git push origin v0.7.0                   # facultatif
+scripts/deploy.sh v0.7.0
 ```
 
 Contrôle après déploiement (après « Recharger » sur le bandeau « Nouvelle version disponible », ou un rechargement forcé de la page) :
@@ -100,7 +100,7 @@ Ce qui change au déploiement, sans action manuelle :
 
 Un changement de pratique pour l'ADV : pour prolonger l'heure de commande d'une région au-delà de son heure de validation, prolonger d'abord la validation (le message le rappelle).
 
-Aucun nouveau service. Une variable facultative : `DOCUMENTS_TEMP_DIR`, dossier des fichiers temporaires des exports Excel (par défaut, le dossier temporaire du système). Retour arrière : `scripts/deploy.sh v0.5.0`. La nouvelle table et les nouvelles colonnes sont alors ignorées ; les décisions déjà prises restent en base.
+Aucun nouveau service. Une variable facultative : `DOCUMENTS_TEMP_DIR`, dossier des fichiers temporaires des exports Excel (par défaut, le dossier temporaire du système). Retour arrière : `scripts/deploy.sh` avec l'étiquette précédente (v0.6.0, v0.5.0 ou v0.4.0). Avant la v0.6.0, la nouvelle table et les nouvelles colonnes sont ignorées ; les décisions déjà prises restent en base.
 
 ## Parcours complet d'une journée (critère de fin)
 
