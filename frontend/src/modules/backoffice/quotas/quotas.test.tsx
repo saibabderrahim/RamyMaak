@@ -785,8 +785,9 @@ describe('back-office — quota matrix: refreshed while editing', () => {
 
     await refresh(changedMatrix({ without: [43] }))
     await waitFor(() => expect(screen.queryByRole('textbox')).not.toBeInTheDocument())
-    // Repli au même rang, ramené dans la grille : Abricot a pris la place de Pomme.
-    expect(cellOf('Abricot 1 L', 'CENTRE')).toHaveFocus()
+    // Repli au même rang, ramené dans la grille : Abricot a pris la place de Pomme
+    // (focus posé au rendu qui suit l'abandon de la saisie).
+    await waitFor(() => expect(cellOf('Abricot 1 L', 'CENTRE')).toHaveFocus())
     expect(cellOf('Abricot 1 L', 'CENTRE')).toHaveTextContent(/^100$/)
 
     await user.keyboard('{Enter}')
@@ -805,7 +806,7 @@ describe('back-office — quota matrix: refreshed while editing', () => {
     await refresh(changedMatrix({ inactive: [52] }))
     await waitFor(() => expect(screen.queryByRole('textbox')).not.toBeInTheDocument())
     expect(cellOf('Goyave 1 L', 'EST')).toHaveAttribute('aria-readonly', 'true')
-    expect(cellOf('Goyave 1 L', 'EST')).toHaveFocus()
+    await waitFor(() => expect(cellOf('Goyave 1 L', 'EST')).toHaveFocus())
     expect(cellOf('Goyave 1 L', 'EST')).toHaveTextContent(/^0$/)
 
     await user.keyboard('{Enter}')
