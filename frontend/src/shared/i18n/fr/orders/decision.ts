@@ -6,6 +6,8 @@ const decision = {
   offline: 'Hors ligne : la décision est impossible pour le moment.',
   allZero: 'Toutes les lignes sont à 0 : rejetez la commande.',
   allZeroAction: 'Rejeter la commande',
+  // Sous la barre d'actions (charte Ramy, lot 7) : la validation reste possible, le serveur tranche.
+  aboveHint: 'Une ligne dépasse son maximum validable : appliquez le maximum proposé, sinon la validation sera refusée.',
   cutoff: {
     before: 'Validation avant {{time}}',
     passed: 'L’heure limite de validation ({{time}}) est passée : la validation reste possible.',

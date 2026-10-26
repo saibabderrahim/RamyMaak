@@ -16,7 +16,7 @@ import { OrderDetail } from './OrderDetail'
 
 const LINK_CLASSES =
   'inline-flex min-h-11 items-center gap-2 self-start rounded-lg font-medium text-brand-700 hover:underline ' +
-  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'
 
 /**
  * Détail d'une commande reçue et décision (EF-REG-04, EF-REG-05) :
@@ -52,7 +52,10 @@ function OrderScreen({ id }: { id: string }) {
   })
 
   // Une commande par écran (« Commande suivante » en ouvre une autre) : toujours lue depuis le haut.
-  useEffect(() => window.scrollTo({ top: 0 }), [])
+  // Accolades : window.scrollTo renvoie une promesse dans les navigateurs récents, qu'un effet ne doit pas renvoyer.
+  useEffect(() => {
+    window.scrollTo({ top: 0 })
+  }, [])
 
   const state: unknown = location.state
   const listSearch = state !== null && typeof state === 'object' && 'list' in state && typeof state.list === 'string' ? state.list : null

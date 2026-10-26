@@ -28,6 +28,11 @@ const fr = {
     retry: 'Réessayer',
     all: 'Tous',
     close: 'Fermer',
+    // Fil de la journée (charte Ramy, lot 7).
+    rail: {
+      label: '{{label}}, il est {{time}}',
+      done: ', passée',
+    },
     quantity: {
       label: 'Quantité de {{name}}',
       decrease: 'Diminuer la quantité de {{name}}',
@@ -50,6 +55,7 @@ const fr = {
   auth: {
     login: {
       title: 'Connexion',
+      photo: 'Bouteille Ramy Extra Hibiscus Menthe, 300 ml',
       username: 'Identifiant',
       usernameHint: 'Code client ou identifiant personnel',
       password: 'Mot de passe',
@@ -96,6 +102,17 @@ const fr = {
     reasons: 'Motifs',
     notifications: 'Notifications',
     menu: 'Menu principal',
+    // Barre latérale du back-office (charte Ramy, lot 7).
+    backOffice: 'Back-office',
+    openMenu: 'Ouvrir le menu',
+    closeMenu: 'Fermer le menu',
+    groups: {
+      operations: 'Opérations',
+      referentials: 'Référentiels',
+      exchanges: 'Échanges',
+      administration: 'Administration',
+      account: 'Compte',
+    },
   },
   pwa: {
     install: 'Installer l’application',

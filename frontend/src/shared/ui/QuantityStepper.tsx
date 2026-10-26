@@ -34,12 +34,18 @@ export function QuantityStepper({ name, value, onChange, max = null, disabled = 
     if (next !== value) onChange(next)
   }
 
+  // Commande groupée en un seul contrôle (charte Ramy, lot 7) : − | quantité | +, bordure foncée dès qu'une quantité est choisie.
   const button =
-    'flex size-11 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white text-lg font-semibold text-slate-800 ' +
-    'hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
+    'flex w-11 shrink-0 items-center justify-center text-lg font-semibold text-slate-900 transition-colors duration-100 ' +
+    'hover:bg-slate-100 active:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent ' +
+    'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus'
 
   return (
-    <div className="flex items-center gap-1">
+    <div
+      className={`inline-flex h-11 items-stretch overflow-hidden rounded-lg border bg-white ${value > 0 && !disabled ? 'border-slate-900' : 'border-field'} ${
+        disabled ? 'opacity-55' : ''
+      }`}
+    >
       <button
         type="button"
         className={button}
@@ -54,7 +60,7 @@ export function QuantityStepper({ name, value, onChange, max = null, disabled = 
         inputMode="numeric"
         pattern="[0-9]*"
         aria-label={t('common.quantity.label', { name })}
-        className="h-11 w-16 rounded-lg border border-slate-300 text-center text-base tabular-nums focus-visible:outline-2 focus-visible:outline-brand-600 disabled:bg-slate-100"
+        className="w-14 border-x border-slate-200 bg-transparent text-center text-base font-semibold tabular-nums text-slate-900 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed"
         value={text}
         disabled={disabled}
         onChange={(event) => setTyped(event.target.value)}

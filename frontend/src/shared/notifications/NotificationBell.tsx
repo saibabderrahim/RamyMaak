@@ -16,12 +16,14 @@ function BellIcon() {
 }
 
 /**
+ * `onBar` : sur la barre rouge des rôles de terrain (charte Ramy, lot 7), cloche et pastille en blanc.
+ *
  * Cloche de l'en-tête, pour tous les rôles (§7, EF-NOT-01) : nombre de
  * notifications non lues, tenu à jour en temps réel sur `user.{id}`, sinon
  * toutes les 30 s (§9.6) ; mène au centre de notifications. Une
  * notification reçue est annoncée aux lecteurs d'écran.
  */
-export function NotificationBell() {
+export function NotificationBell({ onBar = false }: { onBar?: boolean }) {
   const { t } = useTranslation()
   const [received, setReceived] = useState('')
   const refetchInterval = useLiveNotifications((notification) => setReceived(t('notifications.bell.received', { title: notification.title })))
@@ -38,8 +40,12 @@ export function NotificationBell() {
         aria-label={label}
         title={label}
         className={({ isActive }) =>
-          `relative inline-flex size-11 shrink-0 items-center justify-center rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
-            isActive ? 'bg-brand-50 text-brand-800' : 'text-slate-700 hover:bg-slate-100'
+          `relative inline-flex size-11 shrink-0 items-center justify-center rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ${
+            onBar
+              ? `text-white hover:bg-brand-700 focus-visible:outline-white ${isActive ? 'bg-brand-800' : ''}`
+              : isActive
+                ? 'bg-brand-50 text-brand-800'
+                : 'text-slate-700 hover:bg-slate-100'
           }`
         }
       >
@@ -48,7 +54,9 @@ export function NotificationBell() {
           <span
             aria-hidden="true"
             data-testid="notification-badge"
-            className="absolute end-0.5 top-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-xs leading-none font-bold text-white ring-2 ring-white"
+            className={`absolute end-0.5 top-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs leading-none font-semibold tabular-nums ring-2 ${
+              onBar ? 'bg-white text-slate-900 ring-brand-600' : 'bg-brand-600 text-white ring-white'
+            }`}
           >
             {unread > MAX_BADGE ? `${MAX_BADGE}+` : unread}
           </span>

@@ -9,7 +9,7 @@ import { useLocationNotice } from './useLocationNotice'
 import { pageParam } from './view'
 
 const PRIMARY_LINK =
-  'inline-flex min-h-11 items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
+  'inline-flex min-h-11 items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'
 
 /**
  * « Mes commandes » (EF-CLT-04) : commandes du client (tous ses comptes,
@@ -81,7 +81,7 @@ function OrderRow({ order }: { order: OrderSummary }) {
   return (
     <Link
       to={`/client/commandes/${encodeURIComponent(order.id)}`}
-      className="flex min-h-11 flex-col gap-1 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-xs hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+      className="flex min-h-11 flex-col gap-1 rounded-lg border border-slate-200 bg-white px-4 py-3 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
     >
       <span className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-semibold text-slate-900">{order.number}</span>
@@ -103,7 +103,7 @@ function OrderRow({ order }: { order: OrderSummary }) {
 function EmptyOrders() {
   const { t } = useTranslation()
   return (
-    <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed border-slate-300 bg-white p-6">
+    <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed border-slate-300 bg-white p-6">
       <p className="font-semibold text-slate-900">{t('orders.clientOrders.list.empty')}</p>
       <p className="text-sm text-slate-600">{t('orders.clientOrders.list.emptyHint')}</p>
       <Link to="/client/catalogue" className={PRIMARY_LINK}>

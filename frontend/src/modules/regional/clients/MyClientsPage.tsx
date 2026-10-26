@@ -112,13 +112,13 @@ function ClientItem({ client, showRegion }: { client: Client; showRegion: boolea
 
   return (
     <li
-      className={`flex items-center gap-3 rounded-xl border bg-white p-3 shadow-xs ${
+      className={`flex items-center gap-3 rounded-lg border bg-white p-3 ${
         blocked ? 'border-red-300 border-s-4 border-s-red-600' : 'border-slate-200'
       }`}
     >
       <Link
         to={String(client.id)}
-        className="flex min-h-11 min-w-0 flex-1 flex-col gap-0.5 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+        className="flex min-h-11 min-w-0 flex-1 flex-col gap-0.5 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
       >
         <span className="truncate font-semibold text-slate-900">{client.name}</span>
         {client.trade_name && <span className="truncate text-sm text-slate-700">{client.trade_name}</span>}

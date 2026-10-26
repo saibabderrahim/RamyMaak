@@ -4,8 +4,8 @@ import react from '@vitejs/plugin-react'
 import { defineConfig, type Plugin } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
-// Couleur provisoire : à remplacer par la couleur de la charte Ramy (§9.5).
-const THEME_COLOR = '#0B6E4F'
+// Rouge Ramy, mesuré sur le logo (charte du lot 7, §9.5).
+const THEME_COLOR = '#E30613'
 
 // Code réservé au back-office (§9.5) : modules ADV, Admin et écrans back-office partagés.
 const BACK_OFFICE_MODULE = /\/src\/modules\/(adv|admin|backoffice)\//
@@ -53,7 +53,7 @@ export default defineConfig({
       registerType: 'prompt',
       injectRegister: false,
       injectManifest: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,webp,woff2}'],
         // Le service worker ne met en cache que les modules client et
         // régional : le code du back-office (ADV, Admin) n'est jamais
         // téléchargé par avance sur le téléphone d'un client (§9.5).

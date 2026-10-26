@@ -11,7 +11,7 @@ import { addressLines, mapHref, phonesOf } from './contact'
 
 const LINK_CLASSES =
   'inline-flex min-h-11 items-center gap-2 rounded-lg font-medium text-brand-700 hover:underline ' +
-  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'
 
 /**
  * Fiche d'un client du périmètre (EF-CLI-01, EF-CLI-03) : coordonnées avec

@@ -166,7 +166,7 @@ export default function CartPage() {
         {notice && <CartNoticeAlert notice={notice} onDismiss={dismissNotice} />}
 
         {cart.lines.length === 0 ? (
-          <div className="flex flex-col items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+          <div className="flex flex-col items-start gap-3 rounded-lg border border-slate-200 bg-white p-4">
             <p className="text-slate-700">{editing ? t('orders.client.cart.noLines') : t('orders.client.cart.empty')}</p>
             <Link to="/client/catalogue" className={PRIMARY_LINK}>
               {t('orders.client.cart.browse')}
@@ -187,7 +187,7 @@ export default function CartPage() {
               <h2 id={linesId} className="sr-only">
                 {t('orders.client.cart.lines')}
               </h2>
-              <ul className="flex flex-col gap-2">
+              <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white px-4">
                 {items.map((item) => (
                   <CartLineRow
                     key={item.product.id}
@@ -199,21 +199,33 @@ export default function CartPage() {
               </ul>
             </section>
 
-            <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-xs lg:sticky lg:top-20">
-              <DaySummary today={today} />
-              <TotalsList totals={sums} />
-              {today.min_amount_ht !== null && sums.ht < today.min_amount_ht && (
-                <Alert tone="warning">{t('orders.client.cart.minimum', { amount: formatAmount(today.min_amount_ht) })}</Alert>
-              )}
-              <CommentField value={cart.comment} onChange={(comment) => store.setComment(comment)} />
-              {blocker && <Alert tone="warning">{blocker}</Alert>}
-              {!online && <Alert tone="warning">{t('orders.client.cart.offline')}</Alert>}
-              {cart.pending && !outcome && !send.isPending && <Alert>{t('orders.client.cart.pending')}</Alert>}
-              {/* Compte rendu à côté du bouton : visible là où le client vient d'envoyer, sur téléphone aussi. */}
-              {outcome && <OutcomeAlert outcome={outcome} editing={editing !== null} onRestart={restart} onAbandon={abandon} />}
-              <Button className="w-full" disabled={!canSend} onClick={() => setConfirming(true)}>
-                {send.isPending ? t('orders.client.cart.sending') : editing ? t('orders.client.cart.save') : t('orders.client.cart.send')}
-              </Button>
+            {/* Téléphone : enfants dans la colonne de la page (display: contents), la barre d'envoi reste
+                visible au-dessus des onglets ; PC : colonne latérale collante. */}
+            <div className="contents lg:sticky lg:top-20 lg:flex lg:flex-col lg:gap-4">
+              <div className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-4">
+                <DaySummary today={today} />
+                <TotalsList totals={sums} />
+                {today.min_amount_ht !== null && sums.ht < today.min_amount_ht && (
+                  <Alert tone="warning">{t('orders.client.cart.minimum', { amount: formatAmount(today.min_amount_ht) })}</Alert>
+                )}
+                <CommentField value={cart.comment} onChange={(comment) => store.setComment(comment)} />
+                {blocker && <Alert tone="warning">{blocker}</Alert>}
+                {!online && <Alert tone="warning">{t('orders.client.cart.offline')}</Alert>}
+                {cart.pending && !outcome && !send.isPending && <Alert>{t('orders.client.cart.pending')}</Alert>}
+              </div>
+              <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 -mx-4 flex flex-col gap-3 border-t border-slate-200 bg-white px-4 py-3 lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:p-0">
+                {/* Compte rendu à côté du bouton : visible là où le client vient d'envoyer, sur téléphone aussi. */}
+                {outcome && <OutcomeAlert outcome={outcome} editing={editing !== null} onRestart={restart} onAbandon={abandon} />}
+                <div className="flex items-center gap-3">
+                  <p className="flex shrink-0 flex-col text-xs leading-tight text-slate-600 lg:hidden">
+                    {t('orders.client.cart.totalTtc')}
+                    <span className="text-base font-semibold tabular-nums text-slate-900">{formatAmount(sums.ttc)}</span>
+                  </p>
+                  <Button className="min-h-12 flex-1 text-base" disabled={!canSend} onClick={() => setConfirming(true)}>
+                    {send.isPending ? t('orders.client.cart.sending') : editing ? t('orders.client.cart.save') : t('orders.client.cart.send')}
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -244,20 +256,25 @@ function CartLineRow({ item, issue, onQuantity }: { item: CartItem; issue: LineI
 
   return (
     <li>
-      <article aria-label={product.name} className={`flex gap-3 rounded-xl border bg-white p-3 shadow-xs ${shown ? 'border-red-300' : 'border-slate-200'}`}>
-        <ProductImage photo={product.photos[0] ?? null} alt="" size={72} className="w-[72px] shrink-0" />
+      <article aria-label={product.name} className={`-mx-4 flex gap-3 px-4 py-4 ${shown ? 'bg-danger-soft' : ''}`}>
+        <ProductImage photo={product.photos[0] ?? null} alt="" size={56} format={product.format} className="w-14 shrink-0 self-start" />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <p className="font-semibold leading-snug text-slate-900">{product.name}</p>
           <p className="text-xs text-slate-600">
             {product.sales_unit_label} · {t('orders.client.cart.unitPrice', { amount: formatAmount(pricedLine(item).unit_price_ht) })}
           </p>
-          {product.limit !== null && <p className="text-xs font-medium text-slate-700">{limitText(t, product)}</p>}
+          {product.limit !== null && <p className="text-xs font-semibold text-slate-900">{limitText(t, product)}</p>}
           {shown && <LineIssueText issue={shown} onQuantity={onQuantity} />}
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
             <QuantityStepper name={product.name} value={line.quantity} onChange={onQuantity} max={product.available} />
             <span className="text-sm font-semibold tabular-nums text-slate-900">{t('orders.client.cart.amount', { amount: formatAmount(lineAmount(item)) })}</span>
           </div>
-          <Button variant="ghost" className="self-start" aria-label={t('orders.client.cart.removeLabel', { name: product.name })} onClick={() => onQuantity(0)}>
+          <Button
+            variant="ghost"
+            className="-ms-2 self-start px-2 underline decoration-1 underline-offset-4"
+            aria-label={t('orders.client.cart.removeLabel', { name: product.name })}
+            onClick={() => onQuantity(0)}
+          >
             {t('orders.client.cart.remove')}
           </Button>
         </div>
@@ -271,7 +288,7 @@ function LineIssueText({ issue, onQuantity }: { issue: LineIssue; onQuantity: (q
   const { t } = useTranslation()
   const max = issue.kind === 'limit' ? issue.max : null
   return (
-    <div className="flex flex-col items-start gap-1 text-sm text-red-800">
+    <div className="flex flex-col items-start gap-1 text-sm text-danger">
       <p>
         {issue.kind === 'unavailable'
           ? t('orders.client.line.unavailable')
@@ -295,7 +312,7 @@ function CommentField({ value, onChange }: { value: string; onChange: (value: st
   const id = useId()
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium text-slate-800">
+      <label htmlFor={id} className="text-sm font-semibold text-slate-900">
         {t('orders.client.cart.comment')}
       </label>
       <textarea
@@ -305,9 +322,9 @@ function CommentField({ value, onChange }: { value: string; onChange: (value: st
         value={value}
         aria-describedby={`${id}-hint`}
         onChange={(event) => onChange(event.target.value.slice(0, MAX_COMMENT))}
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base text-slate-900 shadow-xs focus:border-brand-600 focus:outline-2 focus:outline-brand-600/30"
+        className="w-full rounded-lg border border-field bg-white px-3 py-2 text-base text-slate-900 focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-focus"
       />
-      <p id={`${id}-hint`} className="text-xs text-slate-500">
+      <p id={`${id}-hint`} className="text-sm text-slate-600">
         {t('orders.client.cart.commentHint', { count: value.length, max: MAX_COMMENT })}
       </p>
     </div>

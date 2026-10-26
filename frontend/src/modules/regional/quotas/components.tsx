@@ -74,7 +74,7 @@ export function RegionQuotasCard({
   const published = region.quota_version > 0
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+    <section aria-labelledby={headingId} className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4">
       <header className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <h2 id={headingId} className="text-lg font-semibold text-slate-900">
@@ -141,7 +141,7 @@ function Cutoffs({ region, dayCutoffs }: { region: RegionalQuotaRegion; dayCutof
 
 const LINK_CLASSES =
   'inline-flex min-h-11 w-full shrink-0 items-center justify-center rounded-lg px-4 text-sm font-semibold transition-colors sm:w-auto ' +
-  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'
 const PRIMARY_LINK = 'bg-brand-600 text-white hover:bg-brand-700'
 const SECONDARY_LINK = 'border border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
 

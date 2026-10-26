@@ -16,7 +16,7 @@ import { type Feedback, weekdayOf } from './view'
 // Actions du client sur une commande (RG-C05, EF-CLT-05) — contrat : docs/lot-5-contrat-api.md §6.
 
 const LINK_BUTTON =
-  'inline-flex min-h-11 items-center justify-center rounded-lg px-1 text-sm font-semibold text-brand-700 underline underline-offset-2 hover:text-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
+  'inline-flex min-h-11 items-center justify-center rounded-lg px-1 text-sm font-semibold text-brand-700 underline underline-offset-2 hover:text-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'
 
 const WARNING = 'rounded-lg bg-amber-50 px-3 py-2 text-amber-900'
 

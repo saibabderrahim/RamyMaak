@@ -93,7 +93,7 @@ export function Dialog({ open, title, onClose, children, size = 'md' }: DialogPr
         aria-labelledby={titleId}
         tabIndex={-1}
         className={cx(
-          'max-h-[92dvh] w-full overflow-y-auto rounded-t-xl bg-white p-4 shadow-xl focus:outline-none sm:rounded-xl sm:p-6',
+          'max-h-[92dvh] w-full overflow-y-auto rounded-t-xl bg-white p-4 shadow-xl focus:outline-none sm:rounded-lg sm:p-6',
           size === 'lg' ? 'sm:max-w-3xl' : 'sm:max-w-lg',
         )}
       >
@@ -106,7 +106,7 @@ export function Dialog({ open, title, onClose, children, size = 'md' }: DialogPr
             data-dialog-close
             onClick={() => close.current()}
             aria-label={t('backoffice.common.close')}
-            className="-me-2 -mt-2 inline-flex size-11 items-center justify-center rounded-lg text-xl text-slate-600 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-brand-600"
+            className="-me-2 -mt-2 inline-flex size-11 items-center justify-center rounded-lg text-xl text-slate-600 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-focus"
           >
             <span aria-hidden="true">×</span>
           </button>
@@ -183,8 +183,8 @@ export function Tabs<T extends string>({ id, label, tabs, value, onChange }: Tab
             onClick={() => onChange(tab.id)}
             onKeyDown={(event) => onKeyDown(event, index)}
             className={cx(
-              '-mb-px min-h-11 shrink-0 border-b-2 px-4 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-brand-600',
-              selected ? 'border-brand-600 text-brand-800' : 'border-transparent text-slate-600 hover:text-slate-900',
+              '-mb-px min-h-11 shrink-0 border-b-[3px] px-4 text-sm focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
+              selected ? 'border-brand-600 font-semibold text-slate-900' : 'border-transparent text-slate-600 hover:text-slate-900',
             )}
           >
             {tab.label}
@@ -206,7 +206,9 @@ export function TabPanel({ id, tab, children }: { id: string; tab: string; child
 /** Tableau défilant horizontalement sur petit écran (tablette). */
 export function DataTable({ label, children, className }: { label?: string; children: ReactNode; className?: string }) {
   return (
-    <div className="overflow-x-auto">
+    // relative : les textes réservés aux lecteurs d'écran (position absolue) restent dans la zone de défilement
+    // au lieu d'élargir la page sur téléphone.
+    <div className="relative overflow-x-auto">
       <table aria-label={label} className={cx('w-full text-start text-sm', className ?? 'min-w-[720px]')}>
         {children}
       </table>
@@ -216,7 +218,7 @@ export function DataTable({ label, children, className }: { label?: string; chil
 
 export function TableHead({ children }: { children: ReactNode }) {
   return (
-    <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
+    <thead className="border-b border-slate-300 text-xs text-slate-600">
       <tr>{children}</tr>
     </thead>
   )
@@ -227,7 +229,7 @@ export function Th({ children, className }: { children?: ReactNode; className?: 
   // deux classes text-* sur le même élément, c'est l'ordre de la feuille de style qui gagne.
   const aligned = /(^|\s)text-(end|center|right|left)(\s|$)/.test(className ?? '')
   return (
-    <th scope="col" className={cx('py-2 pe-4 font-medium', !aligned && 'text-start', className)}>
+    <th scope="col" className={cx('py-2 pe-4 font-semibold whitespace-nowrap', !aligned && 'text-start', className)}>
       {children}
     </th>
   )

@@ -6,8 +6,8 @@ import { formatAmount } from '../../../shared/format'
 import type { CatalogueView } from './view'
 
 const CHIP =
-  'flex min-h-11 shrink-0 items-center rounded-full px-4 text-sm font-semibold whitespace-nowrap transition-colors ' +
-  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
+  'flex min-h-11 shrink-0 items-center rounded-full px-4 text-sm font-semibold whitespace-nowrap transition-colors duration-100 active:translate-y-px ' +
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'
 
 /** Familles en onglets qui défilent horizontalement (§7.3) ; null : toutes. */
 export function FamilyTabs({ families, selected, onSelect }: { families: ClientFamily[]; selected: number | null; onSelect: (id: number | null) => void }) {
@@ -21,7 +21,7 @@ export function FamilyTabs({ families, selected, onSelect }: { families: ClientF
           type="button"
           aria-pressed={selected === item.id}
           onClick={() => onSelect(item.id)}
-          className={`${CHIP} ${selected === item.id ? 'bg-brand-600 text-white' : 'border border-slate-300 bg-white text-slate-800 hover:bg-slate-50'}`}
+          className={`${CHIP} ${selected === item.id ? 'border border-brand-600 bg-brand-600 text-white' : 'border border-slate-300 bg-white text-slate-900 hover:border-field'}`}
         >
           {item.name}
         </button>
@@ -35,10 +35,13 @@ export function SearchBox({ value, onChange }: { value: string; onChange: (value
   const { t } = useTranslation()
   const id = useId()
   return (
-    <div className="flex flex-col gap-1">
+    <div className="relative flex flex-col gap-1">
       <label htmlFor={id} className="sr-only">
         {t('orders.client.catalogue.search')}
       </label>
+      <svg viewBox="0 0 24 24" aria-hidden="true" className="pointer-events-none absolute start-3 top-1/2 size-5 -translate-y-1/2 text-slate-600" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">
+        <path d="M11 4.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM16 16l4.5 4.5" />
+      </svg>
       <input
         id={id}
         type="search"
@@ -47,7 +50,7 @@ export function SearchBox({ value, onChange }: { value: string; onChange: (value
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={t('orders.client.catalogue.searchPlaceholder')}
-        className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-base text-slate-900 shadow-xs focus:border-brand-600 focus:outline-2 focus:outline-brand-600/30"
+        className="min-h-11 w-full rounded-lg border border-field bg-white ps-10 pe-3 text-base text-slate-900 placeholder:text-slate-500 focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-focus"
       />
     </div>
   )
@@ -61,15 +64,15 @@ export function ViewToggle({ view, onChange }: { view: CatalogueView; onChange: 
     { value: 'gallery', label: t('orders.client.catalogue.gallery') },
   ] as const
   return (
-    <div role="group" aria-label={t('orders.client.catalogue.view')} className="flex shrink-0 gap-1 rounded-lg bg-slate-100 p-1 sm:hidden">
+    <div role="group" aria-label={t('orders.client.catalogue.view')} className="flex shrink-0 gap-0.5 rounded-lg bg-slate-100 p-0.5 sm:hidden">
       {options.map((option) => (
         <button
           key={option.value}
           type="button"
           aria-pressed={view === option.value}
           onClick={() => onChange(option.value)}
-          className={`min-h-11 rounded-md px-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-brand-600 ${
-            view === option.value ? 'bg-white text-brand-800 shadow-xs' : 'text-slate-700'
+          className={`min-h-10 rounded-md px-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-focus ${
+            view === option.value ? 'bg-white text-slate-900 shadow-[0_1px_2px_rgb(35_28_26/0.08)]' : 'text-slate-600 hover:text-slate-900'
           }`}
         >
           {option.label}
@@ -89,14 +92,17 @@ export function CartBar({ lines, totalHt }: { lines: number; totalHt: number }) 
     <div className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 px-4 pb-2 lg:bottom-0">
       <Link
         to="/client/panier"
-        className="mx-auto flex min-h-12 max-w-xl items-center justify-between gap-3 rounded-xl bg-brand-700 px-4 py-2 text-white shadow-lg hover:bg-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+        className="mx-auto flex min-h-13 max-w-xl items-center justify-between gap-3 rounded-lg bg-brand-600 px-4 py-2 text-white shadow-[0_12px_32px_rgb(20_16_13/0.22)] hover:bg-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
       >
         <span className="flex flex-col text-sm leading-tight">
           <span className="font-semibold">{t('orders.client.bar.lines', { count: lines })}</span>
           <span className="tabular-nums">{t('orders.client.bar.total', { amount: formatAmount(totalHt) })}</span>
         </span>
-        <span className="font-semibold">
-          {t('orders.client.bar.see')} <span aria-hidden="true">→</span>
+        <span className="inline-flex items-center gap-1 font-semibold">
+          {t('orders.client.bar.see')}
+          <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m9 5 7 7-7 7" />
+          </svg>
         </span>
       </Link>
     </div>

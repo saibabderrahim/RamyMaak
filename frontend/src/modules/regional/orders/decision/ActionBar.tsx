@@ -17,7 +17,7 @@ export function ActionBar({ label, children }: { label: string; children: ReactN
       <div
         role="group"
         aria-label={label}
-        className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 border-t border-slate-200 bg-white/95 shadow-[0_-2px_8px_rgb(0_0_0/0.06)] backdrop-blur lg:bottom-0"
+        className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 border-t border-slate-200 bg-white lg:bottom-0 lg:shadow-[0_-8px_24px_rgb(20_16_13/0.08)]"
       >
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-end gap-2 px-4 py-3">{children}</div>
       </div>

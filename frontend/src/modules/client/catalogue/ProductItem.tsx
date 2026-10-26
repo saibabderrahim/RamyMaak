@@ -34,17 +34,20 @@ export function ProductItem({ product, quantity, onQuantity, readOnly, view, onO
   const { t } = useTranslation()
   const list = view === 'list'
   const photo = product.photos[0] ?? null
+  const limit = product.limit !== null ? limitText(t, product) : null
 
+  // Charte Ramy (lot 7) : en liste sur téléphone, une ligne compacte (vignette, désignation, prix, puis
+  // maximum et quantité sur la même ligne) dans un seul bloc à filets ; carte à partir de la tablette.
   return (
     <article
       aria-label={product.name}
-      className={`flex h-full gap-3 rounded-xl border bg-white p-3 shadow-xs ${list ? 'flex-row sm:flex-col' : 'flex-col'} ${
-        product.sold_out ? 'border-slate-200 opacity-60' : quantity > 0 ? 'border-brand-300' : 'border-slate-200'
-      }`}
+      className={`flex h-full gap-3 bg-white ${
+        list ? 'flex-row py-3 sm:flex-col sm:rounded-lg sm:border sm:p-3' : 'flex-col rounded-lg border p-2 sm:p-3'
+      } ${product.sold_out ? 'border-slate-200 opacity-60' : quantity > 0 ? 'border-slate-900' : 'border-slate-200'}`}
     >
       {/* Vignette : ouvre la fiche (le nom fait de même au clavier). */}
-      <button type="button" tabIndex={-1} aria-hidden="true" onClick={onOpen} className={`shrink-0 ${list ? 'w-[72px] sm:w-full' : 'w-full'}`}>
-        <ProductImage photo={photo} alt="" size={list ? 72 : 200} />
+      <button type="button" tabIndex={-1} aria-hidden="true" onClick={onOpen} className={`shrink-0 ${list ? 'w-16 sm:w-full' : 'w-full'}`}>
+        <ProductImage photo={photo} alt="" size={list ? 64 : 200} format={product.format} className={list ? 'sm:aspect-[4/3]' : 'aspect-[4/3]'} />
       </button>
 
       <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -52,25 +55,29 @@ export function ProductItem({ product, quantity, onQuantity, readOnly, view, onO
           type="button"
           onClick={onOpen}
           aria-label={t('orders.client.catalogue.open', { name: product.name })}
-          className="min-h-11 text-start font-semibold leading-snug text-slate-900 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+          className="min-h-6 rounded text-start font-semibold leading-snug text-slate-900 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
         >
           {/* Désignation courte sur téléphone (EF-PRD-01, §7.3), complète à partir de la tablette. */}
           <span className="sm:hidden">{product.short_name || product.name}</span>
           <span className="hidden sm:inline">{product.name}</span>
         </button>
         <p className="text-xs text-slate-600">{product.sales_unit_label}</p>
-        <p className="text-sm text-slate-800">
+        <p className="text-sm tabular-nums text-slate-900">
           {t('orders.client.catalogue.price', { ht: formatAmount(product.price.price_ht), ttc: formatAmount(product.price.price_ttc) })}
         </p>
-        <div className="flex flex-wrap items-center gap-1">
-          {product.sold_out && <Badge tone="danger">{t('orders.client.catalogue.soldOut')}</Badge>}
-          {product.is_new && <Badge tone="brand">{t('orders.client.catalogue.isNew')}</Badge>}
-          {product.is_featured && <Badge tone="warning">{t('orders.client.catalogue.featured')}</Badge>}
-          {/* Sans borne, aucune quantité n'est montrée (RG-C09). */}
-          {product.limit !== null && <span className="text-xs font-medium text-slate-700">{limitText(t, product)}</span>}
-        </div>
-        <div className={`mt-auto pt-1 ${list ? FLUID_FROM_TABLET : FLUID}`}>
-          <QuantityStepper name={product.name} value={quantity} onChange={onQuantity} max={product.available} disabled={readOnly || product.sold_out} />
+        {(product.sold_out || product.is_new || product.is_featured) && (
+          <div className="flex flex-wrap items-center gap-1">
+            {product.sold_out && <Badge tone="danger">{t('orders.client.catalogue.soldOut')}</Badge>}
+            {product.is_new && <Badge tone="brand">{t('orders.client.catalogue.isNew')}</Badge>}
+            {product.is_featured && <Badge>{t('orders.client.catalogue.featured')}</Badge>}
+          </div>
+        )}
+        {/* Sans borne, aucune quantité n'est montrée (RG-C09). */}
+        {limit && <p className="text-xs font-semibold tabular-nums text-slate-900">{limit}</p>}
+        <div className={`mt-auto flex pt-1 ${list ? 'justify-end sm:justify-stretch' : ''}`}>
+          <div className={list ? `${FLUID_FROM_TABLET} sm:w-full` : `${FLUID} w-full`}>
+            <QuantityStepper name={product.name} value={quantity} onChange={onQuantity} max={product.available} disabled={readOnly || product.sold_out} />
+          </div>
         </div>
       </div>
     </article>

@@ -228,7 +228,7 @@ function ErrorsCard({ item }: { item: Import }) {
           {t('backoffice.imports.detail.errorsTruncated')}
         </Alert>
       )}
-      <div className="overflow-x-auto">
+      <div className="relative overflow-x-auto">
         <table className="w-full min-w-[560px] text-start text-sm">
           <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
             <tr>
@@ -265,7 +265,7 @@ function PreviewCard({ item, actions }: { item: Import; actions?: ReactNode }) {
       {item.preview.length === 0 ? (
         <p className="py-4 text-sm text-slate-500">{t('backoffice.imports.detail.previewEmpty')}</p>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="relative overflow-x-auto">
           <table className="w-full min-w-[640px] text-start text-sm">
             <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
               <tr>

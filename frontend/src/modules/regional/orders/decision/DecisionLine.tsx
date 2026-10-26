@@ -24,7 +24,7 @@ function LineField({ label, name, hint, error, children }: FieldProps) {
   const describedBy = [hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(' ') || undefined
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium text-slate-800">
+      <label htmlFor={id} className="text-sm font-semibold text-slate-900">
         {label}
         <span className="sr-only"> — {name}</span>
       </label>
@@ -35,7 +35,7 @@ function LineField({ label, name, hint, error, children }: FieldProps) {
         </p>
       )}
       {error && (
-        <p id={`${id}-error`} role="alert" className="text-sm text-red-700">
+        <p id={`${id}-error`} role="alert" className="text-sm text-danger">
           {error}
         </p>
       )}
@@ -109,14 +109,32 @@ export const DecisionLine = memo(function DecisionLine({
     t('orders.decision.line.max', { value: formatQuantity(max) }),
   ]
 
+  // Charte Ramy (lot 7) : chiffres côte à côte, libellé au-dessus de la valeur ; le texte de chaque
+  // élément reste « Libellé : valeur » pour les lecteurs d'écran.
+  const cell = (text: string, strong = false, negative = false) => {
+    const [label, value] = text.split(' : ')
+    return (
+      <li key={text} className="flex min-w-0 flex-col">
+        {value === undefined ? (
+          <span className="text-sm text-slate-700">{label}</span>
+        ) : (
+          <>
+            <span className="text-xs leading-snug text-slate-600">{label}</span>
+            <span className="sr-only"> : </span>
+            <span className={`text-base tabular-nums ${negative ? 'font-semibold text-danger' : strong ? 'font-semibold text-slate-900' : 'text-slate-900'}`}>
+              {value}
+            </span>
+          </>
+        )}
+      </li>
+    )
+  }
+
   return (
     <li>
-      <article
-        aria-label={line.name}
-        className={`flex flex-col gap-3 rounded-xl border bg-white p-3 shadow-xs ${message !== null ? 'border-red-300' : 'border-slate-200'}`}
-      >
+      <article aria-label={line.name} className={`-mx-4 flex flex-col gap-3 px-4 py-4 sm:-mx-5 sm:px-5 ${message !== null ? 'bg-danger-soft' : ''}`}>
         <div className="flex gap-3">
-          <ProductImage photo={line.photo ? { urls: line.photo } : null} alt="" size={56} className="w-14 shrink-0" />
+          <ProductImage photo={line.photo ? { urls: line.photo } : null} alt="" size={56} className="w-14 shrink-0 self-start" />
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <p className="font-semibold text-slate-900">{line.name}</p>
             <p className="text-xs text-slate-600">
@@ -125,27 +143,23 @@ export const DecisionLine = memo(function DecisionLine({
           </div>
         </div>
 
-        <ul aria-label={t('orders.regional.detail.lines.context', { name: line.name })} className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-700">
-          {facts.map((fact) => (
-            <li key={fact}>{fact}</li>
-          ))}
+        <ul
+          aria-label={t('orders.regional.detail.lines.context', { name: line.name })}
+          className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 lg:grid-cols-5"
+        >
+          {facts.map((fact, index) => cell(fact, index === 0 || index === facts.length - 1))}
         </ul>
 
-        <QuantityStepper name={line.name} value={quantity} max={line.requested_qty} disabled={disabled} onChange={(next) => onQuantity(line, next)} />
-
-        <ul aria-label={t('orders.decision.line.afterLabel', { name: line.name })} className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-          <li className={regionAfter < 0 ? 'font-medium text-red-800' : 'text-slate-700'}>
-            {t('orders.decision.line.regionAfter', { value: formatQuantity(regionAfter) })}
-          </li>
-          {limitAfter !== null && (
-            <li className={limitAfter < 0 ? 'font-medium text-red-800' : 'text-slate-700'}>
-              {t('orders.decision.line.limitAfter', { value: formatQuantity(limitAfter) })}
-            </li>
-          )}
-        </ul>
+        <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
+          <QuantityStepper name={line.name} value={quantity} max={line.requested_qty} disabled={disabled} onChange={(next) => onQuantity(line, next)} />
+          <ul aria-label={t('orders.decision.line.afterLabel', { name: line.name })} className="flex flex-wrap gap-x-6 gap-y-2">
+            {cell(t('orders.decision.line.regionAfter', { value: formatQuantity(regionAfter) }), false, regionAfter < 0)}
+            {limitAfter !== null && cell(t('orders.decision.line.limitAfter', { value: formatQuantity(limitAfter) }), false, limitAfter < 0)}
+          </ul>
+        </div>
 
         {message !== null && (
-          <div className="flex flex-col items-start gap-2 text-sm text-red-800">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm font-semibold text-danger">
             <p>{message}</p>
             {applicable !== null && !disabled && (
               <Button
@@ -160,7 +174,7 @@ export const DecisionLine = memo(function DecisionLine({
         )}
 
         {reduced && (
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 rounded-lg bg-slate-100 p-3 sm:grid-cols-2">
             <LineField
               label={t('orders.decision.line.reason')}
               name={line.name}

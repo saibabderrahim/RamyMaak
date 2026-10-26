@@ -79,7 +79,7 @@ export function Dialog({ title, onClose, children, size = 'md' }: Props) {
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`max-h-[92dvh] w-full overflow-y-auto rounded-t-xl bg-white p-4 shadow-xl focus:outline-none sm:rounded-xl sm:p-6 ${
+        className={`max-h-[92dvh] w-full overflow-y-auto rounded-t-xl bg-white p-4 shadow-xl focus:outline-none sm:rounded-lg sm:p-6 ${
           size === 'lg' ? 'sm:max-w-2xl' : 'sm:max-w-lg'
         }`}
       >
@@ -92,7 +92,7 @@ export function Dialog({ title, onClose, children, size = 'md' }: Props) {
             data-dialog-close
             onClick={() => close.current()}
             aria-label={t('common.close')}
-            className="-me-2 -mt-2 inline-flex size-11 items-center justify-center rounded-lg text-xl text-slate-600 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-brand-600"
+            className="-me-2 -mt-2 inline-flex size-11 items-center justify-center rounded-lg text-xl text-slate-600 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-focus"
           >
             <span aria-hidden="true">×</span>
           </button>

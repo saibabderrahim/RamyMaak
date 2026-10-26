@@ -22,8 +22,8 @@ import { ordersPath, quotasPath } from './model'
 const DASHBOARD_NOTIFICATIONS: readonly NotificationType[] = ['CUTOFF_EXTENDED', 'QUOTAS_PUBLISHED', 'QUOTAS_UPDATED']
 
 const SHORTCUT =
-  'inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 ' +
-  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
+  'inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-900 hover:border-field hover:bg-slate-50 ' +
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'
 
 /**
  * « Ma journée » du régional (EF-REG-01), page d'accueil `/regional?day=AAAA-MM-JJ` :
@@ -136,9 +136,15 @@ export default function MyDayPage() {
                 <Alert tone="warning">{t('orders.myDay.noRegion')}</Alert>
               ) : (
                 <>
-                  <div className="flex flex-col gap-4">
+                  <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
                     {data.regions.map((region) => (
-                      <RegionDayCard key={region.region.id} region={region} day={data.day} validationBlocking={data.validation_blocking} />
+                      <RegionDayCard
+                        key={region.region.id}
+                        region={region}
+                        day={data.day}
+                        validationBlocking={data.validation_blocking}
+                        closing={data.cutoffs?.closing ?? null}
+                      />
                     ))}
                   </div>
                   <ClientsWithoutOrder dashboard={data} />

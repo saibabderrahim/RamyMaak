@@ -19,59 +19,98 @@ const QUEUE_TAB: Partial<Record<(typeof MONITORING_ORDER_STATUSES)[number], stri
   CANCELLED: 'annulees',
 }
 
-const TILE = 'flex min-h-20 flex-col justify-between gap-1 rounded-xl border border-slate-200 bg-white p-3 shadow-xs'
-const TILE_LINK = `${TILE} hover:border-brand-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600`
+// Chaîne du traitement (charte Ramy, lot 7) : de l'envoi à l'expédition ; les fins de parcours à part.
+const FLOW = ['SUBMITTED', 'VALIDATED', 'IN_PREPARATION', 'PREPARED', 'SHIPPED'] as const
+const STEP = 'flex h-full min-h-20 flex-col gap-1 p-4'
+const STEP_LINK = `${STEP} hover:bg-slate-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus`
 
-/** Chiffres clés : commandes par statut (lien vers la file quand elle les contient), clients ayant commandé, quotas validés. */
+/** Jauge validé / en attente / reste sur la quantité totale ; décorative (les nombres sont écrits à côté). */
+function Meter({ total, validated, pending = 0, className = 'h-2' }: { total: number; validated: number; pending?: number; className?: string }) {
+  const share = (value: number) => (total > 0 ? Math.min(100, (value / total) * 100) : 0)
+  const v = share(validated)
+  const p = Math.min(100 - v, share(pending))
+  return (
+    <span aria-hidden="true" className={`flex overflow-hidden rounded-full bg-slate-200 ${className}`}>
+      <span className="h-full bg-slate-900" style={{ width: `${v}%` }} />
+      <span className="h-full bg-field" style={{ width: `${p}%` }} />
+    </span>
+  )
+}
+
+/**
+ * Chiffres clés : la chaîne des commandes par statut (lien vers la file quand
+ * elle les contient), les fins de parcours, puis les clients ayant commandé et
+ * les quotas validés avec leur jauge.
+ */
 export function KeyFigures({ data }: { data: DayMonitoring }) {
   const { t } = useTranslation()
   const { base, can } = useBackoffice()
   const quota = data.products.reduce((sum, product) => sum + product.quota, 0)
   const validated = data.products.reduce((sum, product) => sum + product.validated, 0)
   const pending = data.products.reduce((sum, product) => sum + product.pending, 0)
+  const ends = MONITORING_ORDER_STATUSES.filter((status) => !(FLOW as readonly string[]).includes(status))
+
+  const step = (status: (typeof MONITORING_ORDER_STATUSES)[number], index: number) => {
+    const tab = QUEUE_TAB[status]
+    const count = data.totals.orders[status]
+    const content = (
+      <>
+        <span className={`text-sm ${count > 0 ? 'font-semibold text-slate-900' : 'text-slate-600'}`}>{t(`backoffice.monitoring.tiles.${status}`)}</span>
+        <span className="text-3xl leading-none font-semibold tracking-tight tabular-nums text-slate-900">{formatQuantity(count)}</span>
+      </>
+    )
+    return (
+      <li key={status} data-tile={status} className={`relative min-w-0 ${index > 0 ? 'border-t border-slate-200 sm:border-t-0 sm:border-s' : ''}`}>
+        {tab && can('order.view') ? (
+          <Link to={`${base}/commandes?jour=${data.day}&onglet=${tab}`} className={STEP_LINK}>
+            {content}
+          </Link>
+        ) : (
+          <div className={STEP}>{content}</div>
+        )}
+      </li>
+    )
+  }
 
   return (
-    <ul aria-label={t('backoffice.monitoring.tiles.label')} className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-      {MONITORING_ORDER_STATUSES.map((status) => {
-        const tab = QUEUE_TAB[status]
-        const content = (
-          <>
-            <span className="text-xs font-medium uppercase text-slate-600">{t(`backoffice.monitoring.tiles.${status}`)}</span>
-            <span className="text-2xl font-bold text-slate-900 tabular-nums">{formatQuantity(data.totals.orders[status])}</span>
-          </>
-        )
-        return (
-          <li key={status} data-tile={status}>
-            {tab && can('order.view') ? (
-              <Link to={`${base}/commandes?jour=${data.day}&onglet=${tab}`} className={TILE_LINK}>
-                {content}
-              </Link>
-            ) : (
-              <div className={TILE}>{content}</div>
-            )}
-          </li>
-        )
-      })}
-      <li data-tile="clients">
-        <div className={TILE}>
-          <span className="text-xs font-medium uppercase text-slate-600">{t('backoffice.monitoring.tiles.clients')}</span>
-          <span className="text-2xl font-bold text-slate-900 tabular-nums">
-            {t('backoffice.monitoring.tiles.clientsValue', {
-              ordered: formatQuantity(data.totals.clients.ordered),
-              notified: formatQuantity(data.totals.clients.notified),
-            })}
-          </span>
-        </div>
-      </li>
-      <li data-tile="quotas">
-        <div className={TILE}>
-          <span className="text-xs font-medium uppercase text-slate-600">{t('backoffice.monitoring.tiles.quotas')}</span>
-          <span className="text-2xl font-bold text-slate-900 tabular-nums">
-            {t('backoffice.monitoring.tiles.quotasValue', { validated: formatQuantity(validated), quota: formatQuantity(quota) })}
-          </span>
-          {pending > 0 && <span className="text-xs text-amber-800">{t('backoffice.monitoring.tiles.quotasHint', { pending: formatQuantity(pending) })}</span>}
-        </div>
-      </li>
+    <ul aria-label={t('backoffice.monitoring.tiles.label')} className="flex flex-col gap-4">
+        <li>
+          <ol aria-label={t('backoffice.monitoring.tiles.flow')} className="grid overflow-hidden rounded-lg border border-slate-200 bg-white sm:grid-cols-5">
+            {FLOW.map(step)}
+          </ol>
+        </li>
+        <li>
+          <ul aria-label={t('backoffice.monitoring.tiles.ends')} className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-slate-600">
+            {ends.map((status) => (
+              <li key={status} data-tile={status}>
+                <span>{t(`backoffice.monitoring.tiles.${status}`)}</span>
+                <span className="ms-1.5 font-semibold tabular-nums text-slate-900">{formatQuantity(data.totals.orders[status])}</span>
+              </li>
+            ))}
+          </ul>
+        </li>
+        <li>
+          <ul className="grid gap-4 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-2 sm:gap-6">
+            <li data-tile="clients" className="flex flex-col gap-2">
+              <span className="text-sm text-slate-600">{t('backoffice.monitoring.tiles.clients')}</span>
+              <span className="text-2xl leading-none font-semibold tabular-nums text-slate-900">
+                {t('backoffice.monitoring.tiles.clientsValue', {
+                  ordered: formatQuantity(data.totals.clients.ordered),
+                  notified: formatQuantity(data.totals.clients.notified),
+                })}
+              </span>
+              <Meter total={data.totals.clients.notified} validated={data.totals.clients.ordered} />
+            </li>
+            <li data-tile="quotas" className="flex flex-col gap-2">
+              <span className="text-sm text-slate-600">{t('backoffice.monitoring.tiles.quotas')}</span>
+              <span className="text-2xl leading-none font-semibold tabular-nums text-slate-900">
+                {t('backoffice.monitoring.tiles.quotasValue', { validated: formatQuantity(validated), quota: formatQuantity(quota) })}
+              </span>
+              <Meter total={quota} validated={validated} pending={pending} />
+              {pending > 0 && <span className="text-xs text-slate-600">{t('backoffice.monitoring.tiles.quotasHint', { pending: formatQuantity(pending) })}</span>}
+            </li>
+          </ul>
+        </li>
     </ul>
   )
 }
@@ -94,8 +133,8 @@ function RegionRow({ day, item }: { day: string; item: DayMonitoringRegion }) {
   return (
     <tr data-region={item.region.code}>
       <th scope="row" className="py-2 pe-4 text-start align-top font-normal">
-        <span className="font-mono text-xs font-semibold">{item.region.code}</span>
-        <span className="block text-slate-800">{item.region.name}</span>
+        <span className="block font-semibold text-slate-900">{item.region.name}</span>
+        <span className="block text-xs text-slate-600">{item.region.code}</span>
         <span className="block text-xs text-slate-600">{item.region.depot ? item.region.depot.name : t('backoffice.monitoring.regions.noDepot')}</span>
       </th>
       <td className="py-2 pe-4 align-top">
@@ -116,7 +155,7 @@ function RegionRow({ day, item }: { day: string; item: DayMonitoringRegion }) {
           <ul className="flex flex-wrap gap-1">
             {counted.map((status) => (
               <li key={status} data-count={status}>
-                <Badge tone={status === 'SUBMITTED' ? 'warning' : status === 'REJECTED' || status === 'CANCELLED' || status === 'EXPIRED' ? 'neutral' : 'brand'}>
+                <Badge tone={status === 'SUBMITTED' ? 'warning' : 'neutral'}>
                   {item.orders[status]} {t(`backoffice.monitoring.tiles.${status}`).toLowerCase()}
                 </Badge>
               </li>
@@ -145,7 +184,7 @@ function RegionRow({ day, item }: { day: string; item: DayMonitoringRegion }) {
             <Link
               to={`${base}/commandes?jour=${day}&region=${item.region.id}`}
               aria-label={t('backoffice.monitoring.regions.ordersLinkLabel', { name: item.region.name })}
-              className="inline-flex min-h-11 items-center font-medium text-brand-700 hover:underline"
+              className="inline-flex min-h-11 items-center font-semibold text-slate-900 underline decoration-1 underline-offset-4 hover:decoration-2"
             >
               {t('backoffice.monitoring.regions.ordersLink')}
             </Link>
@@ -154,7 +193,7 @@ function RegionRow({ day, item }: { day: string; item: DayMonitoringRegion }) {
             <Link
               to={`${base}/journees/${day}/repartition/${item.region.id}`}
               aria-label={t('backoffice.monitoring.regions.distributionLinkLabel', { name: item.region.name })}
-              className="inline-flex min-h-11 items-center font-medium text-brand-700 hover:underline"
+              className="inline-flex min-h-11 items-center font-semibold text-slate-900 underline decoration-1 underline-offset-4 hover:decoration-2"
             >
               {t('backoffice.monitoring.regions.distributionLink')}
             </Link>
@@ -184,7 +223,7 @@ export function RegionsTable({ data }: { data: DayMonitoring }) {
             <Th>{t('backoffice.monitoring.regions.columns.alerts')}</Th>
             <Th>{t('backoffice.monitoring.regions.columns.links')}</Th>
           </TableHead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-slate-200">
             {data.regions.map((item) => (
               <RegionRow key={item.region.id} day={data.day} item={item} />
             ))}
@@ -219,8 +258,15 @@ export function ProductMatrix({ data }: { data: DayMonitoring }) {
       ) : (
         <div className="flex flex-col gap-3">
           <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
-            <span className="font-medium text-slate-700">{t('backoffice.monitoring.matrix.legend')}</span>
-            <span className="text-amber-800">{t('backoffice.monitoring.matrix.legendPending')}</span>
+            <span className="font-semibold text-slate-900">{t('backoffice.monitoring.matrix.legend')}</span>
+            <span className="inline-flex items-center gap-1.5">
+              <span aria-hidden="true" className="h-2 w-3 rounded-sm bg-slate-900" />
+              {t('backoffice.monitoring.matrix.legendValidated')}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span aria-hidden="true" className="h-2 w-3 rounded-sm bg-field" />
+              {t('backoffice.monitoring.matrix.legendPending')}
+            </span>
             <span className="rounded bg-red-100 px-1.5 font-semibold text-red-900">{t('backoffice.monitoring.matrix.legendSoldOut')}</span>
           </p>
           <DataTable label={t('backoffice.monitoring.matrix.label')} className="min-w-[720px]">
@@ -237,14 +283,14 @@ export function ProductMatrix({ data }: { data: DayMonitoring }) {
               {families.map((family) => (
                 <Fragment key={family.id}>
                   <tr className="bg-slate-50">
-                    <th scope="colgroup" colSpan={columns} className="py-1.5 ps-1 text-start text-xs font-semibold uppercase text-slate-600">
+                    <th scope="colgroup" colSpan={columns} className="py-1.5 ps-1 text-start text-xs font-semibold text-slate-700">
                       {family.name}
                     </th>
                   </tr>
                   {family.products.map((product) => (
-                    <tr key={product.product_id} data-sku={product.sku} className="border-b border-slate-100">
+                    <tr key={product.product_id} data-sku={product.sku} className="border-b border-slate-200">
                       <th scope="row" className="sticky start-0 bg-white py-2 pe-4 text-start font-normal">
-                        <span className="block font-medium text-slate-900">{product.short_name}</span>
+                        <span className="block font-semibold text-slate-900">{product.short_name}</span>
                         <span className="block text-xs text-slate-600">{product.sku}</span>
                       </th>
                       {data.regions.map((item) => {
@@ -268,12 +314,13 @@ export function ProductMatrix({ data }: { data: DayMonitoring }) {
                               quota: cell.quota,
                               pending: cell.pending,
                             })}
-                            className={`py-2 pe-3 text-end tabular-nums ${soldOut ? 'bg-red-100 font-semibold text-red-900' : ''}`}
+                            className={`min-w-28 py-2 pe-3 text-end tabular-nums ${soldOut ? 'bg-red-100 font-semibold text-red-900' : ''}`}
                           >
                             <span>{t('backoffice.monitoring.matrix.cell', { validated: formatQuantity(cell.validated), quota: formatQuantity(cell.quota) })}</span>
+                            <Meter total={cell.quota} validated={cell.validated} pending={cell.pending} className="my-1 h-1" />
                             {soldOut && <span className="block text-xs">{t('backoffice.monitoring.matrix.soldOut')}</span>}
                             {cell.pending > 0 && (
-                              <span className="block text-xs font-normal text-amber-800">
+                              <span className="block text-xs font-normal text-slate-600">
                                 {t('backoffice.monitoring.matrix.pending', { pending: formatQuantity(cell.pending) })}
                               </span>
                             )}

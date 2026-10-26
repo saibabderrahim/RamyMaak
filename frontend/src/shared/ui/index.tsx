@@ -8,7 +8,11 @@ import {
   useId,
 } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Icon, type IconName } from './Icon'
 import { useErrorMessage } from './useErrorMessage'
+
+export { Icon } from './Icon'
+export type { IconName } from './Icon'
 
 function cx(...classes: Array<string | false | null | undefined>): string {
   return classes.filter(Boolean).join(' ')
@@ -16,11 +20,13 @@ function cx(...classes: Array<string | false | null | undefined>): string {
 
 type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost'
 
+// Charte Ramy (lot 7) : l'action principale est rouge ; une action destructrice est
+// encadrée en rouge foncé, pour ne jamais se confondre avec l'action principale.
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
-  primary: 'bg-brand-600 text-white hover:bg-brand-700 disabled:bg-brand-300',
-  secondary: 'border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 disabled:text-slate-400',
-  danger: 'bg-red-600 text-white hover:bg-red-700 disabled:bg-red-300',
-  ghost: 'text-slate-700 hover:bg-slate-100 disabled:text-slate-400',
+  primary: 'border border-brand-600 bg-brand-600 text-white hover:border-brand-700 hover:bg-brand-700 disabled:hover:bg-brand-600',
+  secondary: 'border border-slate-300 bg-white text-slate-900 hover:border-field hover:bg-slate-50 disabled:hover:bg-white',
+  danger: 'border border-danger bg-white text-danger hover:bg-danger-soft disabled:hover:bg-white',
+  ghost: 'border border-transparent text-slate-800 hover:bg-slate-100 disabled:hover:bg-transparent',
 }
 
 // Zones tactiles d'au moins 44 px (§7.3).
@@ -31,8 +37,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
         ref={ref}
         type={type}
         className={cx(
-          'inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold transition-colors',
-          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:cursor-not-allowed',
+          'inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold whitespace-nowrap',
+          'transition-[background-color,border-color,transform] duration-100 active:translate-y-px',
+          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+          'disabled:cursor-not-allowed disabled:opacity-55 disabled:active:translate-y-0',
           BUTTON_VARIANTS[variant],
           className,
         )}
@@ -53,18 +61,18 @@ export function Field({ label, hint, error, children }: FieldProps) {
   const id = useId()
   const describedBy = [hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(' ') || undefined
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium text-slate-800">
+    <div className="flex min-w-0 flex-col gap-1">
+      <label htmlFor={id} className="text-sm font-semibold text-slate-900">
         {label}
       </label>
       {children({ id, 'aria-invalid': Boolean(error), 'aria-describedby': describedBy })}
       {hint && (
-        <p id={`${id}-hint`} className="text-xs text-slate-500">
+        <p id={`${id}-hint`} className="text-sm text-slate-600">
           {hint}
         </p>
       )}
       {error && (
-        <p id={`${id}-error`} role="alert" className="text-sm text-red-700">
+        <p id={`${id}-error`} role="alert" className="text-sm text-danger">
           {error}
         </p>
       )}
@@ -72,9 +80,13 @@ export function Field({ label, hint, error, children }: FieldProps) {
   )
 }
 
-const INPUT_CLASSES =
-  'min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-base text-slate-900 shadow-xs ' +
-  'focus:border-brand-600 focus:outline-2 focus:outline-brand-600/30 aria-[invalid=true]:border-red-600 disabled:bg-slate-100'
+// Bord constant, anneau de focus en contour (jamais un changement de bordure), désactivé sur trois canaux.
+const FIELD_CLASSES =
+  'w-full rounded-lg border border-field bg-white text-base text-slate-900 placeholder:text-slate-500 ' +
+  'focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-focus aria-[invalid=true]:border-danger ' +
+  'disabled:cursor-not-allowed disabled:opacity-55'
+
+const INPUT_CLASSES = `min-h-11 px-3 ${FIELD_CLASSES}`
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Input(
   { className, ...props },
@@ -87,12 +99,10 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
   { className, ...props },
   ref,
 ) {
-  return <select ref={ref} className={cx(INPUT_CLASSES, className)} {...props} />
+  return <select ref={ref} className={cx(INPUT_CLASSES, 'pe-2', className)} {...props} />
 })
 
-const TEXTAREA_CLASSES =
-  'min-h-24 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base text-slate-900 shadow-xs ' +
-  'focus:border-brand-600 focus:outline-2 focus:outline-brand-600/30 aria-[invalid=true]:border-red-600 disabled:bg-slate-100'
+const TEXTAREA_CLASSES = `min-h-24 px-3 py-2 ${FIELD_CLASSES}`
 
 /** Zone de texte (motif, commentaire) : mêmes repères que `Input`. */
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(function Textarea(
@@ -105,8 +115,13 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<H
 export const Checkbox = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { label: string }>(
   function Checkbox({ label, className, ...props }, ref) {
     return (
-      <label className={cx('flex min-h-11 cursor-pointer items-center gap-3 text-sm text-slate-800', className)}>
-        <input ref={ref} type="checkbox" className="size-5 rounded border-slate-300 accent-brand-600" {...props} />
+      <label className={cx('flex min-h-11 cursor-pointer items-center gap-3 text-sm text-slate-900', className)}>
+        <input
+          ref={ref}
+          type="checkbox"
+          className="size-5 rounded border-field accent-brand-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+          {...props}
+        />
         {label}
       </label>
     )
@@ -115,17 +130,20 @@ export const Checkbox = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInp
 
 type AlertTone = 'info' | 'success' | 'warning' | 'error'
 
-const ALERT_TONES: Record<AlertTone, string> = {
-  info: 'border-sky-200 bg-sky-50 text-sky-900',
-  success: 'border-emerald-200 bg-emerald-50 text-emerald-900',
-  warning: 'border-amber-200 bg-amber-50 text-amber-900',
-  error: 'border-red-200 bg-red-50 text-red-900',
+// Fond pâle et icône de la couleur d'état ; le texte reste à l'encre pour la lisibilité.
+const ALERT_TONES: Record<AlertTone, { box: string; icon: string; name: IconName }> = {
+  info: { box: 'bg-info-soft', icon: 'text-info', name: 'info' },
+  success: { box: 'bg-success-soft', icon: 'text-success', name: 'check' },
+  warning: { box: 'bg-warning-soft', icon: 'text-warning', name: 'alert' },
+  error: { box: 'bg-danger-soft', icon: 'text-danger', name: 'alert' },
 }
 
 export function Alert({ tone = 'info', children, className }: { tone?: AlertTone; children: ReactNode; className?: string }) {
+  const style = ALERT_TONES[tone]
   return (
-    <div role={tone === 'error' ? 'alert' : 'status'} className={cx('rounded-lg border px-4 py-3 text-sm', ALERT_TONES[tone], className)}>
-      {children}
+    <div role={tone === 'error' ? 'alert' : 'status'} className={cx('flex gap-3 rounded-lg px-4 py-3 text-sm text-slate-900', style.box, className)}>
+      <Icon name={style.name} className={cx('mt-0.5 size-5', style.icon)} />
+      <div className="min-w-0 flex-1">{children}</div>
     </div>
   )
 }
@@ -142,7 +160,7 @@ export function ErrorAlert({ error, className }: { error: unknown; className?: s
 
 export function Card({ title, actions, children, className }: { title?: string; actions?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <section className={cx('rounded-xl border border-slate-200 bg-white p-4 shadow-xs sm:p-6', className)}>
+    <section className={cx('rounded-lg border border-slate-200 bg-white p-4 sm:p-5', className)}>
       {(title || actions) && (
         <header className="mb-4 flex flex-wrap items-center justify-between gap-2">
           {title && <h2 className="text-base font-semibold text-slate-900">{title}</h2>}
@@ -156,25 +174,28 @@ export function Card({ title, actions, children, className }: { title?: string; 
 
 export function PageHeader({ title, actions }: { title: string; actions?: ReactNode }) {
   return (
-    <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-      <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{title}</h1>
-      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+    <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <h1 className="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">{title}</h1>
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
   )
 }
 
 type BadgeTone = 'neutral' | 'success' | 'warning' | 'danger' | 'brand'
 
+// Pastilles d'état : toujours un libellé, la couleur n'est jamais seule (DESIGN.md §2).
 const BADGE_TONES: Record<BadgeTone, string> = {
-  neutral: 'bg-slate-100 text-slate-700',
-  success: 'bg-emerald-100 text-emerald-800',
-  warning: 'bg-amber-100 text-amber-800',
-  danger: 'bg-red-100 text-red-800',
-  brand: 'bg-brand-100 text-brand-800',
+  neutral: 'bg-slate-100 text-slate-800',
+  success: 'bg-success-soft text-success',
+  warning: 'bg-warning-soft text-warning',
+  danger: 'bg-danger-soft text-danger',
+  brand: 'bg-brand-50 text-brand-800',
 }
 
 export function Badge({ tone = 'neutral', children }: { tone?: BadgeTone; children: ReactNode }) {
-  return <span className={cx('inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium', BADGE_TONES[tone])}>{children}</span>
+  return (
+    <span className={cx('inline-flex min-h-6 items-center rounded-full px-2.5 text-xs font-semibold whitespace-nowrap', BADGE_TONES[tone])}>{children}</span>
+  )
 }
 
 export function Spinner({ label }: { label?: string }) {

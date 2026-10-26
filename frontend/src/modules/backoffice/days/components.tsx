@@ -128,7 +128,7 @@ export function CutoffTime({ time, extended }: { time: string; extended: boolean
 }
 
 const LINK_BUTTON =
-  'inline-flex min-h-11 items-center justify-center rounded-lg px-4 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
+  'inline-flex min-h-11 items-center justify-center rounded-lg px-4 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'
 
 /**
  * Lien vers la matrice des quotas : « Saisir » avec quota.edit sur une
@@ -225,7 +225,7 @@ export function MonitoringLink({ day, variant = 'button' }: { day: Pick<Day, 'da
 
 const TEXT_LINK =
   'inline-flex min-h-11 items-center font-medium text-brand-700 hover:underline ' +
-  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'
 
 /**
  * Lien « Répartition » vers la grille en lecture seule de la région

@@ -9,7 +9,7 @@ import { fetchNextSubmitted, nextSubmitted, type Outcome } from './api'
 
 const LINK =
   'inline-flex min-h-11 flex-1 items-center justify-center rounded-lg px-4 text-sm font-semibold transition-colors sm:flex-none ' +
-  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'
 const PRIMARY = 'bg-brand-600 text-white hover:bg-brand-700'
 const SECONDARY = 'border border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
 
@@ -35,7 +35,9 @@ export function OutcomeBar({
   const queryClient = useQueryClient()
   const status = useRef<HTMLParagraphElement>(null)
   // Le bouton de la décision a disparu avec le panneau : le focus passe au compte rendu, lu par les lecteurs d'écran.
-  useEffect(() => status.current?.focus(), [])
+  useEffect(() => {
+    status.current?.focus()
+  }, [])
   const region = listSearch === null ? null : regionParam(new URLSearchParams(listSearch).get('region'))
   // Listes en cache d'abord (réponse immédiate), puis le serveur, qui fait foi.
   const [next, setNext] = useState(() => nextSubmitted(queryClient, order.day, region, order.id))

@@ -80,7 +80,7 @@ export function PhotoManager({ product, canManage }: { product: Product; canMana
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={t('backoffice.products.photos.open', { index: index + 1 })}
-                  className="block rounded focus-visible:outline-2 focus-visible:outline-brand-600"
+                  className="block rounded focus-visible:outline-2 focus-visible:outline-focus"
                 >
                   <img
                     src={photo.urls.thumb}
@@ -139,7 +139,7 @@ export function PhotoManager({ product, canManage }: { product: Product; canMana
               <Alert tone="warning">{t('backoffice.products.photos.limit')}</Alert>
             ) : (
               <label
-                className={`inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 self-start rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand-600 ${
+                className={`inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 self-start rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-focus ${
                   busy ? 'cursor-not-allowed opacity-60' : ''
                 }`}
               >

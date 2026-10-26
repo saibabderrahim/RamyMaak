@@ -15,7 +15,7 @@ import { historyEvent } from './model'
 
 const LINK_CLASSES =
   'inline-flex min-h-11 items-center gap-2 rounded-lg font-medium text-brand-700 hover:underline ' +
-  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'
 
 /**
  * Détail d'une commande reçue (EF-REG-04, EF-REG-05) : client avec appel en un

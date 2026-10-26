@@ -1,28 +1,88 @@
 @import 'tailwindcss';
 
-/* Palette provisoire : à aligner sur la charte Ramy (§9.5). */
+/*
+ * Charte Ramy (lot 7, direction « Rouge Ramy » validée) sur le système de
+ * DESIGN.md : neutres chauds, rouge mesuré sur le logo Ramy (#E30613),
+ * sémantique de DESIGN.md. Les noms Tailwind (slate, brand) sont gardés :
+ * tous les écrans prennent la charte sans changer leurs classes.
+ */
 @theme {
-  --color-brand-50: #e8f4ef;
-  --color-brand-100: #c6e4d7;
-  --color-brand-200: #92cbb3;
-  --color-brand-300: #5eae8e;
-  --color-brand-400: #33926f;
-  --color-brand-500: #148058;
-  --color-brand-600: #0b6e4f;
-  --color-brand-700: #095a41;
-  --color-brand-800: #074733;
-  --color-brand-900: #053425;
+  /* Rouge Ramy : 600 = logo, 700 = survol, 800 = texte sur fond rouge pâle */
+  --color-brand-50: #fdecec;
+  --color-brand-100: #fbd6d7;
+  --color-brand-200: #f6adb0;
+  --color-brand-300: #ef7b80;
+  --color-brand-400: #e9474e;
+  --color-brand-500: #e5232d;
+  --color-brand-600: #e30613;
+  --color-brand-700: #c40812;
+  --color-brand-800: #9e0710;
+  --color-brand-900: #7a0a10;
+  --color-brand-950: #4a060a;
 
-  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', 'Noto Sans Arabic', sans-serif;
+  /* Neutres de DESIGN.md, teintés vers le rouge (50 = fond, 200 = filets, 500 = texte secondaire minimal, 900 = encre) */
+  --color-slate-50: #f6f4f3;
+  --color-slate-100: #efebe9;
+  --color-slate-200: #e7e2df;
+  --color-slate-300: #d8d2ce;
+  --color-slate-400: #a39a96;
+  --color-slate-500: #736a66;
+  --color-slate-600: #6b625f;
+  --color-slate-700: #4e4643;
+  --color-slate-800: #352d2a;
+  --color-slate-900: #231c1a;
+  --color-slate-950: #14100d;
+
+  /* Bord des champs (3,8:1 sur blanc) et anneau de focus, distinct du rouge des erreurs */
+  --color-field: #8a817d;
+  --color-focus: #14100d;
+  /* Fond mesuré sur les photos produit détourées sur blanc */
+  --color-photo: #fbfbfb;
+
+  /* États de DESIGN.md : couleur du texte ou de l'icône, et fond pâle associé (contraste ≥ 4,5:1) */
+  --color-success: #18794e;
+  --color-success-soft: #e6f3ec;
+  --color-warning: #8a5b00;
+  --color-warning-soft: #fbf0d9;
+  --color-danger: #b42318;
+  --color-danger-soft: #fceae8;
+  --color-info: #175cd3;
+  --color-info-soft: #e8effb;
+
+  --font-sans: 'Rubik', system-ui, -apple-system, 'Segoe UI', 'Noto Sans', 'Noto Sans Arabic', sans-serif;
+
 }
 
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
+    overflow-x: clip;
   }
 
   body {
     @apply bg-slate-50 text-slate-900 antialiased;
+    overflow-x: clip;
+    font-synthesis: none;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  ::selection {
+    @apply bg-brand-100 text-slate-900;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

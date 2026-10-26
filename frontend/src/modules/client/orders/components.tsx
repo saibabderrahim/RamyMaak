@@ -21,13 +21,13 @@ import {
 // Éléments du détail d'une commande du client (EF-CLT-04) — contrat : docs/lot-5-contrat-api.md §3 et §6 ;
 // motifs avec libellé, ajustement, expédition : docs/lot-6-contrat-api.md §4 et §8. RG-C09 : jamais Q, R ni V(r,p).
 
-const SECTION = 'flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-xs sm:p-6'
+const SECTION = 'flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:p-6'
 
 /** Statut d'une commande : libellé commun (orders.status.*) sur une couleur propre au statut. */
 export function OrderStatusBadge({ status }: { status: OrderStatus }) {
   const { t } = useTranslation()
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_CLASSES[status]}`} data-status={status}>
+    <span className={`inline-flex min-h-6 items-center rounded-full px-2.5 text-xs font-semibold whitespace-nowrap ${STATUS_CLASSES[status]}`} data-status={status}>
       {t(`orders.status.${status}`)}
     </span>
   )
@@ -220,7 +220,7 @@ export function OrderDecision({ order }: { order: DecisionOrder }) {
   const reason = reasonText(order.decision_reason, order.decision_reason_code)
   const at = decisionInstant(order)
   return (
-    <section aria-labelledby={titleId} className={`flex flex-col gap-1 rounded-xl border px-4 py-3 text-sm ${DECISION_TONES[kind]}`}>
+    <section aria-labelledby={titleId} className={`flex flex-col gap-1 rounded-lg border px-4 py-3 text-sm ${DECISION_TONES[kind]}`}>
       <h2 id={titleId} className="font-semibold">
         {t(`orders.clientOrders.decision.${kind}`)}
       </h2>

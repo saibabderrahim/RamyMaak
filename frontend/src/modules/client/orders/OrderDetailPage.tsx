@@ -14,10 +14,10 @@ import { useLocationNotice } from './useLocationNotice'
 import { type Feedback, formatTime, weekdayOf } from './view'
 
 const BACK_LINK =
-  'inline-flex min-h-11 items-center gap-1 self-start rounded-lg px-1 text-sm font-semibold text-brand-700 hover:text-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
+  'inline-flex min-h-11 items-center gap-1 self-start rounded-lg px-1 text-sm font-semibold text-brand-700 hover:text-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'
 
 const CART_LINK =
-  'inline-flex min-h-11 items-center font-semibold text-brand-700 underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-brand-600'
+  'inline-flex min-h-11 items-center font-semibold text-brand-700 underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-focus'
 
 /**
  * Détail d'une commande (EF-CLT-04) : état et actions (modifier, annuler,
@@ -111,7 +111,7 @@ function OrderOverview({ order, onFeedback }: { order: Order; onFeedback: (feedb
   const until = order.modifiable_until
 
   return (
-    <section className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-xs sm:p-6" aria-labelledby={titleId}>
+    <section className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:p-6" aria-labelledby={titleId}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id={titleId} className="text-base font-semibold text-slate-900">
           {t('orders.clientOrders.detail.day', { date: `${weekdayOf(order.day)} ${formatDate(order.day)}` })}
@@ -159,7 +159,7 @@ function OrderComment({ comment }: { comment: string }) {
   const { t } = useTranslation()
   const titleId = useId()
   return (
-    <section aria-labelledby={titleId} className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-white p-4 text-sm shadow-xs sm:p-6">
+    <section aria-labelledby={titleId} className="flex flex-col gap-1 rounded-lg border border-slate-200 bg-white p-4 text-sm sm:p-6">
       <h2 id={titleId} className="text-base font-semibold text-slate-900">
         {t('orders.clientOrders.detail.comment')}
       </h2>
