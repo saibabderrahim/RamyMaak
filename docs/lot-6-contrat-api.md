@@ -371,6 +371,8 @@ Le socle (commits du lot 6) fournit migrations, modèles, `Domain/Orders/{OrderD
 | I-96 | « Ma journée » et suivi de la journée : réponses sans enveloppe `data` |
 | I-97 | Changement de statut en masse : un seul événement `OrdersProcessed` par journée régionale et par journée, pour ne pas relire chaque écran cent fois |
 | I-98 | Heure limite de validation prolongeable par région ; la fiche de la journée de l'ADV l'affiche avec les autres |
+| I-99 | Chaque région garde l'ordre répartition < commande < validation : prolonger la commande au-delà de la validation de la région exige de prolonger d'abord la validation (sinon une commande envoyée pendant la prolongation ne pourrait plus être validée) |
+| I-100 | Export de la journée : « Décidée le / Décidée par » (validation, ou rejet pour une commande rejetée) ; le CSV se termine par la mention des montants indicatifs |
 
 ## 11. Précisions (implémentation de l'API)
 
