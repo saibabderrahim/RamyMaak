@@ -253,7 +253,8 @@ describe('ADV — shipping (RG-A03, I-77)', () => {
     await user.type(quantity, '30')
 
     expect(screen.getByText('Motif obligatoire pour une quantité inférieure à la validée.')).toBeInTheDocument()
-    expect(screen.getByText('Corrigez les lignes signalées avant d’enregistrer.')).toBeInTheDocument()
+    // Près du bouton d'enregistrement et près de l'étape suivante, désactivée tant que la saisie est à corriger.
+    expect(screen.getAllByText('Corrigez les lignes signalées avant d’enregistrer.')).toHaveLength(2)
     expect(screen.getByRole('button', { name: 'Enregistrer l’expédition' })).toBeDisabled()
 
     await user.selectOptions(await screen.findByRole('combobox', { name: 'Motif d’écart de Jus orange 1 L' }), 'RUPTURE')
@@ -281,6 +282,11 @@ describe('ADV — shipping (RG-A03, I-77)', () => {
     await user.clear(quantity)
     await user.type(quantity, '41')
     expect(screen.getByText('Au plus la quantité validée.')).toBeInTheDocument()
+    // Erreur reliée à son champ, et raison dite à côté de l'étape suivante désactivée.
+    expect(quantity).toHaveAccessibleDescription('Au plus la quantité validée.')
+    const actions = within(screen.getByRole('group', { name: 'Actions sur la commande' }))
+    expect(actions.getByRole('button', { name: 'Marquer préparée' })).toBeDisabled()
+    expect(actions.getByText('Corrigez les lignes signalées avant d’enregistrer.')).toBeInTheDocument()
 
     await user.clear(quantity)
     expect(screen.getByText('Quantité entière attendue.')).toBeInTheDocument()

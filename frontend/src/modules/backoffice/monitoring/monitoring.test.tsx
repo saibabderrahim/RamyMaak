@@ -214,8 +214,12 @@ describe('ADV — live monitoring', () => {
       await waitFor(() => expect(fake.listeners.get(`adv.${DAY}:.${event}`)?.size).toBe(1))
     }
     for (const region of [CENTRE.region.id, EST.region.id]) {
-      for (const event of ['OrderSubmitted', 'OrderUpdated', 'OrderCancelled', 'OrdersExpired', 'OrderValidated', 'OrderRejected', 'OrdersProcessed', 'OrderCancelledByAdv']) {
+      for (const event of ['OrderSubmitted', 'OrderUpdated', 'OrderCancelled', 'OrdersExpired', 'OrderRejected']) {
         await waitFor(() => expect(fake.listeners.get(`region-day.${region}.${DAY}:.${event}`)?.size).toBe(1))
+      }
+      // Déjà reçus une fois sur adv.{jour} : pas une relecture de plus par région (I-97).
+      for (const event of ['OrderValidated', 'OrdersProcessed', 'OrderCancelledByAdv']) {
+        expect(fake.listeners.get(`region-day.${region}.${DAY}:.${event}`)?.size ?? 0).toBe(0)
       }
     }
 

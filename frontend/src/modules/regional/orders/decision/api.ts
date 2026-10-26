@@ -28,7 +28,13 @@ export type Decided = {
 export type Outcome = Decided | { kind: 'processed' }
 
 /** Refus de la dernière tentative ; `sent` : lignes envoyées, pour rapporter les erreurs `lines.N.*` aux produits. */
-export type Failure = { kind: 'validate'; error: unknown; sent: ValidateOrderBody['lines'] } | { kind: 'reject'; error: unknown }
+/**
+ * Dernier refus. `at` : la commande affichée au moment du refus ; dès qu'une
+ * relecture en livre une autre, c'est le serveur (`blocked_reason`) qui décide.
+ */
+export type Failure =
+  | { kind: 'validate'; error: unknown; sent: ValidateOrderBody['lines']; at: RegionalOrder }
+  | { kind: 'reject'; error: unknown; at: RegionalOrder }
 
 const decisionPath = (id: string, action: 'validate' | 'reject') => `/regional/orders/${encodeURIComponent(id)}/${action}`
 
@@ -120,7 +126,7 @@ export function useDecision(order: RegionalOrder, onOutcome: (outcome: Outcome) 
       })
     },
     onError: (error, body) => {
-      setFailure({ kind: 'validate', error, sent: body.lines })
+      setFailure({ kind: 'validate', error, sent: body.lines, at: order })
       settleError(queryClient, order, error, onOutcome)
     },
   })
@@ -133,7 +139,7 @@ export function useDecision(order: RegionalOrder, onOutcome: (outcome: Outcome) 
       onOutcome({ kind: 'rejected', order: updated, adjusted: 0 })
     },
     onError: (error) => {
-      setFailure({ kind: 'reject', error })
+      setFailure({ kind: 'reject', error, at: order })
       settleError(queryClient, order, error, onOutcome)
     },
   })
@@ -152,6 +158,18 @@ export function useDecision(order: RegionalOrder, onOutcome: (outcome: Outcome) 
       reject.mutate(body)
     },
   }
+}
+
+/**
+ * « Commande suivante » lue sur le serveur : la plus ancienne commande encore
+ * envoyée de la journée (et de la région de la liste d'où l'on vient), hors la
+ * commande en cours. Première page triée par heure d'envoi : la plus ancienne
+ * y figure. Couvre l'ouverture depuis une notification (aucune liste en cache)
+ * et les commandes décidées entre-temps par un autre régional.
+ */
+export async function fetchNextSubmitted(day: string, region: number | null, currentId: string, signal?: AbortSignal) {
+  const page = await api.get<RegionalOrdersPage>('/regional/orders', { day, 'filter[status]': 'SUBMITTED', 'filter[region]': region ?? undefined }, signal)
+  return oldestSubmitted(page.data, currentId)
 }
 
 /**

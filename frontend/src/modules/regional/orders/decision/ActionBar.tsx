@@ -5,13 +5,15 @@ import type { ReactNode } from 'react'
  * l'écran, au-dessus de la barre d'onglets du téléphone (3,5 rem, zone de
  * sécurité comprise) ; contre le bas de l'écran dès qu'elle disparaît (grand
  * écran). Les actions tiennent sur une ligne, la plus longue à la place restante,
- * et passent à la ligne si le libellé l'exige. Un espace vide en fin de page évite
- * qu'elle masque le dernier bloc.
+ * et passent à la ligne si le libellé l'exige. Un espace vide, placé en fin de
+ * page (`order-last` dans la colonne de l'écran), évite qu'elle masque le dernier
+ * bloc (l'historique).
  */
 export function ActionBar({ label, children }: { label: string; children: ReactNode }) {
   return (
     <>
-      <div aria-hidden="true" className="h-32 sm:h-24" />
+      {/* Placé en fin de page même quand la barre est rendue au milieu (la page est une colonne flex). */}
+      <div aria-hidden="true" data-testid="action-bar-spacer" className="order-last h-32 sm:h-24" />
       <div
         role="group"
         aria-label={label}

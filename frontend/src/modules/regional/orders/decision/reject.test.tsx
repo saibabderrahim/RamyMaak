@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RegionalOrder } from '../../../../shared/api/types'
 import { json, problem } from '../../../../test/utils'
-import { decidable, makeOrder, ORDER_ID, orderUrl, rejectUrl, renderOrders } from '../testing'
+import { decidable, makeOrder, ORDER_ID, orderUrl, rejectUrl, renderOrders, validateUrl } from '../testing'
 import { draftStore } from './drafts'
 
 afterEach(() => {
@@ -193,6 +193,30 @@ describe('regional order — rejection', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Rejeter la commande' }))
 
     expect(await screen.findByText('Commande modifiée par le client')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('does not reopen the dialog when the regional validates after the refused rejection', async () => {
+    const user = userEvent.setup()
+    let version = 2
+    renderOrders({
+      path: DETAIL,
+      routes: {
+        [orderUrl(ORDER_ID)]: () => json(decidable({ version })),
+        [REJECT]: () => {
+          version = 3
+          return problem(409, 'VERSION_CONFLICT', 'La commande a été modifiée.', { version: 3 })
+        },
+        [validateUrl(ORDER_ID)]: () => problem(503, 'SERVICE_UNAVAILABLE', 'Service indisponible.'),
+      },
+    })
+    const dialog = await openDialog(user)
+    await chooseReason(user, dialog, 'Quota épuisé')
+    await user.click(within(dialog).getByRole('button', { name: 'Rejeter la commande' }))
+    await user.click(await screen.findByRole('button', { name: 'Reprendre avec la commande à jour' }))
+    await user.click(await screen.findByRole('button', { name: 'Valider' }))
+
+    expect(await screen.findByText('Service indisponible.')).toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 

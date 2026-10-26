@@ -298,12 +298,8 @@ export function isDayKey(value: string | null): value is string {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
 }
 
-/** Lendemain calendaire d'une journée « AAAA-MM-JJ » (calcul en UTC, sans heure d'été). */
-export function nextDay(day: string): string {
-  const date = new Date(`${day}T00:00:00Z`)
-  date.setUTCDate(date.getUTCDate() + 1)
-  return date.toISOString().slice(0, 10)
-}
+/** Lendemain calendaire d'une journée (repris de shared/format). */
+export { nextDay } from '../../shared/format'
 
 const weekdayFormat = new Intl.DateTimeFormat('fr-FR', { timeZone: 'UTC', weekday: 'long' })
 

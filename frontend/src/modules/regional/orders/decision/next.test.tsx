@@ -101,14 +101,25 @@ describe('regional order — after a decision', () => {
     const user = userEvent.setup()
     const first = roomy(decidable())
     const second = roomy(secondOrder())
+    // Le serveur ne rend plus une commande décidée dans « À valider ».
+    const decidedIds = new Set<string>()
     renderOrders({
       path: `/regional/commandes?day=${DAY}`,
       routes: {
-        [ORDERS_URL]: () => json(ordersPage([summary(), SECOND], { counts: { ...COUNTS, SUBMITTED: 2 } })),
+        [ORDERS_URL]: () => {
+          const waiting = [summary(), SECOND].filter((order) => !decidedIds.has(order.id))
+          return json(ordersPage(waiting, { counts: { ...COUNTS, SUBMITTED: waiting.length } }))
+        },
         [orderUrl(ORDER_ID)]: () => json(first),
         [orderUrl(SECOND_ID)]: () => json(second),
-        [validateUrl(ORDER_ID)]: () => json(decided(first)),
-        [rejectUrl(SECOND_ID)]: () => json(decided(second, 'REJECTED')),
+        [validateUrl(ORDER_ID)]: () => {
+          decidedIds.add(ORDER_ID)
+          return json(decided(first))
+        },
+        [rejectUrl(SECOND_ID)]: () => {
+          decidedIds.add(SECOND_ID)
+          return json(decided(second, 'REJECTED'))
+        },
       },
     })
 
@@ -156,14 +167,35 @@ describe('regional order — after a decision', () => {
     expect(screen.getByRole('link', { name: 'Retour à la liste' })).toHaveAttribute('href', `/regional/commandes?day=${DAY}&region=3`)
   })
 
-  it('only offers the way back when the order was opened without a list (notification link)', async () => {
+  it('asks the server for the following order when the order was opened without a list (notification link)', async () => {
     const user = userEvent.setup()
     const order = roomy(decidable())
-    renderOrders({ path: `/regional/commandes/${ORDER_ID}`, routes: { [orderUrl(ORDER_ID)]: () => json(order), [validateUrl(ORDER_ID)]: () => json(decided(order)) } })
+    const { queries } = renderOrders({
+      path: `/regional/commandes/${ORDER_ID}`,
+      routes: {
+        [orderUrl(ORDER_ID)]: () => json(order),
+        [validateUrl(ORDER_ID)]: () => json(decided(order)),
+        [ORDERS_URL]: () => json(ordersPage([SECOND])),
+      },
+    })
     await user.click(await screen.findByRole('button', { name: 'Valider' }))
 
     expect(await screen.findByText('Commande RMK-261008-00042 validée.')).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /Commande suivante/ })).not.toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: /Commande suivante/ })).toHaveAttribute('href', `/regional/commandes/${SECOND_ID}`)
+    expect(queries(ORDERS_URL)).toContainEqual({ day: DAY, 'filter[status]': 'SUBMITTED' })
+  })
+
+  it('only offers the way back when nothing else waits for a decision', async () => {
+    const user = userEvent.setup()
+    const order = roomy(decidable())
+    renderOrders({
+      path: `/regional/commandes/${ORDER_ID}`,
+      routes: { [orderUrl(ORDER_ID)]: () => json(order), [validateUrl(ORDER_ID)]: () => json(decided(order)), [ORDERS_URL]: () => json(ordersPage([summary()])) },
+    })
+    await user.click(await screen.findByRole('button', { name: 'Valider' }))
+
+    expect(await screen.findByText('Commande RMK-261008-00042 validée.')).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('link', { name: /Commande suivante/ })).not.toBeInTheDocument())
     expect(screen.getByRole('link', { name: 'Retour à la liste' })).toHaveAttribute('href', `/regional/commandes?day=${DAY}`)
   })
 

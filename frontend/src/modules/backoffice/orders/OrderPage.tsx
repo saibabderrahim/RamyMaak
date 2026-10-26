@@ -199,32 +199,35 @@ function OrderView({ order, back }: { order: AdvOrder; back: ReactNode }) {
                   </Button>
                 )}
               </div>
-              {draft.dirty && order.can.next_statuses.length > 0 && (
-                <p className="text-xs text-slate-600">{t('backoffice.orders.actions.nextSaveFirst')}</p>
-              )}
+              {/* Étape suivante désactivée : la raison est dite à côté des boutons (Design.md §7). */}
+              {order.can.next_statuses.length > 0 &&
+                (!draft.valid ? (
+                  <p className="text-xs text-red-700">{t('backoffice.orders.shipping.fix')}</p>
+                ) : (
+                  draft.dirty && <p className="text-xs text-slate-600">{t('backoffice.orders.actions.nextSaveFirst')}</p>
+                ))}
             </div>
           </Card>
         )}
 
         <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
-          <div className="flex min-w-0 flex-col gap-6">
-            <SummaryCard order={order} />
-            <LinesCard
-              order={order}
-              draft={draft}
-              error={failed ? shipping.error : null}
-              fieldErrors={failed ? failure.fields : NO_FIELD_ERRORS}
-              saving={shipping.isPending}
-              online={online}
-              onSave={save}
-            />
-          </div>
+          <SummaryCard order={order} />
           <div className="flex min-w-0 flex-col gap-6">
             <ClientCard order={order} />
             <TotalsCard order={order} />
-            <HistoryCard history={order.history} />
           </div>
         </div>
+        {/* Lignes sur toute la largeur : quantités, prix et montants restent visibles sur PC (Design.md §6, §9). */}
+        <LinesCard
+          order={order}
+          draft={draft}
+          error={failed ? shipping.error : null}
+          fieldErrors={failed ? failure.fields : NO_FIELD_ERRORS}
+          saving={shipping.isPending}
+          online={online}
+          onSave={save}
+        />
+        <HistoryCard history={order.history} />
       </div>
 
       <CancelDialog

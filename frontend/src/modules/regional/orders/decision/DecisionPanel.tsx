@@ -51,7 +51,8 @@ export function DecisionPanel({ order, onOutcome }: { order: RegionalOrder; onOu
   const lines = useRef<HTMLUListElement>(null)
 
   const { failure } = decision
-  const blocker = blockerOf(order, failure?.error)
+  // Le refus ne bloque que jusqu'à la relecture de la commande (prolongation, client réactivé).
+  const blocker = blockerOf(order, failure?.at === order ? failure.error : undefined)
   const canValidate = order.can_validate && blocker === null && !stale
   const canReject = order.can_reject && blocker !== 'DAY_NOT_OPEN' && !stale
   const editable = canValidate && !decision.pending
@@ -80,7 +81,8 @@ export function DecisionPanel({ order, onOutcome }: { order: RegionalOrder; onOu
   }
 
   const rejectFailure = failure?.kind === 'reject' ? failure : null
-  const rejectOpen = rejecting && !(rejectFailure?.error instanceof ApiError && CLOSING_CODES.includes(rejectFailure.error.code))
+  // Refus qui passe à un bandeau de la page : la boîte se ferme pour de bon (elle ne se rouvre pas à la validation suivante).
+  if (rejecting && rejectFailure?.error instanceof ApiError && CLOSING_CODES.includes(rejectFailure.error.code)) setRejecting(false)
   const openReject = () => {
     decision.clear()
     setRejecting(true)
@@ -170,7 +172,7 @@ export function DecisionPanel({ order, onOutcome }: { order: RegionalOrder; onOu
         </ActionBar>
       )}
 
-      {rejectOpen && (
+      {rejecting && (
         <RejectDialog
           order={{ number: order.number, version: draft.version }}
           pending={decision.pending}

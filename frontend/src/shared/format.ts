@@ -50,3 +50,10 @@ export function businessToday(now: Date = new Date()): string {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: BUSINESS_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
   return parts
 }
+
+/** Lendemain calendaire d'une journée « AAAA-MM-JJ » (calcul en UTC, sans heure d'été). */
+export function nextDay(day: string): string {
+  const date = new Date(`${day}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + 1)
+  return date.toISOString().slice(0, 10)
+}

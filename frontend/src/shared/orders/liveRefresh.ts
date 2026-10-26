@@ -7,8 +7,9 @@ import { FALLBACK_REFRESH_MS, useChannel, useRealtimeReconnect, useRealtimeStatu
  * comme `useLiveRefresh`, mais les rafales d'événements (une validation par
  * commande, un changement de statut en masse) sont regroupées. Le premier
  * événement programme une relecture `wait` ms plus tard, les suivants
- * l'attendent : au plus une relecture par fenêtre, sans annuler celle qui
- * est en cours (§9.6, l'API reste la source de vérité).
+ * l'attendent : au plus une relecture par fenêtre et par écoute ; une
+ * relecture déjà en cours est relancée, elle a pu partir avant le changement
+ * (§9.6, l'API reste la source de vérité).
  */
 
 /** Fenêtre de regroupement des événements. */
@@ -50,8 +51,9 @@ export function useCoalescedRefresh(
 
   useChannel(channel, Object.fromEntries(events.map((event) => [event, schedule])))
 
-  // Retour de la connexion après une coupure : des événements ont pu être manqués.
-  useRealtimeReconnect(refresh)
+  // Retour de la connexion après une coupure : des événements ont pu être manqués. Plusieurs écoutes
+  // d'un même écran se rattrapent en même temps : une relecture déjà partie après le retour suffit.
+  useRealtimeReconnect(() => keysRef.current.forEach((queryKey) => void queryClient.invalidateQueries({ queryKey }, { cancelRefetch: false })))
 
   return status === 'connected' && channel !== null ? false : FALLBACK_REFRESH_MS
 }

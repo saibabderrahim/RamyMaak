@@ -4,6 +4,7 @@ const reasons = {
   placeholder: 'Choisir un motif',
   loading: 'Chargement des motifs…',
   unavailable: 'Motifs indisponibles',
+  loadFailed: 'Les motifs n’ont pas pu être chargés : réessayez pour choisir un motif.',
   inactive: '{{label}} (désactivé)',
 }
 

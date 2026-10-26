@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AdvOrder, AdvOrderLine } from '../../../shared/api/types'
 import { formatAmount, formatQuantity } from '../../../shared/format'
@@ -47,7 +48,7 @@ export function LinesCard({ order, draft, error, fieldErrors, saving, online, on
         {draft.stale && <Alert tone="warning">{t('backoffice.orders.shipping.stale')}</Alert>}
         {!hasFieldErrors && <ErrorAlert error={error} />}
 
-        <DataTable label={t('backoffice.orders.lines.label')} className="min-w-[900px]">
+        <DataTable label={t('backoffice.orders.lines.label')} className="min-w-[760px]">
           <TableHead>
             <Th>{t('backoffice.orders.lines.product')}</Th>
             <Th className="text-end">{t('backoffice.orders.lines.requested')}</Th>
@@ -118,6 +119,7 @@ function LineRow({
   serverError: string | undefined
 }) {
   const { t } = useTranslation()
+  const errorId = useId()
   const validated = line.validated_qty ?? 0
   const reduced = line.validated_qty !== null && line.validated_qty < line.requested_qty
   const edit = draft.edits[line.product_id]
@@ -136,17 +138,18 @@ function LineRow({
         <span className="block text-xs text-slate-600">
           {line.sku} · {line.sales_unit_label}
         </span>
-      </th>
-      <td className="py-2 pe-4 text-end align-top tabular-nums">{formatQuantity(line.requested_qty)}</td>
-      <td className="py-2 pe-4 text-end align-top tabular-nums">
-        <span className={reduced ? 'font-semibold text-amber-800' : undefined}>{line.validated_qty === null ? '—' : formatQuantity(line.validated_qty)}</span>
+        {/* Note d'ajustement sous le produit : la colonne « Validé » garde la largeur d'un nombre. */}
         {reduced && (
-          <span className="block text-xs font-normal text-amber-800">
+          <span className="mt-1 block max-w-md text-xs text-amber-800">
             {t('backoffice.orders.lines.reduced', { from: formatQuantity(line.requested_qty), to: formatQuantity(validated) })}
             {adjustment && <> · {t('backoffice.orders.lines.adjustmentReason', { reason: adjustment })}</>}
             {line.adjustment_comment && <q className="block italic">{line.adjustment_comment}</q>}
           </span>
         )}
+      </th>
+      <td className="py-2 pe-4 text-end align-top whitespace-nowrap tabular-nums">{formatQuantity(line.requested_qty)}</td>
+      <td className="py-2 pe-4 text-end align-top whitespace-nowrap tabular-nums">
+        <span className={reduced ? 'font-semibold text-amber-800' : undefined}>{line.validated_qty === null ? '—' : formatQuantity(line.validated_qty)}</span>
       </td>
       {showShipping && (
         <td className="py-2 pe-4 text-end align-top">
@@ -158,10 +161,15 @@ function LineRow({
                 className="w-28 text-end tabular-nums"
                 aria-label={t('backoffice.orders.shipping.shippedQty', { name: line.name })}
                 aria-invalid={Boolean(message)}
+                aria-describedby={message ? errorId : undefined}
                 value={qtyText}
                 onChange={(event) => draft.setQty(line, event.target.value)}
               />
-              {message && <span className="max-w-48 text-xs text-red-700">{message}</span>}
+              {message && (
+                <span id={errorId} role="alert" className="max-w-48 text-xs text-red-700">
+                  {message}
+                </span>
+              )}
             </div>
           ) : (
             <span className="tabular-nums">{line.shipped_qty === null ? '—' : formatQuantity(line.shipped_qty)}</span>

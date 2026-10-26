@@ -5,7 +5,7 @@ import { Link } from 'react-router'
 import type { RegionalOrder } from '../../../../shared/api/types'
 import { orderPath, regionParam } from '../model'
 import { ActionBar } from './ActionBar'
-import { nextSubmitted, type Outcome } from './api'
+import { fetchNextSubmitted, nextSubmitted, type Outcome } from './api'
 
 const LINK =
   'inline-flex min-h-11 flex-1 items-center justify-center rounded-lg px-4 text-sm font-semibold transition-colors sm:flex-none ' +
@@ -15,9 +15,9 @@ const SECONDARY = 'border border-slate-300 bg-white text-slate-800 hover:bg-slat
 
 /**
  * Après une décision (contrat du lot 6, §8) : compte rendu, puis « Commande
- * suivante » — la plus ancienne commande à valider (RG-V01) des listes en cache
- * pour la journée — ou retour à la liste d'où l'on vient. La commande suivante
- * est choisie une fois, à l'enregistrement de la décision.
+ * suivante » — la plus ancienne commande à valider (RG-V01), proposée depuis les
+ * listes en cache puis relue sur le serveur (ouverture depuis une notification,
+ * commandes décidées entre-temps) — ou retour à la liste d'où l'on vient.
  */
 export function OutcomeBar({
   outcome,
@@ -36,10 +36,16 @@ export function OutcomeBar({
   const status = useRef<HTMLParagraphElement>(null)
   // Le bouton de la décision a disparu avec le panneau : le focus passe au compte rendu, lu par les lecteurs d'écran.
   useEffect(() => status.current?.focus(), [])
-  const [next] = useState(() => {
-    const region = listSearch === null ? null : regionParam(new URLSearchParams(listSearch).get('region'))
-    return nextSubmitted(queryClient, order.day, region, order.id)
-  })
+  const region = listSearch === null ? null : regionParam(new URLSearchParams(listSearch).get('region'))
+  // Listes en cache d'abord (réponse immédiate), puis le serveur, qui fait foi.
+  const [next, setNext] = useState(() => nextSubmitted(queryClient, order.day, region, order.id))
+  useEffect(() => {
+    const controller = new AbortController()
+    fetchNextSubmitted(order.day, region, order.id, controller.signal).then(setNext, () => {
+      // Hors ligne ou erreur : la proposition des listes en cache reste.
+    })
+    return () => controller.abort()
+  }, [order.day, region, order.id])
 
   const text =
     outcome.kind === 'processed'

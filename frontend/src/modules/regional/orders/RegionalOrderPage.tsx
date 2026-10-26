@@ -1,7 +1,11 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useParams } from 'react-router'
 import { ApiError } from '../../../shared/api/client'
+import type { AppNotification } from '../../../shared/api/types'
+import { useAuthenticatedUser } from '../../../shared/auth/session'
+import { NOTIFICATION_EVENT, useChannel } from '../../../shared/realtime'
 import { Alert, Button, ErrorAlert, Spinner } from '../../../shared/ui'
 import { useErrorMessage } from '../../../shared/ui/useErrorMessage'
 import { ORDER_DETAIL_EVENTS, regionalOrderKey, useLiveIntervals, useRegionalOrder } from './api'
@@ -37,6 +41,15 @@ function OrderScreen({ id }: { id: string }) {
   const query = useRegionalOrder(id, interval)
   const order = query.data
   const [outcome, setOutcome] = useState<Outcome | null>(null)
+  const user = useAuthenticatedUser()
+  const queryClient = useQueryClient()
+
+  // Prolongation d'une heure limite (validation comprise, I-98) : notifiée sur `user.{id}` ; la commande est relue.
+  useChannel(`user.${user.id}`, {
+    [NOTIFICATION_EVENT]: (payload) => {
+      if ((payload as Partial<AppNotification> | null)?.type === 'CUTOFF_EXTENDED') void queryClient.invalidateQueries({ queryKey: regionalOrderKey(id) })
+    },
+  })
 
   // Une commande par écran (« Commande suivante » en ouvre une autre) : toujours lue depuis le haut.
   useEffect(() => window.scrollTo({ top: 0 }), [])

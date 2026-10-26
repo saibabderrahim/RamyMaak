@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router'
 import type { AdvOrderStatus, AdvOrderSummary, ProcessingStatus } from '../../../shared/api/types'
-import { businessToday, formatAmount, formatDate, formatDateTime } from '../../../shared/format'
+import { businessToday, formatAmount, formatDate, formatDateTime, nextDay } from '../../../shared/format'
 import { ADV_TO_PREPARE_KEY, useCoalescedRefresh } from '../../../shared/orders'
 import { useOnline } from '../../../shared/pwa/online'
 import { FALLBACK_REFRESH_MS, useRealtimeStatus } from '../../../shared/realtime'
@@ -71,8 +71,10 @@ export default function OrdersQueuePage() {
   const counts = orders.data?.meta.counts
   // Autre onglet en cours de chargement : ses compteurs seuls sont déjà connus.
   const switching = orders.isPlaceholderData && rows.length === 0
-  // Journées affichées (la file court sur plusieurs journées, I-90), plus aujourd'hui : nouvelles validations du jour.
-  const liveDays = [...new Set([businessToday(), ...daysOf(rows)])].sort()
+  // Journées affichées (la file court sur plusieurs journées, I-90), la journée filtrée, aujourd'hui et demain :
+  // une répartition de demain envoyée la veille (I-42) fait valider dès aujourd'hui des commandes de demain.
+  const today = businessToday()
+  const liveDays = [...new Set([today, nextDay(today), ...(params.day ? [params.day] : []), ...daysOf(rows)])].sort()
 
   const update = (patch: Partial<QueueParams>) => {
     setSearchParams(writeQueueParams(searchParams, patch), { replace: true })

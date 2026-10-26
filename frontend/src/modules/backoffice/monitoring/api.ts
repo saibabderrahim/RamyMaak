@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { api } from '../../../shared/api/client'
 import type { DayMonitoring, ExportFormat, PickingListFormat, PickingListGroup } from '../../../shared/api/types'
-import { ADV_DAY_ORDER_EVENTS, REGION_DAY_DECISION_EVENTS } from '../../../shared/realtime'
+import { ADV_DAY_ORDER_EVENTS, ORDER_REJECTED } from '../../../shared/realtime'
 import { fetchFile, saveFile } from '../shared/download'
 import { monitoringKey } from './keys'
 
@@ -12,8 +12,14 @@ export { monitoringKey, monitoringRoot } from './keys'
 /** Événements de `adv.{jour}` qui changent le suivi : quotas, répartitions, clôture, commandes (identifiants seulement, I-81). */
 export const MONITORING_DAY_EVENTS = ['QuotaPublished', 'DistributionPublished', 'DayClosed', ...ADV_DAY_ORDER_EVENTS] as const
 
-/** Événements de `region-day.{r}.{jour}` : envois, modifications et décisions de la région (commandes reçues, validées, traitées). */
-export const MONITORING_REGION_EVENTS = ['OrderSubmitted', 'OrderUpdated', 'OrderCancelled', 'OrdersExpired', ...REGION_DAY_DECISION_EVENTS] as const
+/**
+ * Événements de `region-day.{r}.{jour}` qui n'arrivent pas sur `adv.{jour}` :
+ * envois, modifications, annulations par le client, expirations et rejets. Les
+ * validations, traitements et annulations ADV sont déjà reçus une fois sur
+ * `adv.{jour}` : les écouter aussi par région relirait le suivi une fois par
+ * région (I-97).
+ */
+export const MONITORING_REGION_EVENTS = ['OrderSubmitted', 'OrderUpdated', 'OrderCancelled', 'OrdersExpired', ORDER_REJECTED] as const
 
 /** Suivi : réponse sans enveloppe `data` (I-96). 404 tant que la journée n'est pas ouverte. */
 export function useDayMonitoring(day: string, { enabled, refetchInterval }: { enabled: boolean; refetchInterval: number | false }) {

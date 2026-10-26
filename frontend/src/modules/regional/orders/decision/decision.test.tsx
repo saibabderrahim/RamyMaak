@@ -578,6 +578,37 @@ describe('regional order — refusals of the validation', () => {
     expect(screen.getByRole('list', { name: 'Produits commandés' })).toHaveTextContent('Demandé : 1 250')
   })
 
+  it('offers the validation again once the order read back is no longer blocked (cutoff extended)', async () => {
+    const user = userEvent.setup()
+    let state: 'open' | 'blocked' | 'extended' = 'open'
+    const { queryClient } = renderOrders({
+      path: DETAIL,
+      routes: {
+        [orderUrl(ORDER_ID)]: () =>
+          json(
+            state === 'blocked'
+              ? decidable({ can_validate: false, blocked_reason: 'CUTOFF_PASSED', validation: { cutoff: '15:00', cutoff_at: '2026-10-08T14:00:00+00:00', extended: false, blocking: true, passed: true } })
+              : state === 'extended'
+                ? roomy({ validation: { cutoff: '15:30', cutoff_at: '2026-10-08T14:30:00+00:00', extended: true, blocking: true, passed: false } })
+                : roomy(),
+          ),
+        [VALIDATE]: () => {
+          state = 'blocked'
+          return problem(409, 'CUTOFF_PASSED', 'L’heure limite de validation est passée.', { cutoff: '15:00' })
+        },
+      },
+    })
+    await findPanel()
+    await user.click(validate('Valider'))
+    expect(await screen.findByText('L’heure limite de validation (15:00) est passée : la commande ne peut plus être validée.')).toBeInTheDocument()
+
+    // L'ADV prolonge la validation de la région : la relecture fait foi, le refus précédent ne bloque plus.
+    state = 'extended'
+    await act(() => queryClient.invalidateQueries({ queryKey: ['regional', 'order'] }))
+    expect(await screen.findByRole('button', { name: 'Valider' })).toBeEnabled()
+    expect(screen.queryByText(/ne peut plus être validée/)).not.toBeInTheDocument()
+  })
+
   it('keeps only the rejection for a client blocked', async () => {
     renderOrders({
       path: DETAIL,

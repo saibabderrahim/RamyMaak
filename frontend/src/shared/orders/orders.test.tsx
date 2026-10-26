@@ -6,7 +6,7 @@ import { json, makeUser, mockApi, renderApp } from '../../test/utils'
 import { createQueryClient } from '../api/queryClient'
 import type { CurrentUser } from '../api/types'
 import { meQueryKey } from '../auth/session'
-import { businessToday } from '../format'
+import { businessToday, nextDay } from '../format'
 import { disconnectRealtime, FALLBACK_REFRESH_MS } from '../realtime'
 import { LIVE_COALESCE_MS, useCoalescedRefresh } from './liveRefresh'
 import { useAdvToPrepareCount } from './useAdvToPrepareCount'
@@ -127,6 +127,21 @@ describe('ADV menu counter (N-08, I-80)', () => {
     emit('OrderCancelledByAdv')
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('0'))
     expect(calls.filter((call) => call.path === '/api/v1/adv/orders')).toHaveLength(4)
+  })
+})
+
+describe('ADV « to prepare » counter — other days', () => {
+  it('also follows tomorrow, whose orders can be validated today (I-42)', async () => {
+    let validated = 2
+    mockApi({ 'GET /api/v1/adv/orders': () => queue(validated) })
+    renderProbe(<Count enabled />, adv({ realtime: { key: 'app-key' } }))
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('2'))
+    const tomorrow = nextDay(businessToday())
+    await waitFor(() => expect(fake.listeners.get(`adv.${tomorrow}:.OrderValidated`)?.size).toBe(1))
+
+    validated = 3
+    emit('OrderValidated', `adv.${tomorrow}`)
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('3'))
   })
 })
 
