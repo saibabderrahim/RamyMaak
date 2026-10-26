@@ -146,7 +146,7 @@ git push origin v0.4.0                      # facultatif
 scripts/deploy.sh v0.4.0
 ```
 
-Chaque note de livraison précise ce qui change et les actions éventuelles : [lot 2 — mise à jour depuis la v0.1.0](lot-2-referentiels.md#mettre-à-jour-la-production-v010--v020), [lot 3 — mise à jour depuis la v0.2.0](lot-3-quotas-adv.md#mettre-à-jour-la-production-v020--v030), [lot 4 — mise à jour depuis la v0.3.0](lot-4-repartition.md#mettre-à-jour-la-production-v030--v040), [lot 5 — mise à jour depuis la v0.4.0](lot-5-commandes-client.md#mettre-à-jour-la-production-v040--v050).
+Chaque note de livraison précise ce qui change et les actions éventuelles : [lot 2 — mise à jour depuis la v0.1.0](lot-2-referentiels.md#mettre-à-jour-la-production-v010--v020), [lot 3 — mise à jour depuis la v0.2.0](lot-3-quotas-adv.md#mettre-à-jour-la-production-v020--v030), [lot 4 — mise à jour depuis la v0.3.0](lot-4-repartition.md#mettre-à-jour-la-production-v030--v040), [lot 5 — mise à jour depuis la v0.4.0](lot-5-commandes-client.md#mettre-à-jour-la-production-v040--v050), [lot 6 — mise à jour depuis la v0.5.0](lot-6-validation-adv.md#mettre-à-jour-la-production-v050--v060).
 
 **Retour arrière** : `scripts/deploy.sh <étiquette précédente>`. Les migrations restent compatibles avec la version précédente.
 
