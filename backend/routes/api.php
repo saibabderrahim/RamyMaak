@@ -19,10 +19,12 @@ use App\Http\Controllers\Api\V1\ClientCategoryController;
 use App\Http\Controllers\Api\V1\ClientController;
 use App\Http\Controllers\Api\V1\ImportController;
 use App\Http\Controllers\Api\V1\NotificationController;
+use App\Http\Controllers\Api\V1\PreferencesController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\ProductFamilyController;
 use App\Http\Controllers\Api\V1\ProductMediaController;
 use App\Http\Controllers\Api\V1\ProductPriceController;
+use App\Http\Controllers\Api\V1\PushSubscriptionController;
 use App\Http\Controllers\Api\V1\ReasonCodeController;
 use App\Http\Controllers\Api\V1\Regional\DistributionGridController;
 use App\Http\Controllers\Api\V1\Regional\LimitController;
@@ -31,6 +33,7 @@ use App\Http\Controllers\Api\V1\Regional\RegionalOrderController;
 use App\Http\Controllers\Api\V1\Regional\RegionalOrderDecisionController;
 use App\Http\Controllers\Api\V1\RegionalQuotaController;
 use App\Http\Controllers\Api\V1\RegionController;
+use App\Http\Controllers\Api\V1\SessionController;
 use App\Http\Middleware\EnforceSessionPolicy;
 use App\Http\Middleware\EnsurePasswordIsChanged;
 use Illuminate\Support\Facades\Route;
@@ -152,6 +155,17 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::post('notifications/{notification}/read', [NotificationController::class, 'read'])
                 ->whereUuid('notification')
                 ->name('notifications.read');
+
+            // PWA avancée (lot 8) — contrat : docs/lot-8-contrat-api.md
+            Route::middleware('throttle:push-subscriptions')->group(function () {
+                Route::post('push-subscriptions', [PushSubscriptionController::class, 'store'])->name('push-subscriptions.store');
+                Route::delete('push-subscriptions', [PushSubscriptionController::class, 'destroy'])->name('push-subscriptions.destroy');
+            });
+            Route::patch('auth/me/preferences', [PreferencesController::class, 'update'])->name('auth.preferences');
+            Route::get('auth/sessions', [SessionController::class, 'index'])->name('auth.sessions.index');
+            Route::delete('auth/sessions/{session}', [SessionController::class, 'destroy'])
+                ->where('session', 's_[0-9a-f]{12}')
+                ->name('auth.sessions.destroy');
 
             Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('depots', [DepotController::class, 'index'])->name('depots.index');

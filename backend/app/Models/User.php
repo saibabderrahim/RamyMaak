@@ -68,6 +68,7 @@ class User extends Authenticatable
             'client_id' => 'integer',
             'is_active' => 'boolean',
             'must_change_password' => 'boolean',
+            'reminders_enabled' => 'boolean',
             'failed_logins' => 'integer',
             'locked_until' => 'datetime',
             'last_login_at' => 'datetime',
@@ -106,6 +107,16 @@ class User extends Authenticatable
     public function receivesBroadcastNotificationsOn(): string
     {
         return 'user.'.$this->id;
+    }
+
+    /**
+     * Abonnements Web Push des appareils du compte (lot 8).
+     *
+     * @return HasMany<PushSubscription, $this>
+     */
+    public function pushSubscriptions(): HasMany
+    {
+        return $this->hasMany(PushSubscription::class);
     }
 
     /** @return HasMany<RegionAssignment, $this> */

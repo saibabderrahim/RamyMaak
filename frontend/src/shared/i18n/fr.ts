@@ -1,6 +1,8 @@
 import distribution from './fr/distribution'
 import field from './fr/field'
 import notifications from './fr/notifications'
+import offline from './fr/offline'
+import push from './fr/push'
 
 // Libellés en français (V1). L'arabe arrive en V1.1 avec un fichier ar.ts de
 // même structure (ENF-12). Les écrans du lot 2 ont leurs propres fichiers ;
@@ -264,6 +266,8 @@ const fr = {
   field,
   notifications,
   distribution,
+  push,
+  offline,
 } as const
 
 export default fr

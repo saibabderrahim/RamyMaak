@@ -60,6 +60,8 @@ export function makeUser(role: Role, overrides: Partial<CurrentUser> = {}): Curr
     perimeter: { all_regions: role === 'admin', region_ids: [] },
     last_login_at: null,
     realtime: null,
+    push: null,
+    preferences: { reminders: true },
     ...overrides,
   }
 }

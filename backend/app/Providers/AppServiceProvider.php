@@ -88,5 +88,9 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('login', fn (Request $request) => Limit::perMinute(
             (int) config('ramymaak.rate_limits.login_per_minute'),
         )->by($request->ip()));
+
+        // Abonnements push (lot 8, §2.2) : 20 par minute et par utilisateur.
+        RateLimiter::for('push-subscriptions', fn (Request $request) => Limit::perMinute(20)
+            ->by($request->user()?->getAuthIdentifier() ?? $request->ip()));
     }
 }

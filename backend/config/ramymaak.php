@@ -46,8 +46,39 @@ return [
         'auth.max_failed_logins' => 5,
         'auth.lockout_minutes' => 15,
         'notifications.email_enabled' => false,
+        'notifications.push_enabled' => true,
         'notifications.quiet_start' => '21:00',
         'notifications.quiet_end' => '06:00',
+    ],
+
+    /*
+    | Notifications push (lot 8, contrat §2). Clés VAPID : configuration
+    | `webpush` du paquet (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT).
+    | Le serveur n'écrit qu'aux services push de cette liste (I-104) ; « * »
+    | en tête de nom couvre les sous-domaines.
+    */
+    'push' => [
+        'allowed_hosts' => array_values(array_filter(array_map('trim', explode(',', (string) env(
+            'PUSH_ALLOWED_HOSTS',
+            'fcm.googleapis.com,android.googleapis.com,*.push.services.mozilla.com,*.notify.windows.com,*.push.apple.com',
+        ))))),
+        // Fenêtre d'anti-saturation par utilisateur et par groupe (EF-NOT-02, I-109).
+        'group_window_minutes' => 5,
+        // Durée de vie d'un push non distribué (appareil éteint), en secondes.
+        'ttl' => 6 * 3600,
+        // Purge nocturne (§9.7).
+        'max_failures' => 3,
+        'unused_days' => 60,
+    ],
+
+    /*
+    | Rappels du planificateur (§4.3, contrat du lot 8 §3, I-108) : minutes
+    | avant l'heure limite effective de la région.
+    */
+    'reminders' => [
+        'distribution' => 30,
+        'ordering' => 60,
+        'validation' => 30,
     ],
 
 ];

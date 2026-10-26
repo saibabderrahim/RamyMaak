@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Domain\Access\Perimeter;
 use App\Domain\Auth\PasswordPolicy;
+use App\Domain\Push\WebPushConfig;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -48,6 +49,14 @@ class CurrentUserResource extends JsonResource
             'realtime' => config('broadcasting.default') === 'reverb' && filled(config('broadcasting.connections.reverb.key'))
                 ? ['key' => (string) config('broadcasting.connections.reverb.key')]
                 : null,
+            // Notifications push (lot 8, §2.1) : clé publique VAPID pour abonner l'appareil ; null : pas de push.
+            'push' => WebPushConfig::available()
+                ? ['public_key' => WebPushConfig::publicKey()]
+                : null,
+            // Préférences du compte (lot 8, §4).
+            'preferences' => [
+                'reminders' => (bool) ($this->reminders_enabled ?? true),
+            ],
         ];
     }
 }

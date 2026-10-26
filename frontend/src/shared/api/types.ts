@@ -17,6 +17,10 @@ export type CurrentUser = {
   last_login_at: string | null
   /** Clé publique Reverb ; null si le temps réel est désactivé (repli : rafraîchissement toutes les 30 s). */
   realtime: { key: string } | null
+  /** Clé publique VAPID (lot 8, §2.1) ; null : pas de notifications push. */
+  push: { public_key: string } | null
+  /** Préférences du compte (lot 8, §4) : rappels N-10 à N-12. */
+  preferences: { reminders: boolean }
 }
 
 export type User = {
@@ -412,6 +416,12 @@ export const NOTIFICATION_TYPES = [
   'ORDER_EXPIRED',
   // N-09 (lot 6) : commande expédiée.
   'ORDER_SHIPPED',
+  // Lot 8 : rappels N-10 à N-12, alerte N-13 (ADV), sécurité du compte N-15.
+  'DISTRIBUTION_REMINDER',
+  'ORDERING_REMINDER',
+  'VALIDATION_REMINDER',
+  'DISTRIBUTION_LATE',
+  'ACCOUNT_SECURITY',
 ] as const
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number]
 
@@ -1040,3 +1050,39 @@ export type PickingListGroup = (typeof PICKING_LIST_GROUPS)[number]
 /** `erp` : format provisoire `erp-v0` (Q-14, I-85). */
 export const EXPORT_FORMATS = ['xlsx', 'csv', 'erp'] as const
 export type ExportFormat = (typeof EXPORT_FORMATS)[number]
+
+/* ---------- PWA avancée (lot 8) — contrat : docs/lot-8-contrat-api.md ---------- */
+
+/** Abonnement Web Push envoyé au serveur (§2.2) : forme de `PushSubscription.toJSON()`. */
+export type PushSubscriptionInput = {
+  endpoint: string
+  keys: { p256dh: string; auth: string }
+  content_encoding: 'aes128gcm' | 'aesgcm'
+}
+
+/** Charge utile d'un push (§2.5) : jamais de montant ni de donnée commerciale. */
+export type PushPayload = {
+  /** Identifiant de la notification ; null pour un push groupé. */
+  id: string | null
+  type: NotificationType
+  code: string | null
+  title: string
+  body: string
+  url: string | null
+  tag: string
+  count: number
+}
+
+/** Appareil connecté (§5) : une session du compte. */
+export type DeviceSession = {
+  /** Identifiant opaque `s_` + 12 caractères hexadécimaux. */
+  id: string
+  /** « Chrome sur Android »… */
+  device: string
+  ip: string | null
+  last_active_at: string
+  current: boolean
+  push: boolean
+}
+
+export type PreferencesInput = { reminders: boolean }

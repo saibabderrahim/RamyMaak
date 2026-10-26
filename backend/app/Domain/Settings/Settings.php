@@ -138,6 +138,7 @@ final class Settings
             'auth.max_failed_logins' => ['integer', 'between:3,20'],
             'auth.lockout_minutes' => ['integer', 'between:1,1440'],
             'notifications.email_enabled' => ['boolean'],
+            'notifications.push_enabled' => ['boolean'],
             'notifications.quiet_start' => $time,
             'notifications.quiet_end' => $time,
         ];
