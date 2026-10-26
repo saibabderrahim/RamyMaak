@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 
 /**
  * État d'anti-saturation des push d'un utilisateur pour un groupe (EF-NOT-02,
@@ -11,10 +12,10 @@ use Illuminate\Database\Eloquent\Model;
  * @property int $id
  * @property int $user_id
  * @property string $group
- * @property \Illuminate\Support\Carbon|null $last_sent_at
+ * @property Carbon|null $last_sent_at
  * @property int $pending
  * @property string|null $last_title
- * @property \Illuminate\Support\Carbon|null $flush_at
+ * @property Carbon|null $flush_at
  */
 class PushThrottle extends Model
 {

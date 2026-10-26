@@ -6,6 +6,7 @@ use Database\Factories\PushSubscriptionFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * Abonnement Web Push d'un appareil (§10.3, contrat du lot 8 §2.2).
@@ -19,7 +20,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $content_encoding
  * @property string|null $user_agent
  * @property int $failures
- * @property \Illuminate\Support\Carbon|null $last_used_at
+ * @property Carbon|null $last_used_at
  */
 class PushSubscription extends Model
 {
