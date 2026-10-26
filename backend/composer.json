@@ -12,6 +12,7 @@
     "require": {
         "php": "^8.3",
         "barryvdh/laravel-dompdf": "^3.1",
+        "laravel-notification-channels/webpush": "^13.0",
         "laravel/framework": "^12.0",
         "laravel/reverb": "^1.12",
         "laravel/sanctum": "^4.0",
