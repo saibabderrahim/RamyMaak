@@ -72,12 +72,14 @@ it('extends the ordering cutoff, again later if needed, and notifies through Cut
         ->assertOk()
         ->assertJsonPath('cutoffs', ['distribution' => '10:00', 'ordering' => '14:00', 'validation' => '15:00'])
         ->assertJsonPath('extended', ['distribution' => false, 'ordering' => true, 'validation' => false]);
+    // Au-delà de la validation (15:00), il faut d'abord prolonger la validation de la région.
+    ($this->extend)($this->est, ['kind' => 'VALIDATION', 'until' => '17:00'])->assertOk();
     ($this->extend)($this->est, ['kind' => 'ORDERING', 'until' => '16:30'])
         ->assertOk()
         ->assertJsonPath('cutoffs.ordering', '16:30');
 
     $regionDayId = ($this->regionDay)($this->est)->id;
-    Event::assertDispatchedTimes(CutoffExtended::class, 2);
+    Event::assertDispatchedTimes(CutoffExtended::class, 3);
     Event::assertDispatched(CutoffExtended::class, fn (CutoffExtended $event) => $event->regionDayId === $regionDayId
         && $event->kind === CutoffKind::Ordering
         && $event->actorId === $this->adv->id);
@@ -125,7 +127,31 @@ it('refuses an extension after the closing', function () {
 
     expectProblem($response, 422, 'VALIDATION_FAILED');
     $response->assertJsonPath('errors.until.0', 'La prolongation ne peut pas dépasser l\'heure de clôture (23:00).');
-    ($this->extend)($this->centre, ['kind' => 'ORDERING', 'until' => '23:00'])->assertOk()->assertJsonPath('cutoffs.ordering', '23:00');
+    ($this->extend)($this->centre, ['kind' => 'VALIDATION', 'until' => '23:00'])->assertOk()->assertJsonPath('cutoffs.validation', '23:00');
+    ($this->extend)($this->centre, ['kind' => 'ORDERING', 'until' => '22:45'])->assertOk()->assertJsonPath('cutoffs.ordering', '22:45');
+});
+
+it('keeps distribution, ordering and validation in order for each region (RG-V08)', function () {
+    // Commande prolongée après la validation de la région : une commande envoyée à 15:10 ne pourrait plus être validée.
+    $response = ($this->extend)($this->centre, ['kind' => 'ORDERING', 'until' => '15:30']);
+    expectProblem($response, 422, 'VALIDATION_FAILED');
+    $response->assertJsonPath('errors.until.0', 'La prolongation doit rester avant l\'heure limite de validation de la région (15:00) : prolongez-la d\'abord.');
+    ($this->extend)($this->centre, ['kind' => 'ORDERING', 'until' => '15:00'])->assertUnprocessable();
+    $response = ($this->extend)($this->centre, ['kind' => 'DISTRIBUTION', 'until' => '13:00']);
+    $response->assertJsonPath('errors.until.0', 'La prolongation doit rester avant l\'heure limite de commande de la région (13:00) : prolongez-la d\'abord.');
+    expect(($this->regionDay)($this->centre)->ordering_cutoff_override_at)->toBeNull();
+
+    // La prolongation de validation de la région ouvre la place ; une autre région n'en profite pas.
+    ($this->extend)($this->centre, ['kind' => 'VALIDATION', 'until' => '16:00'])->assertOk();
+    ($this->extend)($this->centre, ['kind' => 'ORDERING', 'until' => '15:30'])->assertOk()->assertJsonPath('cutoffs.ordering', '15:30');
+    ($this->extend)($this->est, ['kind' => 'ORDERING', 'until' => '15:30'])->assertUnprocessable();
+
+    // Une heure de validation de journée qui passerait sous la prolongation de commande d'une région est refusée,
+    // sauf si la région a sa propre prolongation de validation, plus tardive.
+    ($this->extend)($this->est, ['kind' => 'ORDERING', 'until' => '14:30'])->assertOk();
+    $response = $this->patchJson('/api/v1/adv/days/2026-10-08', ['cutoffs' => ['validation' => '14:00']])->assertUnprocessable();
+    expect($response->json('errors')['cutoffs.validation'])->toBe(['Une prolongation de commande accordée à une région dépasse cette heure.']);
+    $this->patchJson('/api/v1/adv/days/2026-10-08', ['cutoffs' => ['validation' => '14:45']])->assertOk();
 });
 
 it('refuses an extension that would already be over', function () {

@@ -148,6 +148,18 @@ final class DayCalendar
             if ($lateOverride) {
                 throw ValidationException::withMessages(['cutoffs.closing' => [__('days.override_after_closing')]]);
             }
+            // Une prolongation régionale doit rester avant l'heure suivante de la région
+            // (sa propre prolongation, sinon la nouvelle heure de la journée).
+            foreach ([CutoffKind::Distribution, CutoffKind::Ordering] as $kind) {
+                $next = $kind->next();
+                $crossing = $day->regionDays()
+                    ->whereNotNull($kind->overrideColumn())
+                    ->whereRaw($kind->overrideColumn().' >= COALESCE('.$next->overrideColumn().', ?)', [$moments[$next->value]->format('Y-m-d H:i:s')])
+                    ->exists();
+                if ($crossing) {
+                    throw ValidationException::withMessages(['cutoffs.'.strtolower($next->value) => [__('days.override_after_next', ['kind' => mb_strtolower($kind->label())])]]);
+                }
+            }
 
             foreach (CutoffKind::cases() as $kind) {
                 $day->setAttribute($kind->column(), $moments[$kind->value]);
@@ -205,6 +217,15 @@ final class DayCalendar
             if ($until->greaterThan($day->closing_at)) {
                 throw ValidationException::withMessages(['until' => [__('days.extension_after_closing', ['closing' => BusinessClock::toLocal($day->closing_at)->format('H:i')])]]);
             }
+            // L'ordre de la journée vaut pour chaque région : répartition < commande < validation.
+            // Sinon une commande envoyée pendant la prolongation arriverait après l'heure de validation.
+            $next = $kind->next();
+            if ($next !== null && $next !== CutoffKind::Closing && $until->greaterThanOrEqualTo($regionDay->effectiveCutoff($next))) {
+                throw ValidationException::withMessages(['until' => [__('days.extension_after_next', [
+                    'next' => mb_strtolower($next->label()),
+                    'time' => BusinessClock::toLocal($regionDay->effectiveCutoff($next))->format('H:i'),
+                ])]]);
+            }
 
             $regionDay->setAttribute($column, $until);
             $regionDay->save();
@@ -254,7 +275,7 @@ final class DayCalendar
             event(new DayClosed($day->id));
 
             return true;
-        });
+        }, 3); // Rejouée sur interblocage, comme les autres écrivains des commandes (I-67).
     }
 
     /** Clôture les journées ouvertes dont l'heure de clôture est passée. */

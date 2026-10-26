@@ -159,6 +159,11 @@ function documentsText(string $html): string
 function documentsCsvRows(string $csv): array
 {
     $csv = str_starts_with($csv, "\xEF\xBB\xBF") ? substr($csv, 3) : $csv;
+    $rows = array_map(fn (string $line) => str_getcsv($line, ';', '"', ''), array_values(array_filter(explode("\n", $csv), fn (string $line) => $line !== '')));
+    // Lignes du tableau seulement : la mention des montants indicatifs (RG-P05) clôt le CSV.
+    if ($rows !== [] && end($rows) === [__('documents.amount_notice')]) {
+        array_pop($rows);
+    }
 
-    return array_map(fn (string $line) => str_getcsv($line, ';', '"', ''), array_values(array_filter(explode("\n", $csv), fn (string $line) => $line !== '')));
+    return $rows;
 }

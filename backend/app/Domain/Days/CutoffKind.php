@@ -63,6 +63,17 @@ enum CutoffKind: string
         return [self::Distribution, self::Ordering, self::Validation];
     }
 
+    /** Heure limite suivante dans la journée (null pour la clôture). */
+    public function next(): ?self
+    {
+        return match ($this) {
+            self::Distribution => self::Ordering,
+            self::Ordering => self::Validation,
+            self::Validation => self::Closing,
+            self::Closing => null,
+        };
+    }
+
     /**
      * Ordre chronologique des heures limites d'une journée.
      *

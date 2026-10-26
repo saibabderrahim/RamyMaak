@@ -128,8 +128,8 @@ return [
             'vat_rate' => 'TVA %',
             'amount_ht' => 'Montant HT validé',
             'submitted_at' => 'Envoyée le',
-            'decided_at' => 'Validée le',
-            'decided_by' => 'Validée par',
+            'decided_at' => 'Décidée le', // Validation, ou rejet pour une commande rejetée.
+            'decided_by' => 'Décidée par',
             'shipped_at' => 'Expédiée le',
             'delivery_note' => 'BL',
         ],

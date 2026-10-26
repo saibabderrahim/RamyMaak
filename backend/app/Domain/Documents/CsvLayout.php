@@ -35,6 +35,9 @@ final class CsvLayout implements ExportLayout
             foreach ($lines as $line) {
                 fputcsv($out, array_map(self::cell(...), StandardColumns::values($line)), ';', '"', '');
             }
+            // Montants indicatifs (RG-P05), après une ligne vide : le tableau reste filtrable dans Excel.
+            fwrite($out, "\n");
+            fputcsv($out, [Csv::sanitize(Formats::amountNotice())], ';', '"', '');
         } finally {
             fclose($out);
         }

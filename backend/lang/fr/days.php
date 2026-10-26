@@ -33,6 +33,8 @@ return [
     'not_extendable' => 'Seules les heures limites de répartition, de commande et de validation se prolongent par région.',
     'extension_not_later' => 'La prolongation doit être postérieure à l\'heure limite actuelle (:current).',
     'extension_after_closing' => 'La prolongation ne peut pas dépasser l\'heure de clôture (:closing).',
+    'extension_after_next' => 'La prolongation doit rester avant l\'heure limite de :next de la région (:time) : prolongez-la d\'abord.',
+    'override_after_next' => 'Une prolongation de :kind accordée à une région dépasse cette heure.',
     'audit' => [
         'opened' => 'Journée ouverte',
         'schedule' => 'Heures limites de la journée modifiées',

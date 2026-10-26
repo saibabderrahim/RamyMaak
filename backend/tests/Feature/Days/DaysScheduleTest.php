@@ -189,6 +189,8 @@ describe('PATCH /adv/days/{day}', function () {
     });
 
     it('refuses a closing earlier than a region extension', function () {
+        // Validation prolongée d'abord : la commande de la région reste avant elle.
+        $this->calendar->extendCutoff($this->calendar->regionDayFor($this->day, $this->centre), CutoffKind::Validation, '21:00', $this->adv);
         $this->calendar->extendCutoff($this->calendar->regionDayFor($this->day, $this->centre), CutoffKind::Ordering, '20:00', $this->adv);
 
         $response = ($this->patch)(['cutoffs' => ['closing' => '19:00']]);

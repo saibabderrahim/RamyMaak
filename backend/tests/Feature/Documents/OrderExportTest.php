@@ -56,7 +56,7 @@ describe('XLSX', function () {
         expect($rows[0])->toBe([
             'Journée', 'Livraison', 'Numéro', 'Statut', 'Ajustée', 'Code client', 'Client', 'Région', 'Dépôt', 'SKU', 'Produit', 'UV',
             'Demandé', 'Validé', 'Expédié', 'Motif ajustement', 'Motif écart', 'Prix HT', 'TVA %', 'Montant HT validé',
-            'Envoyée le', 'Validée le', 'Validée par', 'Expédiée le', 'BL',
+            'Envoyée le', 'Décidée le', 'Décidée par', 'Expédiée le', 'BL',
         ])->and($rows)->toHaveCount(1 + 10)
             // Tous les statuts : validée à expirée, et la commande envoyée.
             ->and(array_values(array_unique(array_column(array_slice($rows, 1), 3))))->toEqualCanonicalizing(['Validée', 'En préparation', 'Préparée', 'Expédiée', 'Rejetée', 'Annulée', 'Expirée', 'Envoyée']);
@@ -140,7 +140,13 @@ describe('CSV for French Excel', function () {
         $raw = ($this->download)('format=csv')->streamedContent();
 
         expect(substr($raw, 0, 3))->toBe("\xEF\xBB\xBF")
-            ->and(explode("\n", $raw)[0])->toBe("\xEF\xBB\xBFJournée;Livraison;Numéro;Statut;Ajustée;\"Code client\";Client;Région;Dépôt;SKU;Produit;UV;Demandé;Validé;Expédié;\"Motif ajustement\";\"Motif écart\";\"Prix HT\";\"TVA %\";\"Montant HT validé\";\"Envoyée le\";\"Validée le\";\"Validée par\";\"Expédiée le\";BL");
+            ->and(explode("\n", $raw)[0])->toBe("\xEF\xBB\xBFJournée;Livraison;Numéro;Statut;Ajustée;\"Code client\";Client;Région;Dépôt;SKU;Produit;UV;Demandé;Validé;Expédié;\"Motif ajustement\";\"Motif écart\";\"Prix HT\";\"TVA %\";\"Montant HT validé\";\"Envoyée le\";\"Décidée le\";\"Décidée par\";\"Expédiée le\";BL");
+    });
+
+    it('ends with the indicative amounts notice after an empty line (RG-P05)', function () {
+        $raw = ($this->download)('format=csv')->streamedContent();
+
+        expect(str_ends_with($raw, "\n\n\"Montants indicatifs : la facture ERP fait foi.\"\n"))->toBeTrue();
     });
 
     it('writes decimal commas and French dates', function () {
@@ -205,6 +211,13 @@ describe('ERP format erp-v0', function () {
             ->and($response->headers->get('Content-Disposition'))->toContain('commandes-erp-v0-2026-10-08.csv')
             ->and($response->headers->get('Cache-Control'))->toContain('no-store');
     });
+});
+
+it('refuses a format sent as a list with 422, never 500', function () {
+    $response = $this->actingAs($this->adv)->getJson('/api/v1/adv/days/2026-10-08/orders/export?format[]=erp&filter[status]=VALIDATED');
+
+    expectProblem($response, 422, 'VALIDATION_FAILED');
+    expect($response->json('errors'))->toHaveKey('format');
 });
 
 describe('filters', function () {

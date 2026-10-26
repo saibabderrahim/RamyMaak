@@ -73,7 +73,7 @@ Journal `reasons` : création et modification des motifs.
 | `POST /adv/orders/bulk-status` ; `PATCH /adv/orders/{id}/shipping` ; `GET /adv/orders/{id}/pdf` ; `GET /adv/days/{day}/picking-list` | `order.process`, ADV | RG-S05 |
 | `POST /adv/orders/{id}/cancel` | `order.cancel-validated`, ADV | RG-S05 |
 | `GET /adv/days/{day}/orders/export` ; `GET /adv/days/{day}/monitoring` | `dashboard.view`, ADV ou Admin | RG-S05 |
-| `POST /adv/days/{day}/regions/{r}/extend-cutoff` avec `kind: VALIDATION` | `day.extend-cutoff` (existant) | existant ; les régions de la journée (`GET /adv/days/{day}`, lot 3) portent désormais `cutoffs.validation` et `extended.validation` (I-98) |
+| `POST /adv/days/{day}/regions/{r}/extend-cutoff` avec `kind: VALIDATION` | `day.extend-cutoff` (existant) | existant ; les régions de la journée (`GET /adv/days/{day}`, lot 3) portent désormais `cutoffs.validation` et `extended.validation` (I-98). Chaque région garde l'ordre répartition < commande < validation : une prolongation qui atteindrait l'heure suivante de la région est refusée (422 sur `until`, « prolongez-la d'abord »), comme une heure de journée qui passerait sous une prolongation régionale (422) |
 
 Les points d'accès `/regional/orders*` restent refusés (403) à l'ADV et à l'Admin.
 
@@ -240,7 +240,7 @@ Téléchargements synchrones, en flux, jamais conservés sur le disque (l'XLSX p
   - Par groupe (« Sans dépôt » pour les régions sans dépôt), par produit (famille, puis ordre) : SKU, produit, UV, quantité en UV, nombre de commandes, palettes (`pleines`, `reste en UV`, équivalent décimal ; « — » sans colisage). Totaux par groupe et total général.
   - En-tête : journée, livraison, statuts inclus, heure de génération. Journée sans commande : document « Aucune commande ».
 - **Export de la journée** : `GET /adv/days/{day}/orders/export?format=xlsx|csv|erp&filter[status]=…&filter[region]=…`, une ligne par ligne de commande.
-  - `xlsx` et `csv` : tous les statuts par défaut ; colonnes Journée, Livraison, Numéro, Statut, Ajustée, Code client, Client, Région, Dépôt, SKU, Produit, UV, Demandé, Validé, Expédié, Motif ajustement, Motif écart, Prix HT, TVA %, Montant HT validé, Envoyée le, Validée le, Validée par, Expédiée le, BL. CSV : `;`, BOM UTF-8, virgule décimale (Excel français). XLSX écrit en flux (OpenSpout), cellules numériques.
+  - `xlsx` et `csv` : tous les statuts par défaut ; colonnes Journée, Livraison, Numéro, Statut, Ajustée, Code client, Client, Région, Dépôt, SKU, Produit, UV, Demandé, Validé, Expédié, Motif ajustement, Motif écart, Prix HT, TVA %, Montant HT validé, Envoyée le, Décidée le, Décidée par (validation, ou rejet pour une commande rejetée), Expédiée le, BL. CSV : `;`, BOM UTF-8, virgule décimale (Excel français), mention des montants indicatifs après une ligne vide. XLSX écrit en flux (OpenSpout), cellules numériques.
   - `erp` : format **provisoire** `erp-v0` (Q-14) : Validée à Expédiée, jamais Annulée ; colonnes `day;delivery_date;order_number;client_code;region_code;depot_code;sku;validated_qty;shipped_qty;unit_price_ht;vat_rate;amount_ht;status`, dates ISO, point décimal, UTF-8 sans BOM.
   - Au-delà de 100 000 lignes → 422 sur `filter`.
 - **Suivi de la journée** (EF-ADV-03) : `GET /adv/days/{day}/monitoring`

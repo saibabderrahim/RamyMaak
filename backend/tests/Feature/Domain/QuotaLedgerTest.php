@@ -116,3 +116,16 @@ it('reports the breaches of I-1 and I-2 as warnings (§5.8, I-93)', function () 
         ['invariant' => 'I-2', 'business_day' => '2026-10-08', 'region_id' => $this->centre->id, 'product_id' => $this->pomme->id, 'client_id' => $client->id, 'validated' => 30, 'ceiling' => 25],
     ]);
 })->skip(fn () => DB::getDriverName() === 'mysql', 'MySQL refuse V > Q (contrainte CHECK) : I-1 ne peut pas être préparé.');
+
+it('aggregates the validated lines of the period only, never the whole history (I-93)', function () {
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+    $this->ledger->reconcile(CarbonImmutable::parse('2026-10-01'), CarbonImmutable::parse('2026-10-08'));
+    $this->ledger->breaches(CarbonImmutable::parse('2026-10-01'), CarbonImmutable::parse('2026-10-08'));
+    $queries = collect(DB::getQueryLog())->pluck('query')->filter(fn (string $query) => preg_match('/from ["`]order_lines["`]/', $query) === 1);
+    DB::disableQueryLog();
+
+    // Chaque agrégat des lignes porte la période dans sa sous-requête : son coût suit les 7 jours, pas l'historique.
+    expect($queries)->toHaveCount(2)
+        ->each(fn ($query) => $query->toMatch('/["`]orders["`]\.["`]business_day_id["`] in \(select ["`]id["`] from ["`]business_days["`] where ["`]day["`] between/'));
+});

@@ -81,6 +81,9 @@ class OrderExportRequest extends DayDocumentRequest
     /** Format reçu avant validation : un format inconnu (refusé par sa règle) se lit comme XLSX. */
     private function rawFormat(): ExportFormat
     {
-        return ExportFormat::tryFrom((string) $this->input('format', '')) ?? ExportFormat::Xlsx;
+        // Un tableau (`format[]=…`) est refusé par la règle de `format` : ne jamais le convertir en texte.
+        $raw = $this->input('format');
+
+        return is_string($raw) ? (ExportFormat::tryFrom($raw) ?? ExportFormat::Xlsx) : ExportFormat::Xlsx;
     }
 }

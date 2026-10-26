@@ -28,7 +28,10 @@ final class OrderExpiry
         // Lecture verrouillante (lecture courante) : un écrivain qui ne prendrait
         // pas la journée en partagé est attendu, et seules les commandes encore
         // envoyées après lui reçoivent historique, journal et N-14.
+        // Index imposé : la lecture ne pose ses verrous que sur cette journée,
+        // jamais sur les commandes envoyées des autres journées ouvertes.
         $orders = Order::query()
+            ->forceIndex('orders_day_status_index')
             ->where('business_day_id', $day->id)
             ->where('status', OrderStatus::Submitted->value)
             ->orderBy('id')

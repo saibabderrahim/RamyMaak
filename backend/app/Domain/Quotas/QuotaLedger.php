@@ -102,8 +102,8 @@ final class QuotaLedger
      */
     public function reconcile(CarbonInterface $from, CarbonInterface $to): array
     {
-        $sums = $this->validatedSums();
         $range = [$from->format('Y-m-d'), $to->format('Y-m-d')];
+        $sums = $this->validatedSums($range);
 
         $counters = DB::table('region_quotas')
             ->join('region_days', 'region_days.id', '=', 'region_quotas.region_day_id')
@@ -178,6 +178,7 @@ final class QuotaLedger
 
         $byClient = DB::table('order_lines')
             ->join('orders', 'orders.id', '=', 'order_lines.order_id')
+            ->whereIn('orders.business_day_id', $this->daysIn($range))
             ->whereIn('orders.status', OrderStatus::values(OrderStatus::validated()))
             ->groupBy('orders.business_day_id', 'orders.region_id', 'orders.client_id', 'order_lines.product_id')
             ->select('orders.business_day_id', 'orders.region_id', 'orders.client_id', 'order_lines.product_id')
@@ -208,16 +209,32 @@ final class QuotaLedger
     }
 
     /**
-     * Somme des quantités validées par journée, région (figée) et produit.
+     * Somme des quantités validées par journée, région (figée) et produit,
+     * limitée aux journées de la période : sans ce filtre, la table dérivée
+     * agrégerait tout l'historique à chaque passage (MySQL n'y pousse pas
+     * la condition de période posée sur `business_days`).
+     *
+     * @param  array{0: string, 1: string}  $range
      */
-    private function validatedSums(): Builder
+    private function validatedSums(array $range): Builder
     {
         return DB::table('order_lines')
             ->join('orders', 'orders.id', '=', 'order_lines.order_id')
+            ->whereIn('orders.business_day_id', $this->daysIn($range))
             ->whereIn('orders.status', OrderStatus::values(OrderStatus::validated()))
             ->groupBy('orders.business_day_id', 'orders.region_id', 'order_lines.product_id')
             ->select('orders.business_day_id', 'orders.region_id', 'order_lines.product_id')
             ->selectRaw('SUM(COALESCE(order_lines.validated_qty, 0)) AS recomputed');
+    }
+
+    /**
+     * Identifiants des journées de la période (bornes comprises).
+     *
+     * @param  array{0: string, 1: string}  $range
+     */
+    private function daysIn(array $range): Builder
+    {
+        return DB::table('business_days')->whereBetween('day', $range)->select('id');
     }
 
     private function counter(int $regionDayId, int $productId): Builder
