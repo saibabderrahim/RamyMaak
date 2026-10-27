@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate, useSearchParams } from 'react-router'
 import type { ClientToday } from '../../../shared/api/types'
+import { OfflineDataNotice } from '../../../shared/offline/OfflineDataNotice'
 import { Alert, Button, ErrorAlert, PageHeader } from '../../../shared/ui'
 import { useDebouncedValue } from '../../../shared/useDebouncedValue'
 import { CartNoticeAlert, CartPanel, DaySummary, EditingBanner, TodayLoading } from '../cart/components'
@@ -43,6 +44,7 @@ export default function CataloguePage() {
   return (
     <>
       <PageHeader title={t('nav.order')} />
+      {today && <OfflineDataNotice updatedAt={query.dataUpdatedAt} hint={t('offline.cart.offlineNew')} className="mb-4" />}
       {query.error && !today ? (
         <div className="flex flex-col gap-3">
           {cart.editing && <EditingBanner number={cart.editing.number} modifiable={false} onAbandon={() => store.clear()} />}

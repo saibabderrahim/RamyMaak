@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ClientAccount } from '../../../shared/api/types'
 import { formatDateTime } from '../../../shared/format'
+import { useOnline } from '../../../shared/pwa/online'
 import { Alert, Button, Card, ErrorAlert } from '../../../shared/ui'
 import { useResetClientPassword } from './api'
 
@@ -13,6 +14,8 @@ import { useResetClientPassword } from './api'
 export function ClientAccess({ accounts }: { accounts: ClientAccount[] }) {
   const { t } = useTranslation()
   const reset = useResetClientPassword()
+  // Écriture en ligne seulement (D-13).
+  const online = useOnline()
   const [confirming, setConfirming] = useState<ClientAccount | null>(null)
   const [copied, setCopied] = useState(false)
 
@@ -52,7 +55,7 @@ export function ClientAccess({ accounts }: { accounts: ClientAccount[] }) {
                     variant="secondary"
                     className="min-h-11"
                     aria-label={t('field.access.resetLabel', { username: account.username })}
-                    disabled={reset.isPending}
+                    disabled={reset.isPending || !online}
                     onClick={() => {
                       reset.reset()
                       setConfirming(account)
@@ -66,7 +69,7 @@ export function ClientAccess({ accounts }: { accounts: ClientAccount[] }) {
                 <Alert tone="warning">
                   <p className="mb-3">{t('field.access.confirm', { username: account.username })}</p>
                   <div className="flex flex-wrap gap-2">
-                    <Button className="min-h-11" disabled={reset.isPending} onClick={() => confirm(account)}>
+                    <Button className="min-h-11" disabled={reset.isPending || !online} onClick={() => confirm(account)}>
                       {t('field.access.confirmButton')}
                     </Button>
                     <Button variant="secondary" className="min-h-11" disabled={reset.isPending} onClick={() => setConfirming(null)}>

@@ -1,9 +1,13 @@
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router'
 import type { OrderSummary, Paginated } from '../../../shared/api/types'
+import { useAuthenticatedUser } from '../../../shared/auth/session'
 import { formatAmount, formatDate } from '../../../shared/format'
+import { OfflineDataNotice } from '../../../shared/offline/OfflineDataNotice'
+import { useOutboxEntries } from '../../../shared/offline/useOutbox'
 import { Alert, Button, ErrorAlert, PageHeader, Spinner } from '../../../shared/ui'
 import { useClientOrders } from '../api'
+import { OutboxBlock } from '../cart/OutboxBlock'
 import { OrderStatusBadge } from './components'
 import { useLocationNotice } from './useLocationNotice'
 import { pageParam } from './view'
@@ -16,7 +20,8 @@ const PRIMARY_LINK =
  * Q-11), toutes journées, la plus récente d'abord, 25 par page (`?page=`) ;
  * numéro, journée, statut, nombre de produits et total TTC, lien vers le
  * détail. Tenue à jour en temps réel (useClientLive). Contrat :
- * docs/lot-5-contrat-api.md §3 et §6.
+ * docs/lot-5-contrat-api.md §3 et §6. Lot 8 : en tête, les commandes de la
+ * boîte d'envoi de l'appareil ; lecture hors ligne (« données de HH:MM »).
  */
 export default function OrdersPage() {
   const { t } = useTranslation()
@@ -25,6 +30,8 @@ export default function OrdersPage() {
   const query = useClientOrders({ page })
   const notice = useLocationNotice()
   const data = query.data
+  const user = useAuthenticatedUser()
+  const outbox = useOutboxEntries(user.id)
 
   const goTo = (next: number) =>
     setSearchParams((params) => {
@@ -37,7 +44,9 @@ export default function OrdersPage() {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
       <PageHeader title={t('orders.clientOrders.list.title')} />
+      <OfflineDataNotice updatedAt={query.dataUpdatedAt} hasData={data !== undefined} />
       {notice && <Alert tone="success">{notice}</Alert>}
+      <OutboxBlock entries={outbox} />
       {query.error && !data && (
         <div className="flex flex-col gap-3">
           <ErrorAlert error={query.error} />
@@ -46,7 +55,7 @@ export default function OrdersPage() {
           </Button>
         </div>
       )}
-      {query.isPending && <Spinner label={t('orders.clientOrders.list.loading')} />}
+      {query.isPending && query.fetchStatus !== 'paused' && <Spinner label={t('orders.clientOrders.list.loading')} />}
       {data &&
         (data.meta.total === 0 ? (
           <EmptyOrders />

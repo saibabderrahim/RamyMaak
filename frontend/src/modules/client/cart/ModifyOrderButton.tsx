@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import type { OrderSummary } from '../../../shared/api/types'
+import { useOnline } from '../../../shared/pwa/online'
 import { Alert, Button, ErrorAlert } from '../../../shared/ui'
 import { Dialog } from '../../../shared/ui/Dialog'
 import { clientKey } from '../api'
@@ -42,6 +43,8 @@ export function ModifyOrderButton({ order, className, label, onNotModifiable }: 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<unknown>(null)
   const [closed, setClosed] = useState(false)
+  // La commande est relue avant d'être modifiée : en ligne seulement (D-13), sauf la reprise d'une modification en cours.
+  const online = useOnline()
 
   const resuming = cart.editing?.orderId === order.id
   const otherLines = resuming ? 0 : cart.lines.length
@@ -76,7 +79,7 @@ export function ModifyOrderButton({ order, className, label, onNotModifiable }: 
 
   return (
     <div className="flex flex-col gap-2">
-      <Button className={className} disabled={loading} onClick={() => (otherLines > 0 || otherEditing ? setConfirming(true) : void start())}>
+      <Button className={className} disabled={loading || (!online && !resuming)} onClick={() => (otherLines > 0 || otherEditing ? setConfirming(true) : void start())}>
         {loading ? t('orders.client.modify.loading') : (label ?? t('orders.client.home.modify'))}
       </Button>
       {closed && <Alert tone="warning">{t('orders.client.modify.notModifiable')}</Alert>}

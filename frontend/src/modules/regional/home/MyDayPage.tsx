@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router'
 import type { AppNotification, NotificationType } from '../../../shared/api/types'
 import { useAuthenticatedUser } from '../../../shared/auth/session'
 import { businessToday, formatDate } from '../../../shared/format'
+import { OfflineDataNotice } from '../../../shared/offline/OfflineDataNotice'
 import { NOTIFICATION_EVENT, useChannel } from '../../../shared/realtime'
 import { PushInvite } from '../../../shared/push/PushInvite'
 import { Alert, Button, ErrorAlert, PageHeader, Spinner } from '../../../shared/ui'
@@ -83,6 +84,9 @@ export default function MyDayPage() {
           {data && <p className="text-xs text-slate-500">{t('orders.myDay.updatedAt', { time: formatTime(dashboard.dataUpdatedAt) })}</p>}
         </div>
 
+        {/* Lot 8 (§6.1) : hors ligne, la journée enregistrée sur l'appareil. */}
+        <OfflineDataNotice updatedAt={dashboard.dataUpdatedAt} hasData={data !== undefined} />
+
         {dashboard.error && !data && (
           <div className="flex flex-col gap-3">
             <ErrorAlert error={dashboard.error} />
@@ -91,7 +95,7 @@ export default function MyDayPage() {
             </Button>
           </div>
         )}
-        {dashboard.isPending && !dashboard.error && <Spinner />}
+        {dashboard.isPending && !dashboard.error && dashboard.fetchStatus !== 'paused' && <Spinner />}
 
         {data &&
           (!data.opened ? (

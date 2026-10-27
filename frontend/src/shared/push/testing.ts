@@ -87,13 +87,12 @@ export function installPush({
 
   vi.stubGlobal('Notification', NotificationMock)
   vi.stubGlobal('PushManager', Object.assign(function PushManager() {}, { supportedContentEncodings: encodings }))
-  Object.defineProperty(navigator, 'serviceWorker', {
-    configurable: true,
-    value: {
-      ready: noWorker ? new Promise(() => {}) : Promise.resolve(registration),
-      getRegistration: vi.fn(async () => (noWorker ? undefined : registration)),
-    },
+  // Conteneur de service worker : aussi cible d'événements (`message`), comme dans le navigateur.
+  const container = Object.assign(new EventTarget(), {
+    ready: noWorker ? new Promise(() => {}) : Promise.resolve(registration),
+    getRegistration: vi.fn(async () => (noWorker ? undefined : registration)),
   })
+  Object.defineProperty(navigator, 'serviceWorker', { configurable: true, value: container })
 
   return { state, pushManager, requestPermission }
 }

@@ -4,6 +4,8 @@ import { Link } from 'react-router'
 import type { ClientDayStatus, ClientProduct, ClientToday, OrderSummary } from '../../../shared/api/types'
 import { useAuthenticatedUser } from '../../../shared/auth/session'
 import { formatAmount } from '../../../shared/format'
+import { OfflineDataNotice } from '../../../shared/offline/OfflineDataNotice'
+import { useOutboxEntries } from '../../../shared/offline/useOutbox'
 import { PushInvite } from '../../../shared/push/PushInvite'
 import { Badge, Button, ErrorAlert, Icon, PageHeader } from '../../../shared/ui'
 import { businessMinutes, minutesOf, useServerNow } from '../../../shared/ui/clock'
@@ -14,6 +16,7 @@ import { useClientToday } from '../api'
 import { CartNoticeAlert, DayStatusText, PRIMARY_LINK, SECONDARY_LINK, TodayLoading } from '../cart/components'
 import { formatDayLong, limitText } from '../cart/format'
 import { ModifyOrderButton } from '../cart/ModifyOrderButton'
+import { OutboxBlock } from '../cart/OutboxBlock'
 import { type Cart, type CartStore, useCart } from '../cart/store'
 import { useCartSync, useCutoffRefetch } from '../cart/sync'
 import { OrderStatusBadge } from '../orders/components'
@@ -40,7 +43,8 @@ function shortDay(day: string): string {
  * livraison, commandes du jour et leur statut, bouton selon ce qui empêche
  * d'envoyer (« Commander », « Modifier ma commande » ou rien), rappel du
  * panier. Tenu à jour en temps réel (useClientLive) et relu à l'heure
- * limite, sur l'horloge du serveur.
+ * limite, sur l'horloge du serveur. Lot 8 : commandes en attente d'envoi
+ * (boîte d'envoi de l'appareil) et lecture hors ligne (« données de HH:MM »).
  */
 export default function ClientHomePage() {
   const { t } = useTranslation()
@@ -52,6 +56,7 @@ export default function ClientHomePage() {
   // Nouvelle commande : panier rapproché de la journée proposée, lue ici. Une
   // modification l'est par le catalogue et le panier (journée de la commande).
   const { notice, dismissNotice } = useCartSync(store, cart.editing ? undefined : today, query.dataUpdatedAt)
+  const outbox = useOutboxEntries(user.id)
 
   return (
     <>
@@ -68,6 +73,8 @@ export default function ClientHomePage() {
             </div>
           )}
           {query.isPending && <TodayLoading paused={query.fetchStatus === 'paused'} />}
+          {today && <OfflineDataNotice updatedAt={query.dataUpdatedAt} hint={t('offline.cart.offlineNew')} />}
+          <OutboxBlock entries={outbox} />
           {notice && <CartNoticeAlert notice={notice} onDismiss={dismissNotice} />}
           {today && <DayCard today={today} receivedAt={query.dataUpdatedAt} />}
           {cart.lines.length > 0 && <CartReminder cart={cart} />}

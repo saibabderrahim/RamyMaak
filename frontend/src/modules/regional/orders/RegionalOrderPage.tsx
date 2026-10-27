@@ -5,6 +5,7 @@ import { Link, useLocation, useParams } from 'react-router'
 import { ApiError } from '../../../shared/api/client'
 import type { AppNotification } from '../../../shared/api/types'
 import { useAuthenticatedUser } from '../../../shared/auth/session'
+import { NoOfflineData, OfflineDataNotice } from '../../../shared/offline/OfflineDataNotice'
 import { NOTIFICATION_EVENT, useChannel } from '../../../shared/realtime'
 import { Alert, Button, ErrorAlert, Spinner } from '../../../shared/ui'
 import { useErrorMessage } from '../../../shared/ui/useErrorMessage'
@@ -87,12 +88,21 @@ function OrderScreen({ id }: { id: string }) {
         </div>
       )
     }
-    return <Spinner />
+    return query.fetchStatus === 'paused' ? (
+      <div className="flex flex-col gap-3">
+        {back}
+        <NoOfflineData />
+      </div>
+    ) : (
+      <Spinner />
+    )
   }
 
   return (
     <div className="flex flex-col gap-4">
       {back}
+      {/* Lot 8 (§6.1) : hors ligne, la commande enregistrée sur l'appareil ; la décision attend le réseau. */}
+      <OfflineDataNotice updatedAt={query.dataUpdatedAt} />
       <RegionOrdersLive
         key={`${order.day}-${order.region.id}`}
         regionId={order.region.id}

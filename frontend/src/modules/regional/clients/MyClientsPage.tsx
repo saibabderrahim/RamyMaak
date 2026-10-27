@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import type { Client } from '../../../shared/api/types'
 import { useAuthenticatedUser } from '../../../shared/auth/session'
+import { OfflineDataNotice } from '../../../shared/offline/OfflineDataNotice'
 import { Alert, Button, ErrorAlert, Field, Input, PageHeader, Spinner } from '../../../shared/ui'
 import { useMyClients } from './api'
 import { CallLink, ClientStatusBadge, PendingRegionBadge } from './components'
@@ -64,6 +65,9 @@ export default function MyClientsPage() {
             </Field>
           </form>
 
+          {/* Lot 8 (§6.1) : hors ligne, la liste enregistrée sur l'appareil (recherches déjà faites). */}
+          <OfflineDataNotice updatedAt={clients.dataUpdatedAt} hasData={clients.data !== undefined} />
+
           {clients.error && (
             <div className="flex flex-col gap-3">
               <ErrorAlert error={clients.error} />
@@ -72,7 +76,7 @@ export default function MyClientsPage() {
               </Button>
             </div>
           )}
-          {clients.isPending && !clients.error && <Spinner />}
+          {clients.isPending && !clients.error && clients.fetchStatus !== 'paused' && <Spinner />}
 
           {clients.data && (
             <>

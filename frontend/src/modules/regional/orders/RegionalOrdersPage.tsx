@@ -2,6 +2,7 @@ import { useId, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useSearchParams } from 'react-router'
 import { businessToday, formatDate } from '../../../shared/format'
+import { NoOfflineData, OfflineDataNotice } from '../../../shared/offline/OfflineDataNotice'
 import { Alert, Button, ErrorAlert, PageHeader, Spinner } from '../../../shared/ui'
 import { useErrorMessage } from '../../../shared/ui/useErrorMessage'
 import { useRegionalRegions } from '../../distribution/api'
@@ -74,6 +75,12 @@ export default function RegionalOrdersPage() {
           )}
         </div>
 
+        {/* Lot 8 (§6.1) : hors ligne, les commandes enregistrées sur l'appareil. */}
+        <OfflineDataNotice
+          updatedAt={orders.data ? orders.dataUpdatedAt : regionsQuery.dataUpdatedAt}
+          hasData={regionsData !== undefined}
+        />
+
         {regionsQuery.error && !regionsData && (
           <div className="flex flex-col gap-3">
             <ErrorAlert error={regionsQuery.error} />
@@ -82,7 +89,7 @@ export default function RegionalOrdersPage() {
             </Button>
           </div>
         )}
-        {regionsQuery.isPending && <Spinner />}
+        {regionsQuery.isPending && regionsQuery.fetchStatus !== 'paused' && <Spinner />}
 
         {regionsData &&
           (!regionsData.opened ? (
@@ -157,7 +164,8 @@ function OrdersBoard({ day, tab, showRegion, orders, onTab }: BoardProps) {
             </Button>
           </div>
         ) : loading ? (
-          <Spinner />
+          // Hors ligne, onglet jamais lu sur cet appareil : rien à attendre avant le retour du réseau.
+          orders.fetchStatus === 'paused' && !orders.data ? <NoOfflineData /> : <Spinner />
         ) : (
           <>
             {orders.isRefetchError && (

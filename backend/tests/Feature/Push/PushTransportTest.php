@@ -111,6 +111,9 @@ it('never writes outside the allowed push services and isolates an unusable devi
 
 it('uses the Web Push transport by default and the log transport for acceptance', function () {
     expect(app(PushTransport::class))->toBeInstanceOf(WebPushTransport::class);
+    // Client HTTP réel construit avec les clés VAPID ; adresse refusée avant tout envoi.
+    $internal = PushSubscription::factory()->create(['user_id' => $this->user->id, 'endpoint' => 'https://10.0.0.5/push']);
+    expect(app(PushTransport::class)->send([$internal], '{}', $this->headers)[0]->ok)->toBeFalse();
 
     config(['ramymaak.push.transport' => 'log']);
     expect(app(PushTransport::class))->toBeInstanceOf(LogPushTransport::class);

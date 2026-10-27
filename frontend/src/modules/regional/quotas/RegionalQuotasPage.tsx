@@ -5,6 +5,7 @@ import { useSearchParams } from 'react-router'
 import type { AppNotification, NotificationType } from '../../../shared/api/types'
 import { useAuthenticatedUser } from '../../../shared/auth/session'
 import { businessToday, formatDate } from '../../../shared/format'
+import { OfflineDataNotice } from '../../../shared/offline/OfflineDataNotice'
 import { FALLBACK_REFRESH_MS, NOTIFICATION_EVENT, useChannel } from '../../../shared/realtime'
 import { Alert, Button, ErrorAlert, PageHeader, Spinner } from '../../../shared/ui'
 import { useRegionalQuotas } from './api'
@@ -115,6 +116,9 @@ export default function RegionalQuotasPage() {
           )}
         </div>
 
+        {/* Lot 8 (§6.1) : hors ligne, les quotas enregistrés sur l'appareil. */}
+        <OfflineDataNotice updatedAt={quotas.dataUpdatedAt} hasData={data !== undefined} />
+
         {quotas.error && (
           <div className="flex flex-col gap-3">
             <ErrorAlert error={quotas.error} />
@@ -123,7 +127,7 @@ export default function RegionalQuotasPage() {
             </Button>
           </div>
         )}
-        {quotas.isPending && !quotas.error && <Spinner />}
+        {quotas.isPending && !quotas.error && quotas.fetchStatus !== 'paused' && <Spinner />}
 
         {data &&
           (!data.opened ? (

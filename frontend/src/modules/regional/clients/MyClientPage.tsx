@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router'
 import { ApiError } from '../../../shared/api/client'
 import type { Client } from '../../../shared/api/types'
 import { businessToday, formatDate } from '../../../shared/format'
+import { NoOfflineData, OfflineDataNotice } from '../../../shared/offline/OfflineDataNotice'
 import { Alert, Button, Card, ErrorAlert, Spinner } from '../../../shared/ui'
 import { useFieldClient } from './api'
 import { ClientAccess } from './ClientAccess'
@@ -52,11 +53,22 @@ export default function MyClientPage() {
     )
   }
 
-  if (!client.data) return <Spinner />
+  if (!client.data) {
+    return client.fetchStatus === 'paused' ? (
+      <div className="flex flex-col gap-3">
+        {back}
+        <NoOfflineData />
+      </div>
+    ) : (
+      <Spinner />
+    )
+  }
 
   return (
     <div className="flex flex-col gap-4">
       {back}
+      {/* Lot 8 (§6.1) : hors ligne, la fiche enregistrée sur l'appareil (l'appel reste possible). */}
+      <OfflineDataNotice updatedAt={client.dataUpdatedAt} hasData />
       <ClientFiche client={client.data} />
     </div>
   )

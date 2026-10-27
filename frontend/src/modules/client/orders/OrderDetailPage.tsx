@@ -4,6 +4,8 @@ import { Link, useParams } from 'react-router'
 import { ApiError } from '../../../shared/api/client'
 import type { Order } from '../../../shared/api/types'
 import { formatDate, formatDateTime } from '../../../shared/format'
+import { OfflineDataNotice } from '../../../shared/offline/OfflineDataNotice'
+import { useOnline } from '../../../shared/pwa/online'
 import { Alert, Button, ErrorAlert, PageHeader, Spinner } from '../../../shared/ui'
 import { useClientOrder } from '../api'
 import { ModifyOrderButton } from '../cart/ModifyOrderButton'
@@ -70,6 +72,8 @@ function OrderDetail({ id }: { id: string }) {
               {t('common.retry')}
             </Button>
           </div>
+        ) : query.fetchStatus === 'paused' ? (
+          <OfflineDataNotice updatedAt={0} hasData={false} />
         ) : (
           <Spinner label={t('orders.clientOrders.detail.loading')} />
         )}
@@ -81,6 +85,7 @@ function OrderDetail({ id }: { id: string }) {
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
       {backLink}
       <PageHeader title={t('orders.clientOrders.detail.title', { number: order.number })} />
+      <OfflineDataNotice updatedAt={query.dataUpdatedAt} hint={t('offline.actions.order')} />
       {feedback ? (
         'error' in feedback ? (
           <ErrorAlert error={feedback.error} />
@@ -106,6 +111,7 @@ function OrderDetail({ id }: { id: string }) {
 function OrderOverview({ order, onFeedback }: { order: Order; onFeedback: (feedback: Feedback | null) => void }) {
   const { t } = useTranslation()
   const { cart } = useCart()
+  const online = useOnline()
   const titleId = useId()
   const editing = cart.editing?.orderId === order.id
   const until = order.modifiable_until
@@ -138,7 +144,8 @@ function OrderOverview({ order, onFeedback }: { order: Order; onFeedback: (feedb
           </Link>
         </p>
       )}
-      <div role="group" aria-label={t('orders.clientOrders.detail.actions')} className="flex flex-col gap-3">
+      {/* Modifier, annuler, « Recommander » : en ligne seulement (D-13) ; le bandeau hors ligne l'explique. */}
+      <fieldset aria-label={t('orders.clientOrders.detail.actions')} disabled={!online} className="m-0 flex min-w-0 flex-col gap-3 border-0 p-0">
         {order.can_modify && (
           <ModifyOrderButton
             order={order}
@@ -149,7 +156,7 @@ function OrderOverview({ order, onFeedback }: { order: Order; onFeedback: (feedb
         )}
         {order.can_cancel && <CancelOrderButton order={order} onFeedback={onFeedback} />}
         <ReorderButton order={order} />
-      </div>
+      </fieldset>
     </section>
   )
 }
