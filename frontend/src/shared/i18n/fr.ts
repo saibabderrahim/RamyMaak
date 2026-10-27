@@ -99,6 +99,8 @@ const fr = {
     order: 'Commander',
     cart: 'Panier',
     withCount: '{{label}} ({{count}})',
+    // Entrée dont la pastille a son propre nom accessible (boîte d'envoi du client, lot 8).
+    withBadge: '{{label}} ({{badge}})',
     orders: 'Commandes',
     myDay: 'Ma journée',
     reasons: 'Motifs',

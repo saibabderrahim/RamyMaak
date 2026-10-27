@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuthenticatedUser } from '../auth/session'
 import { Button, Icon } from '../ui'
@@ -14,6 +14,15 @@ import { usePushState } from './usePushState'
  * été demandée. « Activer » demande la permission et abonne l'appareil ;
  * « Plus tard » l'écarte (le profil garde l'activation).
  */
+
+/** Titre de l'écran (PageHeader), qui reçoit le focus quand l'invitation disparaît avec le bouton touché. */
+function focusPageHeading(): void {
+  const heading = document.querySelector<HTMLElement>('main h1')
+  if (!heading) return
+  if (!heading.hasAttribute('tabindex')) heading.tabIndex = -1
+  heading.focus()
+}
+
 export function PushInvite() {
   const { t } = useTranslation()
   const user = useAuthenticatedUser()
@@ -23,17 +32,29 @@ export function PushInvite() {
   const [dismissed, setDismissed] = useState(() => isInviteDismissed(user.id))
   // Activation lancée depuis l'invitation : elle reste affichée tant qu'elle n'a pas abouti, avec son échec.
   const [engaged, setEngaged] = useState(false)
+  // « Activer » ou « Plus tard » touché : l'invitation peut disparaître avec le bouton qui a le focus.
+  const acted = useRef(false)
 
   const visible =
     !dismissed && (engaged ? push.status === 'off' || push.status === 'checking' : push.status === 'off' && notificationPermission() === 'default')
+
+  // Invitation retirée par l'utilisateur : le focus, retombé sur la page, passe au titre de l'écran.
+  useEffect(() => {
+    if (visible || !acted.current) return
+    acted.current = false
+    if (document.activeElement === null || document.activeElement === document.body) focusPageHeading()
+  }, [visible])
+
   if (!visible) return null
 
   const later = () => {
+    acted.current = true
     dismissInvite(user.id)
     setDismissed(true)
   }
 
   const activate = async () => {
+    acted.current = true
     setEngaged(true)
     await push.enable()
     // Question du navigateur fermée sans réponse : l'invitation ne revient pas, le profil propose toujours l'activation.

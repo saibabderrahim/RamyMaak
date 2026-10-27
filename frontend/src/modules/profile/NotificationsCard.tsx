@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useId } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { CurrentUser } from '../../shared/api/types'
 import { useOnline } from '../../shared/pwa/online'
@@ -39,15 +39,36 @@ function DevicePush() {
   const push = usePushState()
   const pushError = usePushErrorMessage()
   const badge = STATUS_BADGES[push.status]
+  const button = useRef<HTMLButtonElement>(null)
+  const state = useRef<HTMLParagraphElement>(null)
+  // État de l'appareil au moment de l'action ; null : aucune action en cours.
+  const actedFrom = useRef<PushStatus | null>(null)
 
   // La liste des appareils indique ceux qui reçoivent les notifications.
-  const run = (action: () => Promise<void>) => void action().then(() => queryClient.invalidateQueries({ queryKey: sessionsKey }))
+  const run = (action: () => Promise<void>) => {
+    actedFrom.current = push.status
+    void action().then(() => queryClient.invalidateQueries({ queryKey: sessionsKey }))
+  }
+
+  // Action aboutie : le bouton touché disparaît (« Activer » devient « Désactiver ») ; le focus passe au bouton qui le
+  // remplace, ou à l'état de l'appareil s'il n'y en a plus (notifications bloquées), au lieu de retomber sur la page.
+  useEffect(() => {
+    const from = actedFrom.current
+    if (from === null || push.busy) return
+    if (push.error !== null) {
+      // Échec : le bouton reste, avec le message d'erreur.
+      actedFrom.current = null
+    } else if (push.status !== from) {
+      actedFrom.current = null
+      ;(button.current ?? state.current)?.focus()
+    }
+  }, [push.busy, push.error, push.status])
 
   if (push.status === 'checking') return <Spinner label={t('push.device.checking')} />
 
   return (
     <section className="flex flex-col gap-3" aria-label={t('push.device.subtitle')}>
-      <p className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+      <p ref={state} tabIndex={-1} className="flex flex-wrap items-center gap-2 text-sm text-slate-600 outline-none">
         {t('push.device.subtitle')}
         {badge && <Badge tone={badge.tone}>{t(`push.device.status.${badge.label}`)}</Badge>}
       </p>
@@ -66,13 +87,13 @@ function DevicePush() {
       )}
 
       {push.status === 'off' && (
-        <Button className="self-start py-2" onClick={() => run(push.enable)} disabled={push.busy || !online}>
+        <Button ref={button} className="self-start py-2" onClick={() => run(push.enable)} disabled={push.busy || !online}>
           {/* Libellé long : renvoyé à la ligne sur un téléphone de 320 px. */}
           <span className="whitespace-normal">{push.busy ? t('push.device.enabling') : t('push.device.enable')}</span>
         </Button>
       )}
       {push.status === 'on' && (
-        <Button variant="secondary" className="self-start py-2" onClick={() => run(push.disable)} disabled={push.busy || !online}>
+        <Button ref={button} variant="secondary" className="self-start py-2" onClick={() => run(push.disable)} disabled={push.busy || !online}>
           <span className="whitespace-normal">{push.busy ? t('push.device.disabling') : t('push.device.disable')}</span>
         </Button>
       )}

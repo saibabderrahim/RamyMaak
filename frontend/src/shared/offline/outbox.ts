@@ -21,6 +21,8 @@ export const OUTBOX_MESSAGE = 'outbox-updated'
 export const SENDING_STALE_MS = 2 * 60_000
 /** Point d'envoi des commandes (contrat du lot 5, §3). */
 export const ORDERS_ENDPOINT = '/api/v1/client/orders'
+/** Nouveau cookie anti-CSRF (XSRF-TOKEN) de Sanctum. */
+export const CSRF_COOKIE_ENDPOINT = '/sanctum/csrf-cookie'
 /** Clé `kv` du compte connecté sur l'appareil, lue par le service worker. */
 export const SESSION_USER_KEY = 'session-user'
 
@@ -38,7 +40,8 @@ export type OutboxProblem = { status: number; code: string; detail?: string; [ex
 /**
  * Résultat d'une tentative :
  * - `sent` : 201 (nouvelle commande) ou 200 (renvoi d'un identifiant déjà reçu, la commande existante) ;
- * - `pending` : sans réponse définitive (réseau, 5xx, 408, 419, 429), ou session expirée (401) ;
+ * - `pending` : sans réponse définitive (réseau, 5xx, 408, 419, 429), ou session expirée (401) ou
+ *   changement du mot de passe exigé (403 `PASSWORD_CHANGE_REQUIRED`) : l'envoi reprendra après la reconnexion ;
  * - `refused` : autre 4xx, avec le motif du serveur.
  */
 export type SendOutcome =
@@ -50,7 +53,7 @@ export type FetchLike = (input: string, init: RequestInit) => Promise<Response>
 
 export type OutboxDeps = {
   fetch: FetchLike
-  /** Jeton anti-CSRF ; `renew` : un nouveau jeton après un 419 (l'application seule sait le renouveler). */
+  /** Jeton anti-CSRF ; `renew` : un nouveau jeton après un 419. */
   xsrf: (renew: boolean) => Promise<string | null>
   database?: RamyMaakDb
   now?: () => Date
@@ -199,6 +202,8 @@ export async function sendEntry(entry: Pick<OutboxEntry, 'body'>, fetchImpl: Fet
   if (status === 419) return { status: 'pending', reason: 'csrf', httpStatus: status }
   if (status >= 400 && status < 500 && !RETRY_STATUSES.includes(status)) {
     const problem = problemOf(status, payload)
+    // Mot de passe à changer (EF-AUTH-02) : la commande n'est pas refusée, elle partira après le changement.
+    if (status === 403 && problem.code === 'PASSWORD_CHANGE_REQUIRED') return { status: 'pending', reason: 'unauthenticated', httpStatus: status }
     return { status: 'refused', error: { code: problem.code, detail: typeof problem.detail === 'string' ? problem.detail : '' }, problem }
   }
   return { status: 'pending', reason: 'server', httpStatus: status }
@@ -228,9 +233,17 @@ export function settle(entry: OutboxEntry, outcome: SendOutcome, now: Date): Out
   }
 }
 
+/** Enregistre l'entrée, sauf si elle a été retirée entre-temps (déconnexion) : elle n'est pas recréée. */
+async function store(entry: OutboxEntry, database: RamyMaakDb): Promise<void> {
+  await database.transaction('rw', database.outbox, async () => {
+    if (await database.outbox.get(entry.id)) await database.outbox.put(entry)
+  })
+}
+
 /**
  * Une tentative d'envoi de l'entrée `id` : null si elle n'est pas à envoyer
- * (déjà envoyée, refusée, retirée) ou si un autre contexte l'envoie déjà.
+ * (déjà envoyée, refusée, retirée), si un autre contexte l'envoie déjà, ou
+ * si le compte connecté sur l'appareil (`session-user`) n'est plus le sien.
  * Après un 419, un nouveau jeton est demandé et l'envoi rejoué une fois.
  * Une entrée retirée pendant l'envoi (déconnexion) n'est pas recréée.
  */
@@ -240,19 +253,32 @@ export async function processEntry(id: string, deps: OutboxDeps): Promise<Proces
   const claimed = await claim(id, database, now())
   if (!claimed) return null
 
-  let outcome: SendOutcome
+  // Appareil partagé : un autre compte a pu ouvrir sa session dans un autre onglet. Le cookie serait le sien et le
+  // serveur prend le client de la session : la commande n'est envoyée que sous le compte qui l'a déposée, vérifié
+  // juste avant chaque envoi. Sinon, null.
+  const send = async (renew: boolean): Promise<SendOutcome | null> => {
+    const token = await deps.xsrf(renew)
+    if ((await readSessionUser(database).catch(() => null)) !== claimed.user_id) return null
+    return sendEntry(claimed, deps.fetch, token)
+  }
+
+  let outcome: SendOutcome | null
   try {
-    outcome = await sendEntry(claimed, deps.fetch, await deps.xsrf(false))
-    if (outcome.status === 'pending' && outcome.reason === 'csrf') outcome = await sendEntry(claimed, deps.fetch, await deps.xsrf(true))
+    outcome = await send(false)
+    if (outcome?.status === 'pending' && outcome.reason === 'csrf') outcome = await send(true)
   } catch {
     // Jeton introuvable (réseau coupé pendant sa lecture) : nouvelle tentative plus tard.
     outcome = { status: 'pending', reason: 'network', httpStatus: null }
   }
 
+  if (outcome === null) {
+    // Pas envoyée : l'entrée revient en attente telle quelle, sans tentative comptée.
+    await store({ ...claimed, status: 'pending', attempts: claimed.attempts - 1, sending_at: null }, database)
+    return null
+  }
+
   const entry = settle(claimed, outcome, now())
-  await database.transaction('rw', database.outbox, async () => {
-    if (await database.outbox.get(id)) await database.outbox.put(entry)
-  })
+  await store(entry, database)
   return { entry, outcome }
 }
 
@@ -276,7 +302,7 @@ export function needsRetry(results: readonly ProcessResult[]): boolean {
   return results.some(({ outcome }) => outcome.status === 'pending' && outcome.reason !== 'unauthenticated')
 }
 
-/** Compte connecté sur l'appareil (service worker) ; null : personne. */
+/** Compte connecté sur l'appareil (dernier lu par un onglet, GET /auth/me) ; null : personne. */
 export async function readSessionUser(database: RamyMaakDb = defaultDb): Promise<number | null> {
   const record = await database.kv.get(SESSION_USER_KEY)
   const id = Number(record?.value)
@@ -325,4 +351,16 @@ export function decodeXsrf(value: string | null | undefined): string | null {
   } catch {
     return value
   }
+}
+
+/**
+ * Jeton anti-CSRF du service worker, lu par `readCookie` (Cookie Store).
+ * Cookie absent (expiré avec la session, après 120 min d'inactivité) ou
+ * refusé (419, `renew`) : un nouveau cookie est demandé au serveur, puis relu.
+ */
+export async function serviceWorkerXsrf(renew: boolean, readCookie: () => Promise<string | null | undefined>, fetchImpl: FetchLike): Promise<string | null> {
+  const current = renew ? null : decodeXsrf(await readCookie())
+  if (current !== null) return current
+  await fetchImpl(CSRF_COOKIE_ENDPOINT, { credentials: 'include', headers: { Accept: 'application/json' } })
+  return decodeXsrf(await readCookie())
 }

@@ -2,6 +2,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import { liveQuery } from 'dexie'
 import { useEffect, useState } from 'react'
 import { csrfHeaders } from '../api/client'
+import { meQueryKey, useAuthenticatedUser } from '../auth/session'
 import type { OutboxEntry } from './db'
 import {
   displayStatus,
@@ -73,10 +74,16 @@ export async function registerBackgroundSync(): Promise<boolean> {
   }
 }
 
-/** Suite d'un résultat : données du client relues (commande créée ou refus), synchronisation en arrière-plan sinon. */
+/**
+ * Suite d'un résultat : données du client relues (commande créée ou refus),
+ * synchronisation en arrière-plan sinon. Session expirée (401) ou mot de
+ * passe à changer : l'utilisateur est relu, les gardes mènent à la connexion
+ * (ou au changement du mot de passe) au lieu d'un nouvel envoi toutes les 30 s.
+ */
 function afterResult(queryClient: QueryClient, result: ProcessResult): void {
   if (result.outcome.status === 'pending') {
-    if (result.outcome.reason !== 'unauthenticated') void registerBackgroundSync()
+    if (result.outcome.reason === 'unauthenticated') void queryClient.invalidateQueries({ queryKey: meQueryKey })
+    else void registerBackgroundSync()
     return
   }
   void queryClient.invalidateQueries({ queryKey: CLIENT_KEY })
@@ -122,12 +129,18 @@ export function useOutboxEntries(userId: number | null): OutboxEntry[] | undefin
   return userId !== null && state?.userId === userId ? state.entries : undefined
 }
 
+/** Boîte d'envoi du compte client connecté ; undefined pour les autres rôles. */
+export function useClientOutbox(): OutboxEntry[] | undefined {
+  const user = useAuthenticatedUser()
+  return useOutboxEntries(user.role === 'client' ? user.id : null)
+}
+
 /** Commandes qui demandent l'attention : à envoyer, en cours d'envoi ou refusées (pastille de l'onglet « Commandes »). */
 export function attentionCount(entries: readonly OutboxEntry[] | undefined, now = Date.now()): number {
   return entries?.filter((entry) => displayStatus(entry, now) !== 'sent').length ?? 0
 }
 
-/** Commandes encore à envoyer (pending ou en cours) : confirmation de la déconnexion. */
+/** Commandes encore à envoyer (pending ou en cours) : confirmation de la déconnexion (§6.3, point 7). */
 export function waitingCount(entries: readonly OutboxEntry[] | undefined, now = Date.now()): number {
   return entries?.filter((entry) => ['pending', 'sending'].includes(displayStatus(entry, now))).length ?? 0
 }

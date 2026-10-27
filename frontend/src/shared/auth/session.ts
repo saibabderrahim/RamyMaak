@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useRef } from 'react'
 import { api, ApiError, NetworkError } from '../api/client'
 import type { CurrentUser, Role } from '../api/types'
 import { purgeAccount } from '../offline/persist'
@@ -30,11 +31,19 @@ export function useCurrentUser() {
 
 /**
  * Utilisateur connecté, à n'utiliser que sous un garde `RequireAuth`.
+ *
+ * Fin de session (déconnexion, expiration) : un composant de la coquille peut
+ * se redessiner de lui-même (lecture suivie de la boîte d'envoi, lot 8) avant
+ * le garde, qui le retire au rendu suivant ; il garde d'ici là le dernier
+ * utilisateur connecté au lieu de faire tomber la page.
  */
 export function useAuthenticatedUser(): CurrentUser {
   const { data } = useCurrentUser()
-  if (!data) throw new Error('useAuthenticatedUser() utilisé hors d’une route protégée')
-  return data
+  const last = useRef<CurrentUser | null>(null)
+  if (data) last.current = data
+  const user = data ?? last.current
+  if (!user) throw new Error('useAuthenticatedUser() utilisé hors d’une route protégée')
+  return user
 }
 
 export type LoginInput = { username: string; password: string; remember: boolean }

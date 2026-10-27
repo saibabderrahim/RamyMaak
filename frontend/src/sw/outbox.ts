@@ -12,7 +12,6 @@
  * notification locale annonce la commande envoyée ou refusée.
  */
 import {
-  decodeXsrf,
   needsRetry,
   OUTBOX_MESSAGE,
   OUTBOX_SYNC_TAG,
@@ -20,6 +19,7 @@ import {
   type ProcessResult,
   processPending,
   readSessionUser,
+  serviceWorkerXsrf,
 } from '../shared/offline/outbox'
 
 export { OUTBOX_SYNC_TAG }
@@ -32,10 +32,14 @@ interface SyncEvent extends ExtendableEvent {
   readonly lastChance: boolean
 }
 
-async function readXsrf(): Promise<string | null> {
+async function readCookie(): Promise<string | null | undefined> {
+  return 'cookieStore' in self ? (await self.cookieStore.get('XSRF-TOKEN'))?.value : null
+}
+
+/** Jeton anti-CSRF ; cookie expiré ou refusé (419) : renouvelé auprès du serveur. */
+async function readXsrf(renew: boolean): Promise<string | null> {
   try {
-    const cookie = 'cookieStore' in self ? await self.cookieStore.get('XSRF-TOKEN') : null
-    return decodeXsrf(cookie?.value)
+    return await serviceWorkerXsrf(renew, readCookie, (input, init) => fetch(input, init))
   } catch {
     return null
   }

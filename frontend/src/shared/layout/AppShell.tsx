@@ -7,7 +7,7 @@ import { homePath, useAuthenticatedUser, useLogout } from '../auth/session'
 import { NotificationBell } from '../notifications/NotificationBell'
 import { useAdvToPrepareCount } from '../orders'
 import { OutboxSync } from '../offline/OutboxSync'
-import { attentionCount, useOutboxEntries, waitingCount } from '../offline/useOutbox'
+import { attentionCount, useClientOutbox, waitingCount } from '../offline/useOutbox'
 import { OfflineBanner } from '../pwa/components'
 import { PushSync } from '../push/PushSync'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
@@ -17,16 +17,17 @@ import { useCartLineCount } from '../../modules/client/cart/store'
 type NavGroup = 'operations' | 'referentials' | 'exchanges' | 'administration' | 'account'
 
 /**
- * `badge` : pastille (nombre) ; `tabBar: false` : hors de la barre d'onglets du téléphone, lien dans l'en-tête ;
+ * `badge` : pastille (nombre) ; `badgeLabel` : ce qu'elle compte, annoncé à la place du seul nombre ;
+ * `tabBar: false` : hors de la barre d'onglets du téléphone, lien dans l'en-tête ;
  * `group` : rubrique de la barre latérale du back-office.
  */
-type NavItem = { to: string; label: string; icon: IconName; end?: boolean; badge?: number; tabBar?: boolean; group?: NavGroup }
+type NavItem = { to: string; label: string; icon: IconName; end?: boolean; badge?: number; badgeLabel?: string; tabBar?: boolean; group?: NavGroup }
 
 function useNavItems(role: Role, permissions: readonly string[]): NavItem[] {
   const { t } = useTranslation()
   const cartLines = useCartLineCount()
   // Boîte d'envoi du client (lot 8, §6.3) : commandes à envoyer ou refusées.
-  const outbox = useClientOutbox()
+  const outboxCount = attentionCount(useClientOutbox())
   // Commandes à préparer de l'ADV (N-08) : lues seulement avec le droit de consulter les commandes.
   const toPrepare = useAdvToPrepareCount(role === 'adv' && permissions.includes('order.view'))
   const profile: NavItem = { to: '/profil', label: t('nav.profile'), icon: 'user', group: 'account' }
@@ -77,7 +78,7 @@ function useNavItems(role: Role, permissions: readonly string[]): NavItem[] {
         { to: '/client', label: t('nav.home'), icon: 'home', end: true },
         { to: '/client/catalogue', label: t('nav.order'), icon: 'grid' },
         { to: '/client/panier', label: t('nav.cart'), icon: 'bag', badge: cartLines },
-        { to: '/client/commandes', label: t('nav.orders'), icon: 'list', badge: attentionCount(outbox) },
+        { to: '/client/commandes', label: t('nav.orders'), icon: 'list', badge: outboxCount, badgeLabel: t('offline.outbox.badge', { count: outboxCount }) },
         profile,
       ]
   }
@@ -97,13 +98,20 @@ function Count({ value, tone }: { value: number; tone: 'red' | 'white' }) {
   )
 }
 
+/** Nom accessible d'une entrée à pastille : son libellé, avec ce que la pastille compte (par défaut, le nombre). */
+function useBadgeName(): (item: NavItem) => string {
+  const { t } = useTranslation()
+  return (item) =>
+    item.badgeLabel ? t('nav.withBadge', { label: item.label, badge: item.badgeLabel }) : t('nav.withCount', { label: item.label, count: item.badge ?? 0 })
+}
+
 /** Libellé d'une entrée, avec sa pastille (nombre annoncé dans le nom accessible). */
 function NavLabel({ item, tone = 'red' }: { item: NavItem; tone?: 'red' | 'white' }) {
-  const { t } = useTranslation()
+  const badgeName = useBadgeName()
   if (!item.badge) return <>{item.label}</>
   return (
     <span className="flex items-center gap-1.5">
-      <span className="sr-only">{t('nav.withCount', { label: item.label, count: item.badge })}</span>
+      <span className="sr-only">{badgeName(item)}</span>
       <span aria-hidden="true">{item.label}</span>
       <Count value={item.badge} tone={tone} />
     </span>
@@ -113,12 +121,6 @@ function NavLabel({ item, tone = 'red' }: { item: NavItem; tone?: 'red' | 'white
 /** Barre d'onglets en bas de l'écran pour les rôles de terrain (téléphone). */
 function hasTabBar(role: Role): boolean {
   return role === 'client' || role === 'regional'
-}
-
-/** Boîte d'envoi du compte client connecté ; undefined pour les autres rôles. */
-function useClientOutbox() {
-  const user = useAuthenticatedUser()
-  return useOutboxEntries(user.role === 'client' ? user.id : null)
 }
 
 /**
@@ -175,6 +177,7 @@ export function AppShell() {
 
 function FieldShell() {
   const { t } = useTranslation()
+  const badgeName = useBadgeName()
   const user = useAuthenticatedUser()
   const { leave, pending, dialog } = useLogoutAndLeave()
   const items = useNavItems(user.role, user.permissions)
@@ -263,7 +266,7 @@ function FieldShell() {
                   </span>
                 ) : null}
               </span>
-              <span>{item.badge ? <span className="sr-only">{t('nav.withCount', { label: item.label, count: item.badge })}</span> : null}<span aria-hidden={item.badge ? true : undefined}>{item.label}</span></span>
+              <span>{item.badge ? <span className="sr-only">{badgeName(item)}</span> : null}<span aria-hidden={item.badge ? true : undefined}>{item.label}</span></span>
             </NavLink>
           ))}
       </nav>
