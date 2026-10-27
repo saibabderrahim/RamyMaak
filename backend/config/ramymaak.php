@@ -69,6 +69,9 @@ return [
         // Purge nocturne (§9.7).
         'max_failures' => 3,
         'unused_days' => 60,
+        // Transport : « webpush » (services push réels) ou « log » (une ligne
+        // JSON par message dans storage/logs/push.log, sans envoi : recette).
+        'transport' => env('PUSH_TRANSPORT', 'webpush'),
     ],
 
     /*

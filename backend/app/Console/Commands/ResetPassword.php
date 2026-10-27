@@ -6,6 +6,7 @@ use App\Domain\Auth\AuthAudit;
 use App\Domain\Auth\SessionRevoker;
 use App\Domain\Auth\TemporaryPassword;
 use App\Models\User;
+use App\Notifications\AccountSecurityNotification;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -41,6 +42,8 @@ class ResetPassword extends Command
             ])->save();
             $revoker->revokeAll($user);
             $audit->record('password.reset', 'Mot de passe réinitialisé depuis le serveur', request(), subject: $user, properties: ['source' => 'console']);
+            // N-15 (I-111) : le compte est prévenu dans l'application.
+            (new AccountSecurityNotification(now(), AccountSecurityNotification::BY_CONSOLE))->sendOnce([$user]);
         });
 
         $this->info("Mot de passe de « {$username} » réinitialisé ; ses sessions sont fermées.");

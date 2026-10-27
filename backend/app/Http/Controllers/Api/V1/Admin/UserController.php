@@ -11,6 +11,7 @@ use App\Http\Requests\Admin\StoreUserRequest;
 use App\Http\Requests\Admin\UpdateUserRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Notifications\AccountSecurityNotification;
 use App\Support\FilterValue;
 use App\Support\Pagination;
 use Illuminate\Database\Eloquent\Builder;
@@ -170,6 +171,12 @@ class UserController extends Controller
                 subject: $user,
                 causer: $request->user(),
             );
+
+            // N-15 (I-111) : le compte est prévenu dans l'application, avec l'auteur.
+            /** @var User $actor */
+            $actor = $request->user();
+            $by = $actor->hasAppRole(Role::Regional) ? AccountSecurityNotification::BY_REGIONAL : AccountSecurityNotification::BY_ADMIN;
+            (new AccountSecurityNotification(now(), $by))->sendOnce([$user]);
         });
 
         return response()->json([

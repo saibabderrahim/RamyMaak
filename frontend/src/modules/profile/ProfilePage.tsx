@@ -1,33 +1,27 @@
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router'
-import { LOGIN_PATH } from '../../shared/auth/guards'
-import { useAuthenticatedUser, useLogoutAll } from '../../shared/auth/session'
+import { useAuthenticatedUser } from '../../shared/auth/session'
 import { formatDateTime } from '../../shared/format'
 import { InstallHelp } from '../../shared/pwa/components'
-import { Button, Card, ErrorAlert, PageHeader } from '../../shared/ui'
+import { Card, PageHeader } from '../../shared/ui'
 import { ChangePasswordForm } from '../auth/ChangePasswordForm'
+import { DevicesCard } from './DevicesCard'
 import { MyCompanyCard } from './MyCompanyCard'
+import { NotificationsCard } from './NotificationsCard'
 
 /**
- * Profil (EF-CLT-06) : compte, entreprise (comptes clients), mot de passe,
- * déconnexion de tous les appareils (EF-AUTH-07), aide à l'installation de
- * l'application.
+ * Profil (EF-CLT-06) : compte, entreprise (comptes clients), notifications
+ * de l'appareil et rappels, appareils connectés avec la déconnexion de tous
+ * les appareils (EF-AUTH-07, lot 8 §5), aide à l'installation de
+ * l'application, mot de passe.
  */
 export default function ProfilePage() {
   const { t } = useTranslation()
   const user = useAuthenticatedUser()
-  const logoutAll = useLogoutAll()
-  const navigate = useNavigate()
-
-  const onLogoutAll = () => {
-    if (!window.confirm(t('auth.logoutAllConfirm'))) return
-    logoutAll.mutate(undefined, { onSuccess: () => navigate(LOGIN_PATH, { replace: true }) })
-  }
 
   return (
     <>
       <PageHeader title={t('profile.title')} />
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
         <Card title={t('profile.identity')}>
           <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
             <dt className="text-slate-500">{t('admin.users.fields.username')}</dt>
@@ -43,21 +37,16 @@ export default function ProfilePage() {
 
         {user.role === 'client' && user.client_id !== null && <MyCompanyCard clientId={user.client_id} />}
 
+        <NotificationsCard user={user} />
+
+        <DevicesCard />
+
         <Card title={t('profile.app')}>
           <InstallHelp />
         </Card>
 
         <Card title={t('auth.password.title')}>
           <ChangePasswordForm user={user} />
-        </Card>
-
-        <Card title={t('profile.security')}>
-          <div className="flex flex-col gap-3">
-            <ErrorAlert error={logoutAll.error} />
-            <Button variant="secondary" className="self-start" onClick={onLogoutAll} disabled={logoutAll.isPending}>
-              {t('auth.logoutAll')}
-            </Button>
-          </div>
         </Card>
       </div>
     </>

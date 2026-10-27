@@ -78,4 +78,35 @@ return [
         'title' => 'Commande :number expirée',
         'body' => 'Elle n\'a pas été validée avant la clôture de la journée.',
     ],
+    // N-10 (régionaux, rappel du planificateur, lot 8)
+    'distribution_reminder' => [
+        'title' => 'Rappel : répartition du :day — :region',
+        'body' => 'Envoyez la répartition avant :time.',
+    ],
+    // N-11 (clients sans commande, lot 8)
+    'ordering_reminder' => [
+        'title' => 'Rappel : commande avant :time',
+        'body' => 'Vous n\'avez pas encore commandé pour le :day.',
+    ],
+    // N-12 (régionaux, lot 8)
+    'validation_reminder' => [
+        'title' => '{1} Rappel : :count commande à valider|[2,*] Rappel : :count commandes à valider',
+        'body' => ':region : validez avant :time.',
+    ],
+    // N-13 (ADV et Admin, lot 8)
+    'distribution_late' => [
+        'title' => 'Répartition en retard — :region',
+        'body' => 'La répartition du :day n\'est pas envoyée (limite :time).',
+    ],
+    // N-15 (compte concerné, lot 8)
+    'account_security' => [
+        'password_reset' => [
+            'title' => 'Mot de passe réinitialisé',
+            'body' => [
+                'console' => 'Votre mot de passe a été réinitialisé le :date à :time. Si vous n\'êtes pas à l\'origine de cette demande, prévenez l\'administrateur.',
+                'admin' => 'Votre mot de passe a été réinitialisé par l\'administrateur le :date à :time. Si vous n\'en avez pas fait la demande, prévenez-le.',
+                'regional' => 'Votre mot de passe a été réinitialisé par votre régional le :date à :time. Si vous n\'en avez pas fait la demande, prévenez l\'administrateur.',
+            ],
+        ],
+    ],
 ];

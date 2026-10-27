@@ -169,7 +169,5 @@ export function useLiveNotifications(onReceived?: (notification: AppNotification
   return status === 'connected' ? false : FALLBACK_REFRESH_MS
 }
 
-/** Chemin interne de la PWA (EF-NOT-03) ; une autre adresse n'est jamais suivie. */
-export function internalPath(url: string | null): string | null {
-  return url !== null && url.startsWith('/') && !url.startsWith('//') && !url.startsWith('/\\') ? url : null
-}
+/** Chemin interne de la PWA (EF-NOT-03) ; une autre adresse n'est jamais suivie. Partagé avec le service worker. */
+export { internalPath } from '../push/paths'

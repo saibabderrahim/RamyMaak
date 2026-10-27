@@ -22,6 +22,7 @@ return [
         'auth.max_failed_logins' => 'nombre d\'échecs avant verrouillage',
         'auth.lockout_minutes' => 'durée du verrouillage',
         'notifications.email_enabled' => 'notifications par e-mail',
+        'notifications.push_enabled' => 'notifications push',
         'notifications.quiet_start' => 'début de la plage sans push',
         'notifications.quiet_end' => 'fin de la plage sans push',
     ],

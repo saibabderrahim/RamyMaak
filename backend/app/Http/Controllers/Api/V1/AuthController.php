@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Domain\Auth\AuthAudit;
 use App\Domain\Auth\Authenticator;
 use App\Domain\Auth\SessionRevoker;
+use App\Domain\Push\PushSubscriptions;
 use App\Domain\Settings\Settings;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\EnforceSessionPolicy;
@@ -49,12 +50,14 @@ class AuthController extends Controller
         return (new CurrentUserResource($user))->response();
     }
 
-    public function logout(Request $request): Response
+    public function logout(Request $request, PushSubscriptions $pushSubscriptions): Response
     {
         /** @var User $user */
         $user = $request->user();
 
         $this->audit->record('logout', 'Déconnexion', $request, $user);
+        // Abonnements push de cet appareil (I-103), avant que la session ne change d'identifiant.
+        $pushSubscriptions->forgetSession($user, $request->session()->getId());
         $this->endCurrentSession($request);
 
         return response()->noContent();

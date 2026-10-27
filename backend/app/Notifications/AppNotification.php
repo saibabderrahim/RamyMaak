@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\User;
+use App\Notifications\Channels\PushChannel;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Notifications\Messages\BroadcastMessage;
@@ -13,7 +14,8 @@ use Ramsey\Uuid\Uuid;
  * Notification du centre de notifications (EF-NOT-01) : enregistrée en base
  * (lu / non lu) et diffusée sur le canal privé `user.{id}` (§9.6). Contenu
  * minimal, sans donnée commerciale (EF-NOT-03) : un titre, un texte et
- * l'écran à ouvrir. Le push arrive au lot 7, l'e-mail est reporté.
+ * l'écran à ouvrir. Push sur l'appareil au lot 8 (PushChannel), e-mail
+ * reporté.
  *
  * Rejouable sans double effet (§9.7) : l'identifiant est dérivé d'une clé
  * d'unicité (événement, journée régionale, version ou heure) et du
@@ -38,13 +40,16 @@ abstract class AppNotification extends Notification
 
     /**
      * Base d'abord : une tâche concurrente qui perd la course s'arrête sur la
-     * clé primaire, avant la diffusion.
+     * clé primaire, avant la diffusion et le push. Push pour les types qui
+     * partent aussi sur l'appareil (contrat du lot 8, §2.3).
      *
      * @return list<string>
      */
     public function via(object $notifiable): array
     {
-        return ['database', 'broadcast'];
+        return $this->type()->pushable()
+            ? ['database', 'broadcast', PushChannel::class]
+            : ['database', 'broadcast'];
     }
 
     /** Colonne `type` de la table notifications. */

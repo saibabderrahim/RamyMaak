@@ -91,9 +91,8 @@ final class RegionalDayOverview
         $withoutOrder = [];
         foreach ($regionDays as $regionDay) {
             $regionId = $regionDay->region_id;
-            // Notifiés : destinataires de N-03 une fois la répartition envoyée.
-            $notified = $regionDay->isDistributionPublished() ? $this->limits->openingRecipients($regionDay) : [];
-            $missing = array_values(array_diff($notified, $ordered[$regionId] ?? []));
+            $notified = $this->notified($regionDay);
+            $missing = self::missing($notified, $ordered[$regionId] ?? []);
             $withoutOrder[$regionId] = $missing;
 
             $regions[] = $this->region($regionDay, $blocking, $orders[$regionId] ?? [], [
@@ -112,6 +111,42 @@ final class RegionalDayOverview
             'regions' => $regions,
             'clients_without_order' => $this->clientsWithoutOrder($regionDays, $withoutOrder),
         ];
+    }
+
+    /**
+     * Clients sans commande d'une journée régionale (I-88), même calcul que
+     * « Ma journée » : destinataires du rappel N-11 (contrat du lot 8, §3).
+     * Journée régionale chargée avec sa journée.
+     *
+     * @return list<int>
+     */
+    public function clientsWithoutOrder(RegionDay $regionDay): array
+    {
+        $ordered = $this->orderedClients($regionDay->businessDay, [$regionDay->region_id]);
+
+        return self::missing($this->notified($regionDay), $ordered[$regionDay->region_id] ?? []);
+    }
+
+    /**
+     * Notifiés : destinataires de N-03 une fois la répartition envoyée, sinon aucun.
+     *
+     * @return list<int>
+     */
+    private function notified(RegionDay $regionDay): array
+    {
+        return $regionDay->isDistributionPublished() ? $this->limits->openingRecipients($regionDay) : [];
+    }
+
+    /**
+     * Sans commande : notifiés moins ceux qui ont une commande comptée (I-88).
+     *
+     * @param  list<int>  $notified
+     * @param  list<int>  $ordered
+     * @return list<int>
+     */
+    private static function missing(array $notified, array $ordered): array
+    {
+        return array_values(array_diff($notified, $ordered));
     }
 
     /**

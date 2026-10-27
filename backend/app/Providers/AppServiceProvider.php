@@ -4,6 +4,9 @@ namespace App\Providers;
 
 use App\Domain\Limits\ClientUsage;
 use App\Domain\Orders\OrderUsage;
+use App\Domain\Push\LogPushTransport;
+use App\Domain\Push\PushTransport;
+use App\Domain\Push\WebPushTransport;
 use App\Domain\Reasons\ReasonCodes;
 use App\Domain\Settings\Settings;
 use App\Models\AuditLog;
@@ -45,6 +48,10 @@ class AppServiceProvider extends ServiceProvider
         // Consommation des clients (S, V) : fournie par les commandes à partir du lot 5.
         // S(c,p) et V(c,p) lus sur les commandes (lot 5).
         $this->app->bind(ClientUsage::class, OrderUsage::class);
+        // Transport des push (lot 8, §2.4) : services push réels, ou journal de recette.
+        $this->app->bind(PushTransport::class, fn () => config('ramymaak.push.transport') === 'log'
+            ? new LogPushTransport
+            : new WebPushTransport);
     }
 
     public function boot(): void

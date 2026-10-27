@@ -7,4 +7,6 @@ return [
     'session_expired' => 'Votre session a expiré. Reconnectez-vous.',
     'password_change_required' => 'Vous devez changer votre mot de passe avant de continuer.',
     'throttle' => 'Trop de tentatives de connexion. Réessayez dans :seconds secondes.',
+    // Appareils connectés (lot 8, §5).
+    'session_current' => 'C\'est la session de cet appareil : utilisez « Me déconnecter ».',
 ];
