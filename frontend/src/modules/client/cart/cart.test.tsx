@@ -5,10 +5,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ClientToday, Order } from '../../../shared/api/types'
 import { formatAmount } from '../../../shared/format'
 import { totals } from '../../../shared/money'
+import type { OutboxEntry } from '../../../shared/offline/db'
+import { enqueue, getEntry, listEntries } from '../../../shared/offline/outbox'
+import { sendPendingEntries } from '../../../shared/offline/useOutbox'
 import { purgeSessionStorage } from '../../../shared/storage'
 import { json, problem } from '../../../test/utils'
 import {
   type ApiHandler,
+  CLIENT_ID,
   clientApi,
   DAY,
   lben,
@@ -25,7 +29,9 @@ import {
   renderClient,
   storedCart,
   testCart,
+  USER_ID,
 } from './testing'
+import type { Cart } from './store'
 
 afterEach(() => {
   purgeSessionStorage()
@@ -56,6 +62,23 @@ const replayed = (overrides: Partial<Order> = {}) => json(orderOf(FILLED, overri
 async function sendOrder(user: UserEvent, button = 'Envoyer la commande', confirm = 'Confirmer l’envoi') {
   await user.click(await screen.findByRole('button', { name: button }))
   await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: confirm }))
+}
+
+/** Bloc « Commandes en attente d'envoi » (boîte d'envoi, lot 8). */
+const outboxBlock = () => screen.findByRole('region', { name: 'Commandes en attente d’envoi' })
+
+/** « Reprendre dans le panier » de la commande refusée. */
+async function resumeRefused(user: UserEvent) {
+  const block = await outboxBlock()
+  await user.click(await within(block).findByRole('button', { name: 'Reprendre dans le panier la commande du jeudi 08/10/2026' }))
+}
+
+/** Panier rendu, puis envoyé avec la réponse `answer` de POST /client/orders. */
+async function renderSent(user: UserEvent, answer: ApiHandler) {
+  const api = cartApi({ [ORDERS_URL]: answer })
+  const rendered = renderClient('/client/panier')
+  await sendOrder(user)
+  return { ...api, ...rendered }
 }
 
 describe('cart (EF-CLT-03)', () => {
@@ -120,15 +143,14 @@ describe('cart (EF-CLT-03)', () => {
     expect(screen.getByRole('link', { name: 'Voir le catalogue' })).toHaveAttribute('href', '/client/catalogue')
   })
 
-  it('sends the order after confirmation, with the request id saved before the request, then opens it', async () => {
+  it('sends the order through the outbox after confirmation, the request id saved before the request, then opens it', async () => {
     const user = userEvent.setup()
     fillCart('  Livrer avant 10 h ')
-    let savedBeforeRequest: unknown = null
+    let atRequest: { entry: OutboxEntry | undefined; cart: Cart | null } | null = null
     const { requests } = cartApi({
-      [ORDERS_URL]: ({ body }) => {
-        // L'identifiant d'envoi est déjà sur l'appareil quand la requête part (RG-C07).
-        savedBeforeRequest = storedCart()?.pending?.client_request_id
-        expect((body as { client_request_id: string }).client_request_id).toBe(savedBeforeRequest)
+      [ORDERS_URL]: async ({ body }) => {
+        // La commande est dans la boîte d'envoi, en cours d'envoi, et le panier déjà vidé quand la requête part (I-102).
+        atRequest = { entry: await getEntry((body as { client_request_id: string }).client_request_id), cart: storedCart() }
         return created({ comment: 'Livrer avant 10 h' })
       },
     })
@@ -145,8 +167,10 @@ describe('cart (EF-CLT-03)', () => {
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(`/client/commandes/${ORDER_ID}`))
     expect(screen.getByTestId('flash')).toHaveTextContent(`Commande ${ORDER_NUMBER} envoyée.`)
     const [sent] = requests(ORDERS_URL)
+    const id = (sent?.body as { client_request_id: string }).client_request_id
+    expect(id).toMatch(/^[0-9a-f-]{36}$/)
     expect(sent?.body).toEqual({
-      client_request_id: savedBeforeRequest,
+      client_request_id: id,
       day: DAY,
       comment: 'Livrer avant 10 h',
       lines: [
@@ -154,101 +178,89 @@ describe('cart (EF-CLT-03)', () => {
         { product_id: lben.id, quantity: 7 },
       ],
     })
-    expect(savedBeforeRequest).toMatch(/^[0-9a-f-]{36}$/)
-    // Panier vidé, sur l'appareil aussi.
-    expect(storedCart()).toBeNull()
+    expect(sent?.headers.get('X-XSRF-TOKEN')).toBe('token=1')
+    expect(atRequest).toMatchObject({ entry: { id, user_id: USER_ID, client_id: CLIENT_ID, day: DAY, status: 'sending', attempts: 1 }, cart: null })
+    // Commande envoyée : gardée dans la boîte jusqu'à la relecture de la liste des commandes.
+    await waitFor(async () => expect(await getEntry(id)).toMatchObject({ status: 'sent', order: { id: ORDER_ID, number: ORDER_NUMBER } }))
     expect(testCart().get().lines).toEqual([])
   })
 
-  it('keeps the request id after a network error or a server error, and reuses it to send again', async () => {
+  it('keeps the order in the outbox after a network or server error, and resends it with the same request id', async () => {
     const user = userEvent.setup()
     fillCart()
     let attempt = 0
-    const { requests } = cartApi({
-      [ORDERS_URL]: () => {
-        attempt += 1
-        if (attempt === 1) throw new TypeError('Failed to fetch')
-        if (attempt === 2) return problem(503, 'SERVER_ERROR', 'Service indisponible')
-        if (attempt === 3) return problem(429, 'TOO_MANY_REQUESTS', 'Trop de requêtes')
-        // L'envoi précédent avait abouti : renvoi idempotent (200), la commande telle qu'enregistrée.
-        return replayed()
-      },
+    const { requests, queryClient } = await renderSent(user, () => {
+      attempt += 1
+      if (attempt === 1) throw new TypeError('Failed to fetch')
+      if (attempt === 2) return problem(503, 'SERVER_ERROR', 'Service indisponible')
+      if (attempt === 3) return problem(429, 'TOO_MANY_REQUESTS', 'Trop de requêtes')
+      // L'envoi précédent avait abouti : renvoi idempotent (200), la commande telle qu'enregistrée.
+      return replayed()
     })
-    renderClient('/client/panier')
 
-    await sendOrder(user)
-    expect(await screen.findByText('Pas de réseau — panier conservé, réessayez.')).toBeInTheDocument()
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    const id = storedCart()?.pending?.client_request_id
-    expect(id).toBeDefined()
-    expect(storedCart()?.lines).toHaveLength(2)
-
-    await sendOrder(user)
-    expect(await screen.findByText('Envoi interrompu — panier conservé, réessayez.')).toBeInTheDocument()
-    await waitFor(() => expect(requests(ORDERS_URL)).toHaveLength(2))
-    await sendOrder(user)
-    await waitFor(() => expect(requests(ORDERS_URL)).toHaveLength(3))
-    expect(storedCart()?.pending?.client_request_id).toBe(id)
-
-    await sendOrder(user)
-    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(`/client/commandes/${ORDER_ID}`))
-    // Renvoi de la commande telle qu'envoyée : un succès comme un autre.
-    expect(screen.getByTestId('flash')).toHaveTextContent(`Commande ${ORDER_NUMBER} envoyée.`)
-    expect(requests(ORDERS_URL).map((call) => (call.body as { client_request_id: string }).client_request_id)).toEqual([id, id, id, id])
+    expect(await screen.findByText('Commande enregistrée sur cet appareil : elle partira dès le retour du réseau.')).toBeInTheDocument()
+    const block = await outboxBlock()
+    expect(block).toHaveTextContent('Commande du jeudi 08/10/2026 · 2 produits')
+    expect(block).toHaveTextContent('En attente d’envoi')
+    expect(block).toHaveTextContent('Elle partira d’elle-même dès que le réseau le permettra.')
+    // Panier vidé : la commande n'existe plus que dans la boîte d'envoi.
     expect(storedCart()).toBeNull()
+    expect(screen.getByText('Votre panier est vide.')).toBeInTheDocument()
+    const [entry] = await listEntries(USER_ID)
+    expect(entry).toMatchObject({ status: 'pending', attempts: 1, error: null })
+
+    for (const expected of [2, 3]) {
+      await act(() => sendPendingEntries(queryClient, USER_ID))
+      expect(requests(ORDERS_URL)).toHaveLength(expected)
+      expect(await getEntry(entry!.id)).toMatchObject({ status: 'pending', attempts: expected })
+    }
+    await act(() => sendPendingEntries(queryClient, USER_ID))
+    expect(within(await outboxBlock()).getByText(`Envoyée — ${ORDER_NUMBER}`)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: `Voir la commande ${ORDER_NUMBER}` })).toHaveAttribute('href', `/client/commandes/${ORDER_ID}`)
+    expect(requests(ORDERS_URL).map((call) => (call.body as { client_request_id: string }).client_request_id)).toEqual([entry!.id, entry!.id, entry!.id, entry!.id])
   })
 
-  it('keeps the cart and starts afresh when the interrupted sending had created an order cancelled since', async () => {
+  it('gives the cart back and starts afresh when the interrupted sending had created an order cancelled since', async () => {
     const user = userEvent.setup()
     fillCart()
+    // Envoi interrompu avant la boîte d'envoi (lot 5) : identifiant gardé dans le panier.
+    const first = testCart().beginSend()
     let attempt = 0
     const { requests } = cartApi({
       [ORDERS_URL]: () => {
         attempt += 1
-        if (attempt === 1) throw new TypeError('Failed to fetch')
         // Le premier envoi avait abouti ; la commande a été annulée depuis (« Mes commandes », autre compte).
-        if (attempt === 2) return replayed({ status: 'CANCELLED', status_label: 'Annulée', can_modify: false, can_cancel: false })
+        if (attempt === 1) return replayed({ status: 'CANCELLED', status_label: 'Annulée', can_modify: false, can_cancel: false })
         return created()
       },
     })
     renderClient('/client/panier')
 
     await sendOrder(user)
-    expect(await screen.findByText('Pas de réseau — panier conservé, réessayez.')).toBeInTheDocument()
-    const first = storedCart()?.pending?.client_request_id
-    await sendOrder(user)
     expect(
       await screen.findByText(`L’envoi interrompu avait créé la commande ${ORDER_NUMBER}, depuis annulée : envoyez à nouveau pour créer une nouvelle commande.`),
     ).toBeInTheDocument()
     expect(screen.getByTestId('location')).toHaveTextContent('/client/panier')
-    expect(storedCart()?.lines).toHaveLength(2)
+    await waitFor(() => expect(storedCart()?.lines).toHaveLength(2))
     expect(storedCart()?.pending).toBeNull()
+    await waitFor(async () => expect(await listEntries(USER_ID)).toEqual([]))
 
     await sendOrder(user)
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(`/client/commandes/${ORDER_ID}`))
     const ids = requests(ORDERS_URL).map((call) => (call.body as { client_request_id: string }).client_request_id)
-    expect(ids.slice(0, 2)).toEqual([first, first])
-    expect(ids[2]).not.toBe(first)
+    expect(ids[0]).toBe(first)
+    expect(ids[1]).not.toBe(first)
   })
 
   it('warns when a resent order was already saved without the changes made since the interruption', async () => {
     const user = userEvent.setup()
     fillCart()
-    let attempt = 0
-    cartApi({
-      [ORDERS_URL]: () => {
-        attempt += 1
-        // Premier envoi reçu par le serveur, réponse perdue ; le renvoi rend la commande enregistrée (I-54).
-        if (attempt === 1) throw new TypeError('Failed to fetch')
-        return replayed()
-      },
-    })
+    testCart().beginSend()
+    // Premier envoi reçu par le serveur, réponse perdue ; le renvoi rend la commande enregistrée (I-54).
+    cartApi({ [ORDERS_URL]: () => replayed() })
     renderClient('/client/panier')
 
-    await sendOrder(user)
-    expect(await screen.findByText('Pas de réseau — panier conservé, réessayez.')).toBeInTheDocument()
-    await user.click(within(line('Jus orange 1 L')).getByRole('button', { name: 'Augmenter la quantité de Jus orange 1 L' }))
-
+    await user.click(within(await screen.findByRole('article', { name: 'Jus orange 1 L' })).getByRole('button', { name: 'Augmenter la quantité de Jus orange 1 L' }))
     await sendOrder(user)
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(`/client/commandes/${ORDER_ID}`))
     expect(screen.getByTestId('flash')).toHaveTextContent(
@@ -306,11 +318,12 @@ describe('cart (EF-CLT-03)', () => {
     expect((call?.body as { client_request_id: string } | undefined)?.client_request_id).toBe(id)
   })
 
-  it('reports the refused quantities on their lines and forgets the request id', async () => {
+  it('shows a refusal in the outbox, then reports the refused quantities on their lines once resumed in the cart', async () => {
     const user = userEvent.setup()
     testCart().setQuantity(DAY, orange.id, 38)
     testCart().setQuantity(DAY, pomme.id, 300)
     testCart().setQuantity(DAY, lben.id, 7)
+    testCart().setComment('Livrer tôt')
     const { requests } = cartApi({
       [ORDERS_URL]: () =>
         problem(409, 'CLIENT_LIMIT_EXCEEDED', '2 lignes dépassent la quantité disponible.', {
@@ -323,9 +336,18 @@ describe('cart (EF-CLT-03)', () => {
     renderClient('/client/panier')
 
     await sendOrder(user)
+    const block = await outboxBlock()
+    expect(await within(block).findByText('Refusée : 2 lignes dépassent la quantité disponible.')).toBeInTheDocument()
+    expect(storedCart()).toBeNull()
+    expect((await listEntries(USER_ID))[0]).toMatchObject({ status: 'refused', error: { code: 'CLIENT_LIMIT_EXCEEDED', detail: '2 lignes dépassent la quantité disponible.' } })
+
+    await user.click(within(block).getByRole('button', { name: 'Reprendre dans le panier la commande du jeudi 08/10/2026' }))
     expect(await screen.findByText('2 lignes dépassent la quantité disponible.')).toBeInTheDocument()
     expect(screen.getByText('Corrigez les lignes signalées, puis renvoyez la commande.')).toBeInTheDocument()
-    expect(storedCart()?.pending).toBeNull()
+    expect((await screen.findAllByText('Panier reconstruit à partir de la commande refusée : corrigez-le si besoin, puis envoyez-le à nouveau.')).length).toBeGreaterThan(0)
+    expect(storedCart()).toMatchObject({ day: DAY, comment: 'Livrer tôt', pending: null })
+    expect(storedCart()?.lines).toHaveLength(3)
+    await waitFor(async () => expect(await listEntries(USER_ID)).toEqual([]))
 
     const orangeLine = line('Jus orange 1 L')
     expect(within(orangeLine).getByText('Maximum : 35.')).toBeInTheDocument()
@@ -352,6 +374,7 @@ describe('cart (EF-CLT-03)', () => {
     renderClient('/client/panier')
 
     await sendOrder(user)
+    await resumeRefused(user)
     expect(await screen.findByText('Un produit n’est pas disponible pour vous ce jour-là.')).toBeInTheDocument()
     expect(within(line('Lben 1 L')).getByText('Ce produit n’est plus disponible pour vous : retirez-le.')).toBeInTheDocument()
     expect(line('Jus orange 1 L')).not.toHaveTextContent('disponible pour vous')
@@ -360,6 +383,7 @@ describe('cart (EF-CLT-03)', () => {
       errors: { 'lines.0.quantity': ['La quantité doit être un nombre entier de 1 à 1 000 000.'], comment: ['Le commentaire est trop long.'] },
     })
     await sendOrder(user)
+    await resumeRefused(user)
     expect(await screen.findByText('Le commentaire est trop long.')).toBeInTheDocument()
     expect(within(line('Jus orange 1 L')).getByText('La quantité doit être un nombre entier de 1 à 1 000 000.')).toBeInTheDocument()
     expect(line('Lben 1 L')).not.toHaveTextContent('retirez-le')
@@ -375,19 +399,23 @@ describe('cart (EF-CLT-03)', () => {
       problem(422, 'ORDER_BELOW_MINIMUM', 'Minimum.', { min_amount_ht: 5000, total_ht: 3613.5 }),
       plain(`Montant minimum de commande : ${formatAmount(5000)} HT (votre commande : ${formatAmount(3613.5)} HT).`),
     ],
-  ])('explains a refusal %s and forgets the request id', async (_, answer, message) => {
+  ])('shows the server reason of a refusal %s, then explains it once resumed in the cart', async (_, answer, message) => {
     const user = userEvent.setup()
     fillCart()
+    const detail = ((await answer.clone().json()) as { detail: string }).detail
     const { todayQueries } = cartApi({ [ORDERS_URL]: () => answer.clone() })
     renderClient('/client/panier')
 
     await sendOrder(user)
+    expect(await within(await outboxBlock()).findByText(`Refusée : ${detail}`)).toBeInTheDocument()
+    // La journée est relue : ce qui empêche l'envoi s'affiche.
+    await waitFor(() => expect(todayQueries().length).toBeGreaterThan(1))
+
+    await resumeRefused(user)
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent(message)
     expect(storedCart()?.pending).toBeNull()
     expect(storedCart()?.lines).toHaveLength(2)
-    // La journée est relue : ce qui empêche l'envoi s'affiche.
-    await waitFor(() => expect(todayQueries().length).toBeGreaterThan(1))
   })
 
   it('warns below the minimum amount and says why the order cannot be sent', async () => {
@@ -400,21 +428,59 @@ describe('cart (EF-CLT-03)', () => {
     expect(screen.getByRole('button', { name: 'Envoyer la commande' })).toBeDisabled()
   })
 
-  it('disables sending offline, the cart staying editable', async () => {
+  it('sends a new order offline through the outbox: the order waits on the device and the cart is emptied', async () => {
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
     const user = userEvent.setup()
     fillCart()
-    const { requests } = cartApi({ [ORDERS_URL]: () => created() })
+    const { requests } = cartApi({
+      [ORDERS_URL]: () => {
+        throw new TypeError('Failed to fetch')
+      },
+    })
     renderClient('/client/panier')
 
-    expect(await screen.findByText('Hors ligne : l’envoi est impossible pour le moment. Votre panier reste enregistré sur cet appareil.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Envoyer la commande' })).toBeDisabled()
+    expect(await screen.findByText(/^Hors ligne — données de \d\d:\d\d$/)).toBeInTheDocument()
+    expect(screen.getByText('Hors ligne : la commande sera enregistrée sur cet appareil et envoyée dès le retour du réseau.')).toBeInTheDocument()
     await user.click(within(line('Lben 1 L')).getByRole('button', { name: 'Augmenter la quantité de Lben 1 L' }))
     expect(storedCart()?.lines[1]).toEqual({ product_id: lben.id, quantity: 8 })
-    expect(requests(ORDERS_URL)).toHaveLength(0)
+
+    await sendOrder(user)
+    expect(await screen.findByText('Commande enregistrée sur cet appareil : elle partira dès le retour du réseau.')).toBeInTheDocument()
+    expect(within(await outboxBlock()).getByText('En attente d’envoi')).toBeInTheDocument()
+    expect(storedCart()).toBeNull()
+    const [entry] = await listEntries(USER_ID)
+    expect(entry?.body.lines).toEqual([
+      { product_id: orange.id, quantity: 3 },
+      { product_id: lben.id, quantity: 8 },
+    ])
+    expect(entry).toMatchObject({ status: 'pending', day: DAY })
+    expect(requests(ORDERS_URL)).toHaveLength(1)
   })
 
-  it('says offline that the day will show once the network is back, the cart staying on the device', async () => {
+  it('cannot send a second order for a day that already has one waiting on the device (I-112)', async () => {
+    fillCart()
+    await enqueue({ user_id: USER_ID, client_id: CLIENT_ID, body: { client_request_id: 'waiting-1', day: DAY, comment: null, lines: [{ product_id: pomme.id, quantity: 2 }] } })
+    cartApi()
+    renderClient('/client/panier')
+
+    expect(await screen.findByText('Une commande est déjà en attente d’envoi pour cette journée.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Envoyer la commande' })).toBeDisabled()
+    expect(await outboxBlock()).toHaveTextContent('Commande du jeudi 08/10/2026 · 1 produit')
+  })
+
+  it('keeps the modifications of a submitted order for the network, offline (D-13)', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    testCart().startEditing(makeOrder({ version: 2 }))
+    cartApi({}, makeToday({ orders: [makeSummary({ version: 2 })], products: [{ ...orange, available: 50 }, pomme, lben] }))
+    renderClient('/client/panier')
+
+    expect(
+      await screen.findByText('Hors ligne : l’enregistrement des modifications reprendra au retour du réseau. Votre panier reste enregistré sur cet appareil.'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Enregistrer les modifications' })).toBeDisabled()
+  })
+
+  it('says offline that nothing is saved on the device for the day, the cart staying on the device', async () => {
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
     onlineManager.setOnline(false)
     try {
@@ -422,7 +488,8 @@ describe('cart (EF-CLT-03)', () => {
       const { todayQueries } = cartApi()
       renderClient('/client/panier')
 
-      expect(await screen.findByText('Hors ligne : la journée s’affichera au retour du réseau. Votre panier reste enregistré sur cet appareil.')).toBeInTheDocument()
+      expect(await screen.findByText('Pas de données enregistrées sur cet appareil pour cet écran : reconnectez-vous au réseau.')).toBeInTheDocument()
+      expect(screen.getByText('Votre panier reste enregistré sur cet appareil.')).toBeInTheDocument()
       expect(todayQueries()).toHaveLength(0)
       expect(storedCart()?.lines).toHaveLength(2)
 

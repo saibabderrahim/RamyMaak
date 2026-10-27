@@ -164,7 +164,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::patch('auth/me/preferences', [PreferencesController::class, 'update'])->name('auth.preferences');
             Route::get('auth/sessions', [SessionController::class, 'index'])->name('auth.sessions.index');
             Route::delete('auth/sessions/{session}', [SessionController::class, 'destroy'])
-                ->where('session', 's_[0-9a-f]{12}')
+                ->where('session', '[sr]_[0-9a-f]{12}')
                 ->name('auth.sessions.destroy');
 
             Route::prefix('admin')->name('admin.')->group(function () {

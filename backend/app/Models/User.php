@@ -38,6 +38,17 @@ class User extends Authenticatable
     protected string $guard_name = 'web';
 
     /**
+     * Jeton « Rester connecté » de l'appareil de la requête en cours, en
+     * clair, jamais enregistré : posé à sa création (connexion) ou à sa
+     * lecture dans le cookie (I-113). Vide sinon : SessionGuard en crée alors
+     * un nouveau à chaque connexion avec « Rester connecté ».
+     */
+    private ?string $deviceRememberToken = null;
+
+    /** Ligne `remember_tokens` de cet appareil pour la requête en cours. */
+    private ?int $rememberTokenId = null;
+
+    /**
      * @var list<string>
      */
     protected $fillable = [
@@ -123,6 +134,41 @@ class User extends Authenticatable
     public function regionAssignments(): HasMany
     {
         return $this->hasMany(RegionAssignment::class);
+    }
+
+    /**
+     * Jeton « Rester connecté » de l'appareil courant (I-113), et non plus la
+     * colonne `remember_token`, partagée par tous les appareils du compte.
+     */
+    public function getRememberToken(): ?string
+    {
+        return $this->deviceRememberToken;
+    }
+
+    /** @param  string|null  $value */
+    public function setRememberToken($value): void
+    {
+        $this->deviceRememberToken = $value === '' ? null : $value;
+    }
+
+    /** Appareil reconnu ou enregistré pendant la requête : jeton en clair et ligne. */
+    public function rememberDevice(int $tokenId, string $token): void
+    {
+        $this->rememberTokenId = $tokenId;
+        $this->deviceRememberToken = $token;
+    }
+
+    /** Ligne `remember_tokens` de l'appareil de la requête en cours, ou null. */
+    public function rememberTokenId(): ?int
+    {
+        return $this->rememberTokenId;
+    }
+
+    /** L'appareil de la requête en cours n'est plus mémorisé. */
+    public function forgetRememberedDevice(): void
+    {
+        $this->rememberTokenId = null;
+        $this->deviceRememberToken = null;
     }
 
     public function appRole(): ?Role

@@ -1076,7 +1076,7 @@ export type PushPayload = {
 
 /** Appareil connecté (§5) : une session du compte. */
 export type DeviceSession = {
-  /** Identifiant opaque `s_` + 12 caractères hexadécimaux. */
+  /** Identifiant opaque : `s_` (session active) ou `r_` (appareil mémorisé inactif) + 12 caractères hexadécimaux. */
   id: string
   /** « Chrome sur Android »… */
   device: string
@@ -1084,6 +1084,8 @@ export type DeviceSession = {
   last_active_at: string
   current: boolean
   push: boolean
+  /** « Rester connecté » sur cet appareil (I-113). */
+  remembered: boolean
 }
 
 export type PreferencesInput = { reminders: boolean }

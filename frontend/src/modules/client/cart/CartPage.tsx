@@ -230,10 +230,12 @@ export default function CartPage() {
       setConfirming(false)
     }
     store.clear()
-    setQueuedId(body.client_request_id)
     void registerBackgroundSync()
     const result = await sendOutboxEntry(queryClient, body.client_request_id)
-    if (result && mounted.current) settleQueued(result, body)
+    if (!mounted.current) return
+    // Avis « enregistrée sur cet appareil » après la première tentative seulement : jamais pendant l'envoi.
+    setQueuedId(body.client_request_id)
+    if (result) settleQueued(result, body)
   }
 
   /** « Reprendre dans le panier » de la commande refusée ici : refus rapporté aux lignes, comme au lot 5. */

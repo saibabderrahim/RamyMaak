@@ -79,8 +79,8 @@ export function DevicesCard() {
         <div className="flex flex-col gap-3 border-t border-slate-200 pt-4">
           <p className="text-sm text-slate-600">{t('push.sessions.logoutAllHint')}</p>
           <ErrorAlert error={logoutAll.error} />
-          <Button variant="danger" className="self-start whitespace-normal" onClick={() => setConfirmAll(true)} disabled={logoutAll.isPending || !online}>
-            {t('auth.logoutAll')}
+          <Button variant="danger" className="self-start py-2" onClick={() => setConfirmAll(true)} disabled={logoutAll.isPending || !online}>
+            <span className="whitespace-normal">{t('auth.logoutAll')}</span>
           </Button>
           {!online && <p className="text-sm text-slate-600">{t('push.offline')}</p>}
         </div>
@@ -102,7 +102,7 @@ export function DevicesCard() {
       <ConfirmDialog
         open={confirmAll}
         title={t('auth.logoutAll')}
-        confirmLabel={t('auth.logoutAll')}
+        confirmLabel={t('push.sessions.logoutAllAction')}
         tone="danger"
         pending={logoutAll.isPending}
         error={logoutAll.error}

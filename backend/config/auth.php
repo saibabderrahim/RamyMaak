@@ -62,8 +62,9 @@ return [
     */
 
     'providers' => [
+        // Eloquent, avec un jeton « Rester connecté » par appareil (I-113).
         'users' => [
-            'driver' => 'eloquent',
+            'driver' => 'eloquent_devices',
             'model' => env('AUTH_MODEL', User::class),
         ],
 

@@ -343,7 +343,7 @@ describe('profile — connected devices (contract §5)', () => {
     await user.click(card.getByRole('button', { name: 'Me déconnecter de tous mes appareils' }))
     const dialog = within(await screen.findByRole('dialog', { name: 'Me déconnecter de tous mes appareils' }))
     expect(dialog.getByText(/y compris celui-ci/)).toBeInTheDocument()
-    await user.click(dialog.getByRole('button', { name: 'Me déconnecter de tous mes appareils' }))
+    await user.click(dialog.getByRole('button', { name: 'Tout déconnecter' }))
 
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/connexion'))
     expect(requests('POST /api/v1/auth/logout-all')).toHaveLength(1)

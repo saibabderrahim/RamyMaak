@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Domain\Auth\DeviceUserProvider;
+use App\Domain\Auth\RememberTokens;
 use App\Domain\Limits\ClientUsage;
 use App\Domain\Orders\OrderUsage;
 use App\Domain\Push\LogPushTransport;
@@ -27,11 +29,14 @@ use App\Models\RegionDay;
 use App\Models\RegionQuota;
 use App\Models\Setting;
 use App\Models\User;
+use Illuminate\Auth\Events\Login;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
@@ -57,6 +62,11 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         JsonResource::withoutWrapping();
+
+        // « Rester connecté » par appareil (EF-AUTH-06, I-113) : un jeton par
+        // connexion, rattaché à la session qu'il ouvre.
+        Auth::provider('eloquent_devices', fn ($app, array $config) => new DeviceUserProvider($app['hash'], $config['model']));
+        Event::listen(Login::class, [RememberTokens::class, 'onLogin']);
 
         // Types polymorphes stables (journal d'audit, rôles) : la base ne
         // dépend pas des noms de classes PHP.

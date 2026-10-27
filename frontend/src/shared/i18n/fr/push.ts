@@ -78,6 +78,7 @@ const push = {
     revokeTitle: 'Déconnecter cet appareil ?',
     revokeConfirm: 'Le compte sera fermé sur « {{device}} » (dernière activité : {{date}}) et cet appareil ne recevra plus de notifications.',
     revoked: '« {{device}} » est déconnecté.',
+    logoutAllAction: 'Tout déconnecter',
     logoutAllHint: 'En cas de perte ou de vol d’un appareil, déconnectez-le, ou fermez votre compte partout, y compris ici.',
   },
   // Accueil du client et « Ma journée » du régional (§8) : une fois par compte et par appareil.

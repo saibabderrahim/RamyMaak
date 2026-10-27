@@ -64,6 +64,7 @@ describe('GET /auth/sessions', function () {
                 'last_active_at' => '2026-10-08T09:00:00+00:00',
                 'current' => true,
                 'push' => false,
+                'remembered' => false,
             ],
             [
                 'id' => ($this->opaque)('tablet-session'),
@@ -72,6 +73,7 @@ describe('GET /auth/sessions', function () {
                 'last_active_at' => '2026-10-08T08:30:00+00:00',
                 'current' => false,
                 'push' => true,
+                'remembered' => false,
             ],
             [
                 'id' => ($this->opaque)('old-phone-session'),
@@ -80,6 +82,7 @@ describe('GET /auth/sessions', function () {
                 'last_active_at' => '2026-10-08T07:30:00+00:00',
                 'current' => false,
                 'push' => false,
+                'remembered' => false,
             ],
         ]);
         expect($response->json('data.0.id'))->toMatch('/^s_[0-9a-f]{12}$/')

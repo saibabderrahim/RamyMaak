@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Auth\AuthAudit;
 use App\Domain\Auth\Authenticator;
+use App\Domain\Auth\RememberTokens;
 use App\Domain\Auth\SessionRevoker;
 use App\Domain\Push\PushSubscriptions;
 use App\Domain\Settings\Settings;
@@ -23,7 +24,7 @@ class AuthController extends Controller
 {
     public function __construct(private readonly AuthAudit $audit) {}
 
-    public function login(LoginRequest $request, Authenticator $authenticator, Settings $settings): JsonResponse
+    public function login(LoginRequest $request, Authenticator $authenticator, Settings $settings, RememberTokens $rememberTokens): JsonResponse
     {
         $user = $authenticator->attempt(
             (string) $request->input('username'),
@@ -34,6 +35,8 @@ class AuthController extends Controller
         // « Rester connecté » réservé aux clients et régionaux (EF-AUTH-06).
         $remember = $request->boolean('remember') && ! $user->appRole()?->isBackOffice();
 
+        // Ancien jeton de cet appareil (I-113) : remplacé par cette connexion.
+        $rememberTokens->forgetCookie($request);
         $guard = Auth::guard('web');
         $guard->setRememberDuration($settings->int('sessions.remember_days') * 24 * 60);
         $guard->login($user, $remember);
@@ -42,6 +45,10 @@ class AuthController extends Controller
         $request->session()->regenerate();
         $request->session()->put(EnforceSessionPolicy::STARTED_AT, now()->getTimestamp());
         $request->session()->put(EnforceSessionPolicy::LAST_SEEN_AT, now()->getTimestamp());
+        // Le jeton de l'appareil suit la session définitive.
+        if ($remember) {
+            $rememberTokens->attachSession($user, $request->session()->getId());
+        }
 
         $this->audit->record('login.succeeded', 'Connexion', $request, $user, properties: [
             'remember' => $remember,
@@ -50,14 +57,16 @@ class AuthController extends Controller
         return (new CurrentUserResource($user))->response();
     }
 
-    public function logout(Request $request, PushSubscriptions $pushSubscriptions): Response
+    public function logout(Request $request, PushSubscriptions $pushSubscriptions, RememberTokens $rememberTokens): Response
     {
         /** @var User $user */
         $user = $request->user();
 
         $this->audit->record('logout', 'Déconnexion', $request, $user);
-        // Abonnements push de cet appareil (I-103), avant que la session ne change d'identifiant.
+        // Abonnements push et jeton « Rester connecté » de cet appareil (I-103,
+        // I-113), avant que la session ne change d'identifiant.
         $pushSubscriptions->forgetSession($user, $request->session()->getId());
+        $rememberTokens->forgetCurrentDevice($user, $request);
         $this->endCurrentSession($request);
 
         return response()->noContent();

@@ -6,39 +6,28 @@
  * Route indépendante de celle de la navigation : celle-ci ne répond qu'aux
  * navigations, et `/media/` figure dans NAVIGATION_DENYLIST. Les URL des
  * photos sont versionnées (lot 2) : une photo remplacée change d'URL, la
- * copie enregistrée ne peut donc pas être périmée.
+ * copie enregistrée ne peut donc pas être périmée. Hors ligne, une photo
+ * jamais vue échoue, et l'application montre le visuel par défaut.
  */
 import type { WorkboxPlugin } from 'workbox-core'
 import { ExpirationPlugin } from 'workbox-expiration'
 import { registerRoute } from 'workbox-routing'
 import { CacheFirst } from 'workbox-strategies'
+import { isCacheablePhoto, isPhotoRequest, PHOTO_CACHE, PHOTO_MAX_AGE_SECONDS, PHOTO_MAX_ENTRIES } from '../shared/offline/photos'
 
-export const PHOTO_CACHE = 'ramymaak-photos'
-export const PHOTO_MAX_ENTRIES = 500
-export const PHOTO_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
+declare let self: ServiceWorkerGlobalScope
 
-/** Photo de l'application servie par nginx : même origine, sous /media/, en lecture. */
-export function isPhotoRequest(url: URL, request: Request, origin: string): boolean {
-  return url.origin === origin && url.pathname.startsWith('/media/') && request.method === 'GET'
-}
-
-/**
- * Seules les réponses 200 sont enregistrées (rôle de workbox-cacheable-response) :
- * jamais une erreur, une redirection ou une réponse partielle.
- */
-export const cacheOkOnly: WorkboxPlugin = {
-  cacheWillUpdate: async ({ response }) => (response.status === 200 ? response : null),
+/** Rôle de workbox-cacheable-response (non installé) : réponses 200 seulement. */
+const cacheOkOnly: WorkboxPlugin = {
+  cacheWillUpdate: async ({ response }) => (isCacheablePhoto(response) ? response : null),
 }
 
 export function registerPhotoCache(): void {
   registerRoute(
-    ({ url, request }) => isPhotoRequest(url, request, self.location.origin),
+    ({ url, request }) => isPhotoRequest(url, request.method, self.location.origin),
     new CacheFirst({
       cacheName: PHOTO_CACHE,
-      plugins: [
-        cacheOkOnly,
-        new ExpirationPlugin({ maxEntries: PHOTO_MAX_ENTRIES, maxAgeSeconds: PHOTO_MAX_AGE_SECONDS, purgeOnQuotaError: true }),
-      ],
+      plugins: [cacheOkOnly, new ExpirationPlugin({ maxEntries: PHOTO_MAX_ENTRIES, maxAgeSeconds: PHOTO_MAX_AGE_SECONDS, purgeOnQuotaError: true })],
     }),
   )
 }

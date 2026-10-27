@@ -66,13 +66,14 @@ function DevicePush() {
       )}
 
       {push.status === 'off' && (
-        <Button className="self-start whitespace-normal" onClick={() => run(push.enable)} disabled={push.busy || !online}>
-          {push.busy ? t('push.device.enabling') : t('push.device.enable')}
+        <Button className="self-start py-2" onClick={() => run(push.enable)} disabled={push.busy || !online}>
+          {/* Libellé long : renvoyé à la ligne sur un téléphone de 320 px. */}
+          <span className="whitespace-normal">{push.busy ? t('push.device.enabling') : t('push.device.enable')}</span>
         </Button>
       )}
       {push.status === 'on' && (
-        <Button variant="secondary" className="self-start whitespace-normal" onClick={() => run(push.disable)} disabled={push.busy || !online}>
-          {push.busy ? t('push.device.disabling') : t('push.device.disable')}
+        <Button variant="secondary" className="self-start py-2" onClick={() => run(push.disable)} disabled={push.busy || !online}>
+          <span className="whitespace-normal">{push.busy ? t('push.device.disabling') : t('push.device.disable')}</span>
         </Button>
       )}
       {!online && (push.status === 'off' || push.status === 'on') && <p className="text-sm text-slate-600">{t('push.offline')}</p>}

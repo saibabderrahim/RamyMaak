@@ -4,6 +4,7 @@ use App\Domain\Access\Role;
 use App\Models\AuditLog;
 use App\Models\User;
 use Database\Factories\UserFactory;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
 
 function login(string $username, string $password = UserFactory::PASSWORD, array $extra = []): TestResponse
@@ -145,9 +146,12 @@ it('regenerates the session identifier on login', function () {
 it('only lets clients and regionals stay signed in', function (Role $role, bool $remembered) {
     $user = userWithRole($role, ['username' => 'someone']);
 
-    login('someone', extra: ['remember' => true])->assertOk();
+    $response = login('someone', extra: ['remember' => true])->assertOk();
 
-    expect($user->fresh()->remember_token !== null)->toBe($remembered);
+    // Un jeton par appareil (I-113), et le cookie qui le porte.
+    $cookie = collect($response->headers->getCookies())->first(fn ($c) => str_starts_with($c->getName(), 'remember_web_'));
+    expect(DB::table('remember_tokens')->where('user_id', $user->id)->count())->toBe($remembered ? 1 : 0)
+        ->and($cookie !== null)->toBe($remembered);
 })->with([
     'client' => [Role::Client, true],
     'regional' => [Role::Regional, true],
