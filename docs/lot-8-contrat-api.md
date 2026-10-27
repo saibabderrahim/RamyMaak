@@ -199,11 +199,12 @@ Le cache de TanStack Query est enregistré dans IndexedDB (Dexie, base `ramymaak
   - client : `['client', …]` (état du jour, catalogue, commandes) ;
   - régional : `['regional','dashboard'|'quotas'|'orders'|'order', …]`, `['distribution','grid', …]`, `['distribution','regions', …]`, `['field','clients', …]` ;
   - tous : `['notifications', …]` (centre de notifications).
-  - **Jamais** `['adv', …]`, `['admin', …]`, `['backoffice', …]` ni rien du back-office.
-- **Démarrage hors ligne** : l'utilisateur et les données enregistrés s'affichent. Au retour du réseau, `GET /auth/me` est relu ; un 401 renvoie à la connexion.
-- **Bandeau** sur chaque écran lu hors ligne : « Hors ligne — données de 09:42 » (heure de la dernière relecture réussie de la requête principale de l'écran, `dataUpdatedAt`). C'est déjà le cas de la grille du régional (lot 4) ; le lot l'étend à l'accueil, au catalogue, au panier, aux commandes, à « Ma journée », aux quotas, aux commandes reçues et à « Mes clients ».
+  - **Jamais** `['adv', …]`, `['admin', …]`, `['backoffice', …]` ni rien du back-office ; pour un compte ADV ou Admin, rien n'est enregistré (§1).
+- **Démarrage** : les données enregistrées s'affichent tout de suite, puis sont relues dès que le réseau le permet (`GET /auth/me` compris : un 401 renvoie à la connexion, même juste après un rechargement). Hors ligne, l'utilisateur et les données enregistrés restent affichés.
+- **Plusieurs onglets ou comptes** : un instantané n'est écrit que pour le compte connecté en dernier sur l'appareil ; un onglet qui découvre un autre compte oublie les données du précédent avant tout enregistrement.
+- **Bandeau** sur chaque écran lu hors ligne : « Hors ligne — données de 09:42 », ou « … du 05/10 à 09:42 » pour des données d'un autre jour (heure de la dernière relecture réussie de la requête principale de l'écran, `dataUpdatedAt`). C'est déjà le cas de la grille du régional (lot 4) ; le lot l'étend à l'accueil, au catalogue, au panier, aux commandes, à « Ma journée », aux quotas, aux commandes reçues et à « Mes clients ».
 - **Pas encore lu sur cet appareil** : message « Pas de données enregistrées sur cet appareil pour cet écran : reconnectez-vous au réseau. »
-- **Déconnexion** : le cache persistant du compte, la boîte d'envoi (§6.3) et les brouillons de bornes sont effacés de l'appareil.
+- **Déconnexion** (et déconnexion de tous les appareils) : le cache persistant du compte, la boîte d'envoi (§6.3) et les brouillons de bornes sont effacés de l'appareil. **Session expirée** : seul le cache persistant est effacé ; les commandes en attente restent, avec « Reconnectez-vous pour envoyer ».
 
 ### 6.2 Photos : cache du service worker
 
@@ -217,25 +218,27 @@ Table Dexie `outbox` :
 { id: string /* client_request_id */, user_id: number, client_id: number, day: string,
   body: SubmitOrderInput, created_at: string, status: 'pending' | 'sending' | 'sent' | 'refused',
   attempts: number, error: { code: string, detail: string } | null,
-  order: { id: string, number: string } | null }
+  order: { id: string, number: string } | null,
+  sending_at?: string, sent_at?: string }
 ```
 
 1. « Envoyer la commande » (après confirmation) dépose la commande dans la boîte d'envoi avec son `client_request_id`, vide le panier et tente l'envoi aussitôt. C'est le cas en ligne comme hors ligne : l'envoi passe toujours par la boîte.
 2. **Nouvelles tentatives** :
    - au retour du réseau (`online`), à l'ouverture de l'application, au retour au premier plan, puis toutes les 30 s tant qu'une commande attend et que l'application est ouverte ;
-   - en arrière-plan avec Background Sync (Chrome, Android), étiquette `ramymaak-outbox`. Le service worker envoie alors lui-même la commande, avec le jeton CSRF lu par l'API Cookie Store, et prévient l'utilisateur par une notification locale « Commande RMK-… envoyée » ou « Commande refusée ».
+   - en arrière-plan avec Background Sync (Chrome, Android), étiquette `ramymaak-outbox`. Le service worker envoie alors lui-même la commande, avec le jeton CSRF lu par l'API Cookie Store (renouvelé par `/sanctum/csrf-cookie` s'il a expiré), et prévient l'utilisateur par une notification locale « Commande RMK-… envoyée » ou « Commande refusée » quand aucune fenêtre de l'application n'est visible.
+   - **Seulement pour le compte connecté** : une commande déposée par un autre compte de l'appareil n'est jamais envoyée (elle attend ce compte), ni par l'application ni par le service worker. Une entrée « Envoi en cours… » bloquée depuis plus de 2 minutes redevient envoyable, avec le même identifiant d'envoi.
 3. **Résultat** :
    - 201 ou 200 (renvoi idempotent) → `sent`, numéro de commande, lien vers la commande ;
    - erreur de réseau, 5xx, 408, 419 ou 429 → reste `pending` ;
-   - 401 → `pending`, avec « Reconnectez-vous pour envoyer » ;
+   - 401, ou 403 `PASSWORD_CHANGE_REQUIRED` → `pending`, avec « Reconnectez-vous pour envoyer » ; l'application relit `/auth/me` (connexion) ;
    - autre 4xx → `refused` avec le motif du serveur (`detail`, par exemple « L'heure limite de commande (13:00) est passée »), et deux actions : « Reprendre dans le panier » (le panier est reconstruit depuis `body`, un nouvel identifiant d'envoi sera créé) et « Retirer ».
 4. **Affichage** :
    - accueil du client et « Mes commandes » : bloc « Commandes en attente d'envoi » (« En attente d'envoi », « Envoi en cours… », « Envoyée — RMK-… », « Refusée : motif ») ;
    - pastille de l'onglet « Commandes » ;
-   - une commande `sent` reste affichée jusqu'à ce que la liste des commandes l'ait relue, puis elle est retirée de la boîte.
+   - une commande `sent` reste affichée jusqu'à ce que la liste des commandes (ou l'état du jour) l'ait relue après son envoi, puis elle est retirée de la boîte.
 5. **Une commande en attente par journée** : tant qu'une commande de la journée est `pending`, le panier de cette journée ne peut pas en envoyer une autre (« Une commande est déjà en attente d'envoi pour cette journée »). Le serveur reste juge du nombre de commandes par jour (RG-C04).
 6. **Modification, annulation, « Recommander »** : en ligne seulement, comme au lot 5 (D-13).
-7. **Déconnexion avec une commande en attente** : confirmation « 1 commande en attente d'envoi sera supprimée de cet appareil. Se déconnecter quand même ? ».
+7. **Déconnexion avec une commande en attente** (« Me déconnecter » ou de tous les appareils) : confirmation « 1 commande en attente d'envoi sera supprimée de cet appareil. Se déconnecter quand même ? ».
 
 ## 7. Service worker
 
@@ -243,7 +246,7 @@ Table Dexie `outbox` :
 |---|---|
 | `install` / `activate` | Pré-cache (lot 1) ; `clientsClaim` à l'activation d'une nouvelle version acceptée |
 | `fetch` | Navigation vers `index.html` (lot 1) ; `/media/*` en cache d'abord (§6.2) ; **rien d'autre** : jamais l'API |
-| `push` | Affiche la notification (`title`, `body`, `tag`, icône 192, badge, `data.url`) ; charge illisible → « RamyMaak — nouvelle notification » |
+| `push` | Affiche la notification (`title`, `body`, `tag`, icône 192, badge, `data.url`) ; charge illisible → titre « RamyMaak », texte « Nouvelle notification » |
 | `notificationclick` | Ferme la notification, met au premier plan une fenêtre de l'application et la mène à `data.url` (chemin interne seulement), sinon ouvre une fenêtre |
 | `pushsubscriptionchange` | Réabonne avec la même clé publique, et laisse la PWA renvoyer l'abonnement à la prochaine ouverture |
 | `sync` (`ramymaak-outbox`) | Envoie la boîte d'envoi (§6.3) |

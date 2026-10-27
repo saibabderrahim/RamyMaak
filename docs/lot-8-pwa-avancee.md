@@ -3,7 +3,7 @@
 Périmètre (§16, lot 7 de la spécification, numéroté 8 ici car le lot 7 est la charte Ramy) : hors ligne, envoi différé, notifications push, rappels.
 Critère de fin : **tests validés sur appareils réels** (liste en fin de note, à faire sur le terrain).
 
-Contrat d'API et d'écrans du lot, avec les règles retenues : [lot-8-contrat-api.md](lot-8-contrat-api.md), en particulier son §10 « Décisions proposées » (I-101 à I-113).
+Contrat d'API et d'écrans du lot, avec les règles retenues : [lot-8-contrat-api.md](lot-8-contrat-api.md), en particulier son §10 « Décisions proposées » (I-101 à I-114).
 
 Valeurs par défaut retenues :
 - notifications push activées (`notifications.push_enabled`, Admin → Paramètres), dès que les clés VAPID sont posées sur le serveur ;
@@ -22,7 +22,7 @@ Valeurs par défaut retenues :
 | §8 | **Invitation** « Recevez vos notifications » sur l'accueil du client et « Ma journée » du régional, une fois par compte et par appareil, avec « Activer » et « Plus tard ». |
 | §4.3 | **Rappels** chaque minute, sur l'heure limite effective de la région (prolongation comprise), une fois par heure limite : **N-10** aux régionaux, 30 min avant la limite de répartition si elle n'est pas envoyée ; **N-11** aux clients notifiés sans commande, 1 h avant la limite de commande ; **N-12** aux régionaux, 30 min avant la limite de validation s'il reste des commandes à valider ; **N-13** « Répartition en retard » à l'ADV de la région et à l'Admin, une fois la limite passée. Une prolongation déclenche un nouveau rappel. Rien après l'heure limite (N-13 excepté). |
 | N-15 | **Sécurité du compte** : après une réinitialisation du mot de passe par l'Admin ou par la commande `ramymaak:reset-password`, le compte reçoit l'avis dans l'application (jamais le mot de passe). |
-| EF-AUTH-06, I-110, I-113 | **Appareils connectés** (Profil) : chaque appareil avec son navigateur, son adresse, sa dernière activité, « Cet appareil », « Reste connecté » et « Notifications activées » ; « Déconnecter » un autre appareil, avec confirmation. « Rester connecté » est désormais **propre à chaque appareil** : un appareil déconnecté depuis la liste ne se reconnecte plus par son cookie, sans toucher aux autres. |
+| EF-AUTH-06, I-110, I-113 | **Appareils connectés** (Profil) : chaque appareil avec son navigateur, son adresse, sa dernière activité, « Cet appareil », « Reste connecté » et « Notifications activées » ; « Déconnecter » un autre appareil, avec confirmation. « Rester connecté » est désormais **propre à chaque appareil** : un appareil déconnecté depuis la liste ne se reconnecte plus par son cookie, sans toucher aux autres. **Changer son mot de passe** déconnecte ses autres appareils et garde « Rester connecté » sur celui-ci. |
 | I-103 | Un appareil partagé ne reçoit que les notifications du dernier compte ouvert ; les abonnements sont supprimés à la déconnexion, à la déconnexion de tous les appareils, à la désactivation du compte et à la réinitialisation du mot de passe. |
 | EF-CLT-07, §9.5, I-101 | **Lecture hors ligne** : l'accueil, le catalogue, le panier et les commandes du client ; « Ma journée », les quotas, la répartition, les commandes reçues et « Mes clients » du régional ; le centre de notifications. Les données sont enregistrées sur l'appareil pour le compte connecté (7 jours au plus) et effacées à la déconnexion. Bandeau « Hors ligne — données de 09:42 » ; un écran jamais ouvert sur l'appareil le dit. Le back-office n'est jamais enregistré. **Photos** des produits gardées 30 jours (500 au plus). |
 | §9.5, I-102, I-112 | **Envoi différé** : « Envoyer la commande » marche hors ligne. La commande attend sur l'appareil (« Commandes en attente d'envoi » sur l'accueil et dans « Mes commandes », pastille de l'onglet), puis part d'elle-même au retour du réseau, à la réouverture de l'application, toutes les 30 s, et en arrière-plan sur Android (Background Sync, avec une notification « Commande RMK-… envoyée »). Une commande refusée par le serveur (heure limite passée, quantité au-delà du disponible) l'est avec le motif, puis « Reprendre dans le panier » ou « Retirer ». Jamais de doublon : le serveur reconnaît un renvoi. Une seule commande en attente par journée. La déconnexion avec une commande en attente demande confirmation. |
@@ -108,7 +108,7 @@ Retour arrière : `scripts/deploy.sh v0.7.0`. Les nouvelles tables sont ignorée
 
 ## Décisions d'implémentation à valider
 
-Les décisions I-101 à I-113 sont détaillées au §10 du [contrat](lot-8-contrat-api.md#10-décisions-proposées). Les principales :
+Les décisions I-101 à I-114 sont détaillées au §10 du [contrat](lot-8-contrat-api.md#10-décisions-proposées). Les principales :
 
 | # | Décision | Raison |
 |---|---|---|
@@ -121,6 +121,7 @@ Les décisions I-101 à I-113 sont détaillées au §10 du [contrat](lot-8-contr
 | I-109 | Un push immédiat, puis au plus un push groupé toutes les 5 minutes, par compte et par type | EF-NOT-02 |
 | I-111 | N-15 dans l'application seulement | L'e-mail n'est pas encore en place |
 | I-113 | « Rester connecté » propre à chaque appareil | Déconnecter un appareil perdu sans déconnecter les autres |
+| I-114 | Changer son mot de passe déconnecte ses autres appareils | Leurs cookies ne s'ouvraient déjà plus ; ils ne restent plus listés ni abonnés aux push |
 
 ## Reporté, avec la dépendance qui le justifie
 
