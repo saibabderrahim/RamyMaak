@@ -70,6 +70,8 @@ const push = {
     loading: 'Chargement des appareils…',
     empty: 'Aucun appareil connecté.',
     current: 'Cet appareil',
+    // Appareil connecté avec « Rester connecté » (I-113) : il reste dans la liste même inactif.
+    remembered: 'Reste connecté',
     lastActive: 'Dernière activité : {{date}}',
     ip: 'Adresse IP {{ip}}',
     push: 'Notifications activées',

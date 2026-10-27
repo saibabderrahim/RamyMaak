@@ -16,6 +16,7 @@ const THIS_DEVICE: DeviceSession = {
   last_active_at: '2026-10-08T09:12:00+00:00',
   current: true,
   push: true,
+  remembered: true,
 }
 const OTHER_DEVICE: DeviceSession = {
   id: 's_0123456789ab',
@@ -24,6 +25,7 @@ const OTHER_DEVICE: DeviceSession = {
   last_active_at: '2026-10-07T16:45:00+00:00',
   current: false,
   push: false,
+  remembered: false,
 }
 
 const account = (role: Role = 'client', overrides: Partial<CurrentUser> = {}) =>
@@ -210,6 +212,8 @@ describe('profile — connected devices (contract §5)', () => {
     const current = within(items[0]!)
     expect(current.getByText('Chrome sur Android')).toBeInTheDocument()
     expect(current.getByText('Cet appareil')).toBeInTheDocument()
+    // Connecté avec « Rester connecté » : il reste dans la liste même inactif (I-113).
+    expect(current.getByText('Reste connecté')).toBeInTheDocument()
     expect(current.getByText('Dernière activité : 08/10/2026 10:12')).toBeInTheDocument()
     expect(current.getByText('Adresse IP 41.200.10.7')).toBeInTheDocument()
     expect(current.getByText('Notifications activées')).toBeInTheDocument()
@@ -219,6 +223,7 @@ describe('profile — connected devices (contract §5)', () => {
     const other = within(items[1]!)
     expect(other.getByText('Dernière activité : 07/10/2026 17:45')).toBeInTheDocument()
     expect(other.queryByText('Cet appareil')).not.toBeInTheDocument()
+    expect(other.queryByText('Reste connecté')).not.toBeInTheDocument()
     expect(other.queryByText('Notifications activées')).not.toBeInTheDocument()
     expect(other.getByRole('button', { name: 'Déconnecter Edge sur Windows' })).toBeEnabled()
   })

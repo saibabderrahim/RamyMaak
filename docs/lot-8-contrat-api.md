@@ -154,21 +154,34 @@ Commande `ramymaak:send-reminders`, planifiée `everyMinute()` et `withoutOverla
 
 ```json
 { "data": [ { "id": "s_3fa9c1d2e4b5", "device": "Chrome sur Android", "ip": "41.200.10.7",
-              "last_active_at": "2026-10-08T09:12:00+00:00", "current": true, "push": true } ] }
+              "last_active_at": "2026-10-08T09:12:00+00:00", "current": true, "push": true, "remembered": true },
+            { "id": "r_8c02d4e1f7a9", "device": "Safari sur iPhone", "ip": "41.200.10.9",
+              "last_active_at": "2026-10-07T18:40:00+00:00", "current": false, "push": true, "remembered": true } ] }
 ```
 
-- **Sessions** : les sessions du compte (table `sessions`), de la plus récente à la plus ancienne.
-- **`id`** : identifiant opaque, `s_` suivi des 12 premiers caractères hexadécimaux d'un HMAC de l'identifiant de session avec la clé de l'application. L'identifiant de session lui-même n'est **jamais** exposé (§12).
+- **Appareils**, du plus récent au plus ancien (la session courante en tête) :
+  - les **sessions actives** du compte (table `sessions`, hors sessions expirées) ;
+  - les **appareils mémorisés** (« Rester connecté ») dont la session a expiré après inactivité : ils se reconnectent par leur cookie (I-113). Dernière activité : dernière utilisation du jeton.
+- **`id`** : identifiant opaque, jamais l'identifiant de session ni le jeton (§12) :
+  - `s_` suivi des 12 premiers caractères hexadécimaux d'un HMAC de l'identifiant de session avec la clé de l'application ;
+  - `r_` suivi des 12 premiers caractères hexadécimaux d'un HMAC de la ligne du jeton, pour un appareil mémorisé sans session active.
 - **`device`** : libellé lisible tiré du navigateur, de la forme « {navigateur} sur {système} ».
   - Navigateurs : Chrome, Edge, Firefox, Safari, Samsung Internet, Opera.
   - Systèmes : Android, iPhone, iPad, Windows, macOS, Linux.
   - Repli : « Navigateur inconnu ».
-- **`push`** : un abonnement push est rattaché à cette session.
-- **DELETE** :
+- **`push`** : un abonnement push est rattaché à cette session (pour un appareil mémorisé : à sa dernière session).
+- **`remembered`** : « Rester connecté » sur cet appareil (un jeton y est rattaché).
+- **DELETE** (`s_…` ou `r_…`) :
   - 204 ;
-  - supprime la session et ses abonnements push ;
+  - supprime la session, les jetons « Rester connecté » qui lui sont rattachés et ses abonnements push : l'appareil ne peut plus se reconnecter par son cookie ;
   - journal `auth`, événement `session.revoked`.
-  - **Refus** : 404 si l'identifiant est inconnu ou appartient à un autre compte ; 422 si c'est la session courante (utiliser « Me déconnecter »).
+  - **Refus** : 404 si l'identifiant est inconnu, expiré ou appartient à un autre compte ; 422 si c'est l'appareil courant (utiliser « Me déconnecter »).
+
+**Jetons « Rester connecté » par appareil** (I-113, EF-AUTH-06) :
+- table `remember_tokens` : un jeton par connexion avec « Rester connecté » (clients et régionaux seulement), enregistré haché (SHA-256), avec le navigateur, l'adresse, la dernière utilisation et la dernière session qu'il a ouverte ;
+- durée : celle du cookie (`sessions.remember_days`, depuis la connexion) ; un jeton plus ancien, ou d'un compte passé au back-office, est refusé et supprimé ;
+- « Me déconnecter » supprime le jeton de cet appareil ; la déconnexion de tous les appareils, la désactivation du compte et la réinitialisation du mot de passe suppriment tous les jetons du compte ; une nouvelle connexion sur l'appareil remplace son ancien jeton ;
+- `users.remember_token` est gardé, mais n'ouvre plus de session.
 
 ## 6. Hors ligne (EF-CLT-07, §9.5)
 
@@ -283,6 +296,7 @@ Côté serveur, le socle fournit aussi `NotificationType::pushable()`, `isRemind
 | I-110 | « Appareils connectés » : sessions du compte, identifiant opaque (HMAC), libellé tiré du navigateur ; la session courante ne se révoque pas depuis la liste |
 | I-111 | N-15 (sécurité du compte) dans l'application seulement, à la réinitialisation du mot de passe par l'Admin ou par la commande `ramymaak:reset-password` ; l'e-mail reste reporté |
 | I-112 | Une seule commande en attente d'envoi par journée sur un appareil ; le serveur reste juge (RG-C04) |
+| I-113 | « Rester connecté » par appareil : un jeton haché par connexion (`remember_tokens`) au lieu du jeton unique du compte ; « Déconnecter » un appareil depuis la liste supprime aussi son jeton, il ne se reconnecte plus ; un appareil mémorisé dont la session a expiré reste listé (`r_…`) |
 
 ## 11. Tests sur appareils réels (critère de fin)
 

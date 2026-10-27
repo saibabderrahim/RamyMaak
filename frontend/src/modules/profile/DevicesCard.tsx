@@ -115,7 +115,7 @@ export function DevicesCard() {
   )
 }
 
-/** Un appareil : libellé, « Cet appareil », dernière activité, adresse IP, notifications actives. */
+/** Un appareil : libellé, « Cet appareil », « Reste connecté », dernière activité, adresse IP, notifications actives. */
 function DeviceItem({ session, disabled, onRevoke }: { session: DeviceSession; disabled: boolean; onRevoke: () => void }) {
   const { t } = useTranslation()
   return (
@@ -124,6 +124,7 @@ function DeviceItem({ session, disabled, onRevoke }: { session: DeviceSession; d
         <p className="flex flex-wrap items-center gap-2">
           <span className="font-semibold break-words text-slate-900">{session.device}</span>
           {session.current && <Badge tone="brand">{t('push.sessions.current')}</Badge>}
+          {session.remembered && <Badge tone="neutral">{t('push.sessions.remembered')}</Badge>}
         </p>
         <p className="text-sm text-slate-700">{t('push.sessions.lastActive', { date: formatDateTime(session.last_active_at) })}</p>
         {session.ip && (
