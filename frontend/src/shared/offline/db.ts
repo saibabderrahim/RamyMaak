@@ -5,7 +5,9 @@ import type { SubmitOrderInput } from '../api/types'
  * Base IndexedDB de l'appareil (lot 8, contrat §6) : partagée par
  * l'application et le service worker, donc sans React ni DOM.
  *
- * - `kv` : cache de requêtes persistant, une entrée par compte (§6.1).
+ * - `kv` : cache de requêtes persistant, une entrée par compte
+ *   (`query-cache:{userId}`, §6.1), et compte connecté sur l'appareil
+ *   (`session-user`), lu par le service worker pour n'envoyer que ses commandes.
  * - `outbox` : boîte d'envoi des commandes client (§6.3).
  */
 
@@ -25,6 +27,14 @@ export type OutboxEntry = {
   attempts: number
   error: { code: string; detail: string } | null
   order: { id: string; number: string } | null
+  /**
+   * Début de l'envoi en cours (`sending`) : passé 2 minutes (onglet fermé,
+   * service worker arrêté), l'envoi est repris. Champ non indexé, hors du
+   * contrat : pas de nouvelle version du schéma.
+   */
+  sending_at?: string | null
+  /** Instant du passage à `sent` : l'entrée disparaît dès que la liste des commandes a été relue après. */
+  sent_at?: string | null
 }
 
 export class RamyMaakDb extends Dexie {

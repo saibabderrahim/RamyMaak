@@ -173,7 +173,7 @@ final class Reminders
      */
     private function clientAccountsWithoutOrder(RegionDay $regionDay): LazyCollection
     {
-        $clientIds = $this->overview->clientsWithoutOrder($regionDay);
+        $clientIds = $this->overview->clientIdsWithoutOrder($regionDay);
 
         return $clientIds === []
             ? LazyCollection::empty()
@@ -219,14 +219,15 @@ final class Reminders
     {
         $sent = 0;
         foreach (LazyCollection::make(fn () => yield from $recipients)->chunk(self::CHUNK) as $chunk) {
+            $chunk = $chunk->collect()->values();
             if ($reminder->canBeMuted()) {
                 // Rappels coupés (EF-NOT-04) : ni dans l'application ni en push.
-                $chunk = $chunk->filter(fn (User $user) => $user->reminders_enabled);
+                $chunk = $chunk->filter(fn (User $user) => $user->reminders_enabled)->values();
             }
-            $ids = $chunk->mapWithKeys(fn (User $user) => [$user->id => $notification->idFor($user)]);
-            $done = DatabaseNotification::query()->whereKey($ids->values()->all())->pluck('id')->flip();
+            $ids = $chunk->map(fn (User $user) => $notification->idFor($user));
+            $done = DatabaseNotification::query()->whereKey($ids->all())->pluck('id')->flip();
 
-            $sent += $notification->sendOnce($chunk->reject(fn (User $user) => $done->has($ids[$user->id])));
+            $sent += $notification->sendOnce($chunk->reject(fn (User $user, int $index) => $done->has($ids[$index])));
         }
 
         return $sent;

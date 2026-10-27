@@ -12,6 +12,13 @@ use Minishlink\WebPush\VAPID;
  */
 final class PushTesting
 {
+    /** Clé publique P-256 d'un appareil (65 octets en base64url) et son secret (16 octets). */
+    public const P256DH = 'BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM';
+
+    public const AUTH = 'tBHItJI5svbpez7KI4CCXg';
+
+    public const ENDPOINT = 'https://fcm.googleapis.com/fcm/send/dpH5lCsTSSM:APA91bHqjZxM0VImWWqDRN7U0a3AycjUf4O-byuxb_wJsKRaKvV_iKw56s16ekq6FUqoCF7k2nqWqNYsLYkf';
+
     /** @var array{publicKey: string, privateKey: string}|null */
     private static ?array $keys = null;
 

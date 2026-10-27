@@ -6,7 +6,11 @@ import { LOGIN_PATH } from '../auth/guards'
 import { homePath, useAuthenticatedUser, useLogout } from '../auth/session'
 import { NotificationBell } from '../notifications/NotificationBell'
 import { useAdvToPrepareCount } from '../orders'
+import { OutboxSync } from '../offline/OutboxSync'
+import { attentionCount, useOutboxEntries, waitingCount } from '../offline/useOutbox'
 import { OfflineBanner } from '../pwa/components'
+import { PushSync } from '../push/PushSync'
+import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { Icon, type IconName } from '../ui/Icon'
 import { useCartLineCount } from '../../modules/client/cart/store'
 
@@ -21,6 +25,8 @@ type NavItem = { to: string; label: string; icon: IconName; end?: boolean; badge
 function useNavItems(role: Role, permissions: readonly string[]): NavItem[] {
   const { t } = useTranslation()
   const cartLines = useCartLineCount()
+  // Boîte d'envoi du client (lot 8, §6.3) : commandes à envoyer ou refusées.
+  const outbox = useClientOutbox()
   // Commandes à préparer de l'ADV (N-08) : lues seulement avec le droit de consulter les commandes.
   const toPrepare = useAdvToPrepareCount(role === 'adv' && permissions.includes('order.view'))
   const profile: NavItem = { to: '/profil', label: t('nav.profile'), icon: 'user', group: 'account' }
@@ -71,7 +77,7 @@ function useNavItems(role: Role, permissions: readonly string[]): NavItem[] {
         { to: '/client', label: t('nav.home'), icon: 'home', end: true },
         { to: '/client/catalogue', label: t('nav.order'), icon: 'grid' },
         { to: '/client/panier', label: t('nav.cart'), icon: 'bag', badge: cartLines },
-        { to: '/client/commandes', label: t('nav.orders'), icon: 'list' },
+        { to: '/client/commandes', label: t('nav.orders'), icon: 'list', badge: attentionCount(outbox) },
         profile,
       ]
   }
@@ -109,12 +115,42 @@ function hasTabBar(role: Role): boolean {
   return role === 'client' || role === 'regional'
 }
 
+/** Boîte d'envoi du compte client connecté ; undefined pour les autres rôles. */
+function useClientOutbox() {
+  const user = useAuthenticatedUser()
+  return useOutboxEntries(user.role === 'client' ? user.id : null)
+}
+
+/**
+ * Déconnexion ; avec des commandes en attente d'envoi, qui seront effacées
+ * de l'appareil, après confirmation (lot 8, §6.3, point 7).
+ */
 function useLogoutAndLeave() {
+  const { t } = useTranslation()
   const logout = useLogout()
   const navigate = useNavigate()
+  const waiting = waitingCount(useClientOutbox())
+  const [confirming, setConfirming] = useState(false)
+  const end = () => logout.mutate(undefined, { onSettled: () => navigate(LOGIN_PATH, { replace: true }) })
   return {
     pending: logout.isPending,
-    leave: () => logout.mutate(undefined, { onSettled: () => navigate(LOGIN_PATH, { replace: true }) }),
+    leave: () => (waiting > 0 ? setConfirming(true) : end()),
+    dialog: (
+      <ConfirmDialog
+        open={confirming}
+        title={t('offline.logout.title')}
+        confirmLabel={t('offline.logout.confirm')}
+        tone="danger"
+        pending={logout.isPending}
+        onConfirm={() => {
+          setConfirming(false)
+          end()
+        }}
+        onCancel={() => setConfirming(false)}
+      >
+        <p>{t('offline.logout.pending', { count: waiting })}</p>
+      </ConfirmDialog>
+    ),
   }
 }
 
@@ -126,13 +162,21 @@ function useLogoutAndLeave() {
  */
 export function AppShell() {
   const user = useAuthenticatedUser()
-  return hasTabBar(user.role) ? <FieldShell /> : <BackOfficeShell />
+  return (
+    <>
+      {/* Lot 8 : abonnement push de l'appareil renvoyé à chaque ouverture (contrat §2.2). */}
+      <PushSync />
+      {/* Lot 8 : envoi de la boîte d'envoi du client (contrat §6.3). */}
+      {user.role === 'client' && <OutboxSync userId={user.id} />}
+      {hasTabBar(user.role) ? <FieldShell /> : <BackOfficeShell />}
+    </>
+  )
 }
 
 function FieldShell() {
   const { t } = useTranslation()
   const user = useAuthenticatedUser()
-  const { leave, pending } = useLogoutAndLeave()
+  const { leave, pending, dialog } = useLogoutAndLeave()
   const items = useNavItems(user.role, user.permissions)
   // Entrées hors barre d'onglets (téléphone) : dans l'en-tête.
   const headerItems = items.filter((item) => item.tabBar === false)
@@ -152,6 +196,7 @@ function FieldShell() {
   return (
     <div className="flex min-h-dvh flex-col">
       <OfflineBanner />
+      {dialog}
       <header className="sticky top-0 z-40 bg-brand-600 text-white">
         <div className="mx-auto flex min-h-14 max-w-6xl items-center gap-2 px-4 sm:gap-4">
           <NavLink

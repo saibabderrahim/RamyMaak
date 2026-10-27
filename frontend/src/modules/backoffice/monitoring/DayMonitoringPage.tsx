@@ -10,7 +10,7 @@ import { DayRail } from '../../../shared/ui/DayRail'
 import { DayStatusBadge } from '../days/components'
 import { formatDayLong, isDay } from '../days/dates'
 import { useBackoffice } from '../shared/access'
-import { MONITORING_DAY_EVENTS, MONITORING_REGION_EVENTS, monitoringKey, useDayMonitoring } from './api'
+import { MONITORING_DAY_EVENTS, MONITORING_REGION_EVENTS, monitoringKey, useDayMonitoring, useDistributionLateRefresh } from './api'
 import { KeyFigures, ProductMatrix, RegionsTable } from './components'
 import { ExportDialog, PickingListDialog } from './DocumentDialogs'
 
@@ -40,6 +40,8 @@ function Monitoring({ day }: { day: string }) {
   const valid = isDay(day)
   const refetchInterval = useCoalescedRefresh(valid ? `adv.${day}` : null, MONITORING_DAY_EVENTS, [monitoringKey(day)])
   const query = useDayMonitoring(day, { enabled: valid, refetchInterval })
+  // N-13 (lot 8) : « Répartition en retard » reçue dans le centre de notifications.
+  useDistributionLateRefresh()
   const data = query.data
   const [dialog, setDialog] = useState<'picking' | 'export' | null>(null)
   const now = useBusinessNowOn(day, businessToday())

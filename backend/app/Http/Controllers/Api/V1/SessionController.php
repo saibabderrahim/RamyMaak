@@ -32,16 +32,9 @@ class SessionController extends Controller
         /** @var User $user */
         $user = $request->user();
         $current = $request->session()->getId();
-        $sessions = $this->sessionsOf($user);
-        $withPush = PushSubscription::query()
-            ->where('user_id', $user->id)
-            ->whereIn('session_id', $sessions->pluck('id')->all())
-            ->pluck('session_id')
-            ->flip();
-
         // Session courante : active en ce moment (elle est enregistrée à la fin
         // de la requête, et peut ne pas l'être encore juste après la connexion).
-        $sessions = $sessions
+        $sessions = $this->sessionsOf($user)
             ->reject(fn (object $session) => $session->id === $current)
             ->prepend((object) [
                 'id' => $current,
@@ -49,6 +42,11 @@ class SessionController extends Controller
                 'user_agent' => $request->userAgent(),
                 'last_activity' => now()->getTimestamp(),
             ]);
+        $withPush = PushSubscription::query()
+            ->where('user_id', $user->id)
+            ->whereIn('session_id', $sessions->pluck('id')->all())
+            ->pluck('session_id')
+            ->flip();
 
         $data = $sessions->map(fn (object $session) => [
             'id' => self::opaqueId($session->id),

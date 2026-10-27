@@ -42,7 +42,16 @@ export const STORAGE_PURGED_EVENT = 'ramymaak:storage-purged'
 /** Données propres à la session retirées à la déconnexion (appareil partagé) : paniers des clients. */
 const SESSION_PREFIXES = ['ramymaak:cart:']
 
-export function purgeSessionStorage(): void {
+/** Brouillons de bornes d'un compte (saisies de la répartition sans accusé de réception, RG-B09). */
+export const limitDraftsPrefix = (userId: number) => `ramymaak:limit-drafts:${userId}:`
+
+/**
+ * Déconnexion : paniers retirés, ainsi que les brouillons de bornes du compte
+ * `userId` (lot 8, §6.1). Le cache persistant et la boîte d'envoi, dans
+ * IndexedDB, sont effacés à part (shared/offline/persist.ts, `purgeAccount`).
+ */
+export function purgeSessionStorage(userId?: number): void {
   SESSION_PREFIXES.forEach(removeKeys)
+  if (userId !== undefined) removeKeys(limitDraftsPrefix(userId))
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(STORAGE_PURGED_EVENT))
 }

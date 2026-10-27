@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { ApiError } from '../../shared/api/client'
@@ -49,6 +50,7 @@ const numberField = { valueAsNumber: true } as const
 function SettingsForm({ initial, saving, fieldErrors, onSave }: FormProps) {
   const { t } = useTranslation()
   const weekdays = t('admin.settings.weekdays', { returnObjects: true })
+  const pushHintId = useId()
 
   const { register, handleSubmit, control, setValue } = useForm<Settings>({ defaultValues: initial })
   const workingDays = useWatch({ control, name: 'calendar.working_days' })
@@ -144,6 +146,17 @@ function SettingsForm({ initial, saving, fieldErrors, onSave }: FormProps) {
           {text('notifications.quiet_start', t('admin.settings.fields.quietStart'))}
           {text('notifications.quiet_end', t('admin.settings.fields.quietEnd'))}
         </div>
+        {/* Lot 8 (§2.1) : interrupteur général du push ; la plage ci-dessus borne les envois. */}
+        <Checkbox
+          className="mt-2"
+          label={t('push.settings.pushEnabled')}
+          aria-describedby={pushHintId}
+          {...register('notifications.push_enabled')}
+        />
+        <p id={pushHintId} className="text-sm text-slate-600">
+          {t('push.settings.pushHint')}
+        </p>
+        {err('notifications.push_enabled') && <p className="text-sm text-danger">{err('notifications.push_enabled')}</p>}
         <Checkbox className="mt-2" label={t('admin.settings.fields.emailEnabled')} {...register('notifications.email_enabled')} />
       </Card>
 

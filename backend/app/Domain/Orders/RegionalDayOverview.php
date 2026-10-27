@@ -120,7 +120,7 @@ final class RegionalDayOverview
      *
      * @return list<int>
      */
-    public function clientsWithoutOrder(RegionDay $regionDay): array
+    public function clientIdsWithoutOrder(RegionDay $regionDay): array
     {
         $ordered = $this->orderedClients($regionDay->businessDay, [$regionDay->region_id]);
 

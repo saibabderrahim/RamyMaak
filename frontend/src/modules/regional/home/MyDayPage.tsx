@@ -5,6 +5,7 @@ import type { AppNotification, NotificationType } from '../../../shared/api/type
 import { useAuthenticatedUser } from '../../../shared/auth/session'
 import { businessToday, formatDate } from '../../../shared/format'
 import { NOTIFICATION_EVENT, useChannel } from '../../../shared/realtime'
+import { PushInvite } from '../../../shared/push/PushInvite'
 import { Alert, Button, ErrorAlert, PageHeader, Spinner } from '../../../shared/ui'
 import { useErrorMessage } from '../../../shared/ui/useErrorMessage'
 import { DayToggle, RegionOrdersLive } from '../orders/components'
@@ -74,6 +75,7 @@ export default function MyDayPage() {
       <PageHeader title={t('orders.myDay.title')} />
 
       <div className="flex flex-col gap-4">
+        <PushInvite />
         <DayToggle day={day} today={today} tomorrow={tomorrow} label={t('orders.myDay.dayChoice')} onChange={selectDay} />
 
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">

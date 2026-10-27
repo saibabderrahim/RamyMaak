@@ -4,12 +4,21 @@
  * partagé avec le service worker (src/sw/push.ts).
  */
 
-// Caractères que l'analyseur d'adresses retire ou interprète (« /\t/site.example » devient « //site.example »).
-const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/
+/**
+ * Caractères de contrôle, que l'analyseur d'adresses retire ou interprète
+ * (« /\t/site.example » y devient « //site.example »).
+ */
+function hasControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index)
+    if (code < 0x20 || code === 0x7f) return true
+  }
+  return false
+}
 
 /** Chemin interne de la PWA (`/client/commandes/…`) ; null pour toute autre adresse. */
 export function internalPath(url: unknown): string | null {
-  if (typeof url !== 'string' || CONTROL_CHARACTERS.test(url)) return null
+  if (typeof url !== 'string' || hasControlCharacter(url)) return null
   return url.startsWith('/') && !url.startsWith('//') && !url.startsWith('/\\') ? url : null
 }
 

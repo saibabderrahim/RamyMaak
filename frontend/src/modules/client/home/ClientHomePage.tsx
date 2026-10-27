@@ -4,6 +4,7 @@ import { Link } from 'react-router'
 import type { ClientDayStatus, ClientProduct, ClientToday, OrderSummary } from '../../../shared/api/types'
 import { useAuthenticatedUser } from '../../../shared/auth/session'
 import { formatAmount } from '../../../shared/format'
+import { PushInvite } from '../../../shared/push/PushInvite'
 import { Badge, Button, ErrorAlert, Icon, PageHeader } from '../../../shared/ui'
 import { businessMinutes, minutesOf, useServerNow } from '../../../shared/ui/clock'
 import { DayRail } from '../../../shared/ui/DayRail'
@@ -57,6 +58,7 @@ export default function ClientHomePage() {
       <PageHeader title={t('home.welcome', { name: user.name })} />
       <div className="grid gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:items-start lg:gap-5">
         <div className="flex min-w-0 flex-col gap-4">
+          <PushInvite />
           {query.error && !today && (
             <div className="flex flex-col gap-3">
               <ErrorAlert error={query.error} />

@@ -1,11 +1,17 @@
 import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query'
 import { meQueryKey } from '../auth/session'
+import { applyPersistedDefaults } from '../offline/persist'
 import { ApiError } from './client'
 
 /**
  * Client TanStack Query (§9.5). Une session expirée (401) ou un changement
  * de mot de passe exigé (403) détecté sur n'importe quelle requête met à
  * jour l'état d'authentification ; les gardes de route redirigent alors.
+ *
+ * Hors ligne (lot 8, §6.1) : les requêtes attendent le réseau (`networkMode`
+ * « online » par défaut) en montrant les données en mémoire, relues du cache
+ * persistant au démarrage (shared/offline/persist.ts) ; les requêtes
+ * enregistrées y restent aussi longtemps que ce cache (`gcTime`).
  */
 export function createQueryClient(): QueryClient {
   const client: QueryClient = new QueryClient({
@@ -19,6 +25,7 @@ export function createQueryClient(): QueryClient {
       },
     },
   })
+  applyPersistedDefaults(client)
 
   function handleAuthError(error: unknown, queryKey?: readonly unknown[]): void {
     if (!(error instanceof ApiError)) return

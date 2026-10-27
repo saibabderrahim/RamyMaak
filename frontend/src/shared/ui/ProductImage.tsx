@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { ProductPhoto } from '../api/types'
 
 type Props = {
@@ -18,14 +19,18 @@ type Props = {
  * (`srcset` 200 / 600 px), chargement différé, place réservée (pas de saut
  * de mise en page), visuel par défaut sans photo. Charte Ramy (lot 7) : la
  * bouteille entière reste visible (object-contain) sur le fond blanc mesuré des
- * photos, et un produit sans photo montre son format en grand.
+ * photos, et un produit sans photo montre son format en grand. Hors ligne
+ * (lot 8, §6.2), une photo jamais vue sur l'appareil (absente du cache du
+ * service worker) laisse place au visuel par défaut.
  */
 export function ProductImage({ photo, alt, size = 72, className = '', format = null, caption = null }: Props) {
+  // Photo illisible (hors ligne, jamais vue) : visuel par défaut, jusqu'à ce que l'adresse change.
+  const [failed, setFailed] = useState<string | null>(null)
   // Carré par défaut ; une classe aspect-* sans préfixe de l'appelant le remplace (sm:aspect-* s'y ajoute).
   const square = /(^|\s)aspect-/.test(className) ? '' : 'aspect-square'
   // self-start : dans une rangée flex, la vignette garde son format au lieu de s'étirer à la hauteur de la ligne.
   const box = `relative self-start overflow-hidden rounded-md ${square} ${className}`
-  if (!photo) {
+  if (!photo || failed === photo.urls.thumb) {
     return (
       <div className={`${box} flex items-center justify-center bg-slate-100 text-slate-600`} role="img" aria-label={alt}>
         {format ? (
@@ -51,6 +56,7 @@ export function ProductImage({ photo, alt, size = 72, className = '', format = n
         alt={alt}
         loading="lazy"
         decoding="async"
+        onError={() => setFailed(photo.urls.thumb)}
         className="absolute inset-0 size-full object-contain"
       />
     </div>

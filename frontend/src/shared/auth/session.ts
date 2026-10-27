@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError, NetworkError } from '../api/client'
 import type { CurrentUser, Role } from '../api/types'
+import { purgeAccount } from '../offline/persist'
 import { disconnectRealtime } from '../realtime/connection'
 import { purgeSessionStorage } from '../storage'
 
@@ -22,6 +23,8 @@ export function useCurrentUser() {
     },
     staleTime: 5 * 60_000,
     retry: (failureCount, error) => error instanceof NetworkError && failureCount < 2,
+    // Retour du réseau après un démarrage hors ligne (cache de l'appareil, lot 8) : la session est vérifiée.
+    refetchOnReconnect: 'always',
   })
 }
 
@@ -48,13 +51,20 @@ export function useLogin() {
   })
 }
 
+/**
+ * Déconnexion de l'appareil ou de tous les appareils : en cas d'échec aussi
+ * (hors ligne), les données du compte quittent l'appareil — paniers,
+ * brouillons de bornes, cache persistant et boîte d'envoi (lot 8, §6.1).
+ */
 function useEndSession(path: '/auth/logout' | '/auth/logout-all') {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: () => api.post<void>(path),
     onSettled: () => {
+      const userId = queryClient.getQueryData<CurrentUser | null>(meQueryKey)?.id
       disconnectRealtime()
-      purgeSessionStorage()
+      purgeSessionStorage(userId)
+      if (userId !== undefined) void purgeAccount(userId)
       queryClient.clear()
       queryClient.setQueryData(meQueryKey, null)
     },

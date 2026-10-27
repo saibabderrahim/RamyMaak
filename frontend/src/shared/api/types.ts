@@ -83,7 +83,8 @@ export type Settings = {
   sessions: { remember_days: number; staff_absolute_hours: number; staff_idle_minutes: number }
   passwords: { min_length: number; min_length_staff: number }
   auth: { max_failed_logins: number; lockout_minutes: number }
-  notifications: { email_enabled: boolean; quiet_start: string; quiet_end: string }
+  /** `push_enabled` : interrupteur général des notifications push (lot 8, §2.1). */
+  notifications: { email_enabled: boolean; push_enabled: boolean; quiet_start: string; quiet_end: string }
 }
 
 /* ---------- Référentiels (lot 2) — contrat : docs/lot-2-contrat-api.md ---------- */

@@ -1,12 +1,17 @@
 import { useQueryClient } from '@tanstack/react-query'
 import type { TFunction } from 'i18next'
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useNavigate } from 'react-router'
-import { ApiError, NetworkError } from '../../../shared/api/client'
-import type { ClientToday, Order, OrderStatus } from '../../../shared/api/types'
+import { ApiError, NetworkError, type ProblemDocument } from '../../../shared/api/client'
+import type { ClientToday, Order, OrderStatus, SubmitOrderInput } from '../../../shared/api/types'
+import { useAuthenticatedUser } from '../../../shared/auth/session'
 import { formatAmount, formatQuantity } from '../../../shared/format'
 import type { Totals } from '../../../shared/money'
+import type { OutboxEntry } from '../../../shared/offline/db'
+import { OfflineDataNotice } from '../../../shared/offline/OfflineDataNotice'
+import { enqueue, isWaiting, OutboxBusyError, type ProcessResult, removeEntry } from '../../../shared/offline/outbox'
+import { registerBackgroundSync, sendOutboxEntry, useOutboxEntries } from '../../../shared/offline/useOutbox'
 import { useOnline } from '../../../shared/pwa/online'
 import { Alert, Button, ErrorAlert, PageHeader } from '../../../shared/ui'
 import { Dialog } from '../../../shared/ui/Dialog'
@@ -17,8 +22,9 @@ import { locationNotice } from '../orders/view'
 import { fetchOrder, isRetryable, type LineIssue, sameContent, type SendResult, sendIssues, useSendCart } from './api'
 import { CartNoticeAlert, DaySummary, EditingBanner, PRIMARY_LINK, TodayLoading, TotalsList } from './components'
 import { limitText } from './format'
-import { type CartItem, cartItems, cartTotals, lineAmount, pricedLine } from './reconcile'
-import type { Cart } from './store'
+import { OutboxBlock, resumeInCart } from './OutboxBlock'
+import { type CartItem, cartItems, cartTotals, lineAmount, normalizeComment, orderLines, pricedLine } from './reconcile'
+import type { Cart, CartLine } from './store'
 import { useCartToday } from './sync'
 
 /** Longueur maximale du commentaire (I-60). */
@@ -35,12 +41,34 @@ type Outcome =
   | { kind: 'refused'; error: ApiError; fields: string[] }
   | { kind: 'conflict'; number: string; order: Order | null }
   | { kind: 'dead'; number: string; status: string }
+  | { kind: 'busy' }
+  | { kind: 'storage' }
+
+/** Refus de l'envoi fait depuis cet écran : détail du serveur, rapporté aux lignes à la reprise dans le panier. */
+type Refusal = { id: string; problem: ProblemDocument; lines: CartLine[] }
+
+/** Lignes et commentaire d'un envoi, comparables à une commande (`sameContent`). */
+const contentOf = (body: SubmitOrderInput): Pick<Cart, 'day' | 'lines' | 'comment'> => ({
+  day: body.day,
+  lines: body.lines.map((line) => ({ product_id: line.product_id, quantity: line.quantity })),
+  comment: body.comment ?? '',
+})
 
 /**
  * Panier (EF-CLT-03 ; contrat du lot 5 §6) : lignes avec photo, quantité et
  * montant, totaux HT, TVA et TTC indicatifs, commentaire, puis « Envoyer la
  * commande » (POST) ou « Enregistrer les modifications » (PATCH de la
  * commande modifiée), après confirmation.
+ *
+ * Lot 8 (contrat §6.3, I-102) : une nouvelle commande passe par la boîte
+ * d'envoi de l'appareil, en ligne comme hors ligne. Après confirmation, elle
+ * y est déposée avec son identifiant (enregistré d'abord dans le panier,
+ * I-40), le panier est vidé et l'envoi tenté aussitôt : réussi, la commande
+ * s'ouvre comme avant ; sans réseau, elle partira d'elle-même
+ * (« Commandes en attente d'envoi ») ; refusée, elle se reprend dans le
+ * panier (nouvel identifiant), avec les lignes signalées, ou se retire. Une
+ * seule commande en attente par journée (I-112). Modifier une commande
+ * envoyée reste possible en ligne seulement (D-13).
  *
  * Envoi (RG-C07, I-40) : l'identifiant est enregistré avant la requête.
  * - Réseau, 5xx ou 429 : identifiant gardé, la nouvelle tentative le réutilise ;
@@ -54,7 +82,6 @@ type Outcome =
  * - VERSION_CONFLICT : commande relue ; si elle contient déjà le panier (réponse
  *   perdue d'une tentative précédente), c'est un succès, sinon reprise proposée.
  * Seules les lignes affichées (produits du catalogue du jour) sont envoyées.
- * Hors ligne, le panier reste modifiable mais l'envoi est désactivé.
  */
 export default function CartPage() {
   const { t } = useTranslation()
@@ -65,26 +92,45 @@ export default function CartPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const online = useOnline()
+  const user = useAuthenticatedUser()
+  const entries = useOutboxEntries(user.id)
   const send = useSendCart()
   const linesId = useId()
   const [confirming, setConfirming] = useState(false)
+  const [queueing, setQueueing] = useState(false)
   const [outcome, setOutcome] = useState<Outcome | null>(null)
   const [issues, setIssues] = useState<ReadonlyMap<number, LineIssue>>(() => new Map())
+  // Commande déposée depuis cet écran, et son refus éventuel (détail du serveur).
+  const [queuedId, setQueuedId] = useState<string | null>(null)
+  const [refusal, setRefusal] = useState<Refusal | null>(null)
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
 
   const editing = cart.editing
   const items = today ? cartItems(cart.lines, today.products, editing?.prices) : []
   const sums = cartTotals(items)
   const editingOrder = editing && today ? today.orders.find((order) => order.id === editing.orderId) : undefined
+  // Une seule commande en attente d'envoi par journée sur l'appareil (I-112).
+  const busy = !editing && today !== undefined && (entries ?? []).some((entry) => entry.day === today.day && isWaiting(entry))
   const blocker = !today
     ? null
     : editing
       ? editingOrder?.can_modify
         ? null
         : t('orders.client.editing.notModifiable')
-      : cart.pending
-        ? null
-        : today.submit_blocker && t(`orders.client.blocker.${today.submit_blocker}`, { count: today.max_orders_per_day })
-  const canSend = online && !send.isPending && today !== undefined && blocker === null && items.length > 0
+      : busy
+        ? t('offline.cart.busyDay')
+        : cart.pending
+          ? null
+          : today.submit_blocker && t(`orders.client.blocker.${today.submit_blocker}`, { count: today.max_orders_per_day })
+  // Hors ligne : seule une modification attend le réseau ; une nouvelle commande part dans la boîte d'envoi.
+  const canSend = (online || !editing) && !send.isPending && !queueing && today !== undefined && blocker === null && items.length > 0
+  const queued = queuedId === null ? undefined : entries?.find((entry) => entry.id === queuedId)
 
   const succeed = ({ order, kind }: SendResult, sent: Cart) => {
     // Renvoi qui rend une commande close depuis (annulée, expirée, rejetée) : rien n'a été créé ; le panier
@@ -133,7 +179,78 @@ export default function CartPage() {
     setOutcome({ kind: 'refused', error, fields: found.fields })
   }
 
+  /** Résultat de la première tentative, l'écran encore ouvert. */
+  const settleQueued = (result: ProcessResult, body: SubmitOrderInput) => {
+    const { outcome: sent } = result
+    if (sent.status === 'refused') {
+      setRefusal({ id: result.entry.id, problem: sent.problem as ProblemDocument, lines: contentOf(body).lines })
+      return
+    }
+    if (sent.status !== 'sent') return
+    const { order, created } = sent
+    // Renvoi d'un envoi interrompu (lot 5) qui rend une commande close depuis : rien n'a été créé ; le
+    // panier est rendu, et le prochain envoi aura un nouvel identifiant.
+    if (!created && DEAD_STATUSES.includes(order.status)) {
+      void removeEntry(result.entry.id)
+      resumeInCart(store, result.entry)
+      setQueuedId(null)
+      setOutcome({ kind: 'dead', number: order.number, status: order.status_label })
+      return
+    }
+    const notice = created || sameContent(order, contentOf(body)) ? 'orders.client.sent.created' : 'orders.client.sent.replayed'
+    navigate(`/client/commandes/${encodeURIComponent(order.id)}`, { state: { notice: t(notice, { number: order.number }) } })
+  }
+
+  /**
+   * Nouvelle commande : identifiant enregistré dans le panier (I-40), commande
+   * déposée dans la boîte d'envoi, panier vidé, puis envoi tenté aussitôt.
+   */
+  const queue = async (products: ClientToday['products']) => {
+    const current = store.get()
+    if (current.day === null) return
+    setOutcome(null)
+    setIssues(new Map())
+    setRefusal(null)
+    setQueueing(true)
+    const body: SubmitOrderInput = {
+      client_request_id: store.beginSend(),
+      day: current.day,
+      comment: normalizeComment(current.comment),
+      lines: orderLines(cartItems(current.lines, products).map((item) => item.line)),
+    }
+    try {
+      await enqueue({ user_id: user.id, client_id: user.client_id ?? 0, body })
+    } catch (error) {
+      // Panier et identifiant gardés : un nouvel essai ne crée pas de seconde commande.
+      setOutcome(error instanceof OutboxBusyError ? { kind: 'busy' } : { kind: 'storage' })
+      return
+    } finally {
+      setQueueing(false)
+      setConfirming(false)
+    }
+    store.clear()
+    setQueuedId(body.client_request_id)
+    void registerBackgroundSync()
+    const result = await sendOutboxEntry(queryClient, body.client_request_id)
+    if (result && mounted.current) settleQueued(result, body)
+  }
+
+  /** « Reprendre dans le panier » de la commande refusée ici : refus rapporté aux lignes, comme au lot 5. */
+  const resumed = (entry: OutboxEntry) => {
+    if (refusal?.id !== entry.id) return
+    const error = new ApiError(refusal.problem)
+    const found = sendIssues(error, refusal.lines)
+    setIssues(found.lines)
+    setOutcome({ kind: 'refused', error, fields: found.fields })
+    setRefusal(null)
+    setQueuedId(null)
+  }
+
   const confirm = async (products: ClientToday['products']) => {
+    if (!store.get().editing) {
+      await queue(products)
+      return
+    }
     // Panier relu au moment de l'envoi ; seules ses lignes affichées partent.
     const current = store.get()
     const sent: Cart = { ...current, lines: cartItems(current.lines, products).map((item) => item.line) }
@@ -161,9 +278,12 @@ export default function CartPage() {
     <>
       <PageHeader title={editing ? t('orders.client.cart.editTitle', { number: editing.number }) : t('nav.cart')} />
       <div className="flex flex-col gap-4">
+        {today && <OfflineDataNotice updatedAt={query.dataUpdatedAt} hint={editing ? t('offline.cart.offlineEditing') : t('offline.cart.offlineNew')} />}
         {editing && <EditingBanner number={editing.number} modifiable={today === undefined || blocker === null} onAbandon={abandon} />}
         {arrival && <Alert>{arrival}</Alert>}
         {notice && <CartNoticeAlert notice={notice} onDismiss={dismissNotice} />}
+        {queued?.status === 'pending' && <Alert tone="success">{t('offline.cart.queued')}</Alert>}
+        <OutboxBlock entries={entries} onResumed={resumed} />
 
         {cart.lines.length === 0 ? (
           <div className="flex flex-col items-start gap-3 rounded-lg border border-slate-200 bg-white p-4">
@@ -180,7 +300,7 @@ export default function CartPage() {
             </Button>
           </div>
         ) : !today ? (
-          <TodayLoading paused={query.fetchStatus === 'paused'} label={t('orders.client.cart.loading')} />
+          <TodayLoading paused={query.fetchStatus === 'paused'} label={t('orders.client.cart.loading')} hint={t('offline.cart.kept')} />
         ) : (
           <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
             <section aria-labelledby={linesId}>
@@ -210,8 +330,7 @@ export default function CartPage() {
                 )}
                 <CommentField value={cart.comment} onChange={(comment) => store.setComment(comment)} />
                 {blocker && <Alert tone="warning">{blocker}</Alert>}
-                {!online && <Alert tone="warning">{t('orders.client.cart.offline')}</Alert>}
-                {cart.pending && !outcome && !send.isPending && <Alert>{t('orders.client.cart.pending')}</Alert>}
+                {cart.pending && !outcome && !send.isPending && !queueing && <Alert>{t('orders.client.cart.pending')}</Alert>}
               </div>
               <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 -mx-4 flex flex-col gap-3 border-t border-slate-200 bg-white px-4 py-3 lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:p-0">
                 {/* Compte rendu à côté du bouton : visible là où le client vient d'envoyer, sur téléphone aussi. */}
@@ -238,7 +357,7 @@ export default function CartPage() {
           count={items.length}
           totals={sums}
           comment={cart.comment.trim()}
-          sending={send.isPending}
+          sending={send.isPending || queueing}
           onConfirm={() => void confirm(today.products)}
           onClose={() => setConfirming(false)}
         />
@@ -363,6 +482,9 @@ function OutcomeAlert({
   onAbandon: () => void
 }) {
   const { t } = useTranslation()
+
+  if (outcome.kind === 'busy') return <Alert tone="warning">{t('offline.cart.busyDay')}</Alert>
+  if (outcome.kind === 'storage') return <Alert tone="error">{t('offline.cart.storageFailed')}</Alert>
 
   if (outcome.kind === 'retry') {
     return <Alert tone="warning">{outcome.network ? t('orders.client.errors.network') : t('orders.client.errors.server')}</Alert>

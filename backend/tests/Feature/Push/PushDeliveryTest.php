@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\Access\Role;
+use App\Domain\Orders\ClientOrders;
 use App\Domain\Push\FakePushTransport;
 use App\Domain\Push\PushThrottler;
 use App\Domain\Push\PushTransport;
@@ -8,13 +9,19 @@ use App\Domain\Push\QuietHours;
 use App\Domain\Settings\Settings;
 use App\Jobs\DeliverPush;
 use App\Jobs\FlushPush;
+use App\Models\Client;
+use App\Models\Product;
 use App\Models\PushSubscription;
 use App\Models\PushThrottle;
+use App\Models\Region;
+use App\Models\RegionAssignment;
 use App\Models\User;
 use App\Notifications\NotificationType;
+use App\Support\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
 use Tests\Feature\Push\PushTesting;
 
 // Push des notifications (contrat du lot 8, §2.3 à §2.5) : canal push,
@@ -92,8 +99,12 @@ it('sends to every device of the user and only to theirs', function () {
         ->and($this->push->sent[0]['endpoints'])->toBe([$this->device->endpoint, $tablet->endpoint]);
 });
 
-it('pushes nothing when the Admin turned push off, without VAPID keys or without a device', function (Closure $setup) {
-    $setup->call($this);
+it('pushes nothing when the Admin turned push off, without VAPID keys or without a device', function (string $case) {
+    match ($case) {
+        'push off' => PushTesting::settings(['push_enabled' => false]),
+        'no keys' => config(['webpush.vapid.public_key' => null, 'webpush.vapid.private_key' => null]),
+        'no device' => $this->device->delete(),
+    };
 
     ($this->send)(NotificationType::OrderSubmitted, 'k1');
 
@@ -101,17 +112,7 @@ it('pushes nothing when the Admin turned push off, without VAPID keys or without
     expect(($this->stored)())->toBe(1)
         ->and($this->push->sent)->toBeEmpty()
         ->and(PushThrottle::query()->exists())->toBeFalse();
-})->with([
-    'push_enabled false' => fn () => function () {
-        PushTesting::settings(['push_enabled' => false]);
-    },
-    'no VAPID keys' => fn () => function () {
-        config(['webpush.vapid.public_key' => null, 'webpush.vapid.private_key' => null]);
-    },
-    'no subscription' => fn () => function () {
-        $this->device->delete();
-    },
-]);
+})->with(['push off', 'no keys', 'no device']);
 
 it('drops the push during the quiet hours instead of deferring it', function () {
     $this->travelTo(CarbonImmutable::parse('2026-10-08 22:15', 'Africa/Algiers'));
@@ -129,7 +130,8 @@ it('drops the push during the quiet hours instead of deferring it', function () 
 });
 
 it('knows the quiet hours in the business timezone, across midnight or within the day', function (?string $start, ?string $end, string $time, bool $quiet) {
-    config(['ramymaak.settings.notifications.quiet_start' => $start, 'ramymaak.settings.notifications.quiet_end' => $end]);
+    // Clés plates (« notifications.quiet_start ») : valeurs par défaut remplacées en bloc.
+    config(['ramymaak.settings' => ['notifications.quiet_start' => $start, 'notifications.quiet_end' => $end] + config('ramymaak.settings')]);
     app(Settings::class)->flush();
 
     expect(app(QuietHours::class)->active(CarbonImmutable::parse("2026-10-08 {$time}", 'Africa/Algiers')))->toBe($quiet);
@@ -346,20 +348,16 @@ it('removes expired devices and counts the other failures', function () {
         ->and($this->device->fresh()->last_used_at)->not->toBeNull();
 });
 
-it('does not deliver a queued push once push is turned off or the quiet hours have begun', function (Closure $setup) {
-    $setup->call($this);
+it('does not deliver a queued push once push is turned off or the quiet hours have begun', function (string $case) {
+    match ($case) {
+        'push off' => PushTesting::settings(['push_enabled' => false]),
+        'quiet hours' => $this->travelTo(CarbonImmutable::parse('2026-10-08 21:30', 'Africa/Algiers')),
+    };
 
     (new DeliverPush($this->user->id, ['type' => 'ORDER_DECIDED', 'tag' => 'ORDER_DECIDED']))->handle(app(PushTransport::class), app(QuietHours::class));
 
     expect($this->push->sent)->toBeEmpty();
-})->with([
-    'push_enabled false' => fn () => function () {
-        PushTesting::settings(['push_enabled' => false]);
-    },
-    'quiet hours' => fn () => function () {
-        $this->travelTo(CarbonImmutable::parse('2026-10-08 21:30', 'Africa/Algiers'));
-    },
-]);
+})->with(['push off', 'quiet hours']);
 
 it('never prevents the notification from being recorded when the push fails', function () {
     app()->instance(PushTransport::class, new class implements PushTransport
@@ -385,4 +383,30 @@ it('does not push a notification twice when it is sent again', function () {
 
     expect(($this->stored)())->toBe(1)
         ->and($this->push->sent)->toHaveCount(1);
+});
+
+it('pushes the N-05 of a real order to the regionals of its region', function () {
+    $centre = Region::factory()->create(['code' => 'CENTRE', 'name' => 'Centre']);
+    RegionAssignment::factory()->create(['region_id' => $centre->id, 'user_id' => $this->user->id]);
+    $client = Client::factory()->create(['code' => 'C0012', 'name' => 'Superette El Baraka', 'region_id' => $centre->id]);
+    $account = userWithRole(Role::Client, ['client_id' => $client->id]);
+    $orange = Product::factory()->create();
+    openOrderingDay('2026-10-08', $centre, [[$orange, 500]]);
+    $this->travel(1)->minutes();
+
+    $order = app(ClientOrders::class)->submit($account, (string) Str::uuid(), BusinessClock::parseDay('2026-10-08'), [['product_id' => $orange->id, 'quantity' => 40]], null)['order'];
+
+    $payloads = collect($this->push->payloads($this->user->id));
+    $stored = DatabaseNotification::query()->whereMorphedTo('notifiable', $this->user)->where('type', 'ORDER_SUBMITTED')->sole();
+    expect($payloads->pluck('type')->all())->toBe(['QUOTAS_PUBLISHED', 'ORDER_SUBMITTED'])
+        ->and($payloads->last())->toBe([
+            'id' => $stored->id,
+            'type' => 'ORDER_SUBMITTED',
+            'code' => 'N-05',
+            'title' => 'Nouvelle commande — C0012 Superette El Baraka',
+            'body' => 'RMK-261008-00001 à valider.',
+            'url' => "/regional/commandes/{$order->public_id}",
+            'tag' => 'ORDER_SUBMITTED',
+            'count' => 1,
+        ]);
 });

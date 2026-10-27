@@ -4,7 +4,8 @@ import { Link } from 'react-router'
 import type { ClientToday } from '../../../shared/api/types'
 import { formatAmount, formatQuantity } from '../../../shared/format'
 import type { Totals } from '../../../shared/money'
-import { Alert, Button, Spinner } from '../../../shared/ui'
+import { NoOfflineData } from '../../../shared/offline/OfflineDataNotice'
+import { Button, Spinner } from '../../../shared/ui'
 import { formatDayLong } from './format'
 import { type CartItem, cartTotals, lineAmount } from './reconcile'
 import type { CartNotice } from './sync'
@@ -46,13 +47,13 @@ export function DaySummary({ today }: { today: ClientToday }) {
 }
 
 /**
- * Journée en cours de lecture. Hors ligne sans données en mémoire, la
- * lecture attend le réseau (`fetchStatus` « paused ») : un avis remplace
- * l'attente, le panier restant sur l'appareil (cache des données au lot 7).
+ * Journée en cours de lecture. Hors ligne sans données enregistrées sur
+ * l'appareil (lot 8, §6.1), la lecture attend le réseau (`fetchStatus`
+ * « paused ») : un avis remplace l'attente ; `hint` : ce qui reste possible
+ * (le panier, sur l'appareil).
  */
-export function TodayLoading({ paused, label }: { paused: boolean; label?: string }) {
-  const { t } = useTranslation()
-  return paused ? <Alert tone="warning">{t('orders.client.offlineData')}</Alert> : <Spinner label={label} />
+export function TodayLoading({ paused, label, hint }: { paused: boolean; label?: string; hint?: string }) {
+  return paused ? <NoOfflineData>{hint && <p>{hint}</p>}</NoOfflineData> : <Spinner label={label} />
 }
 
 /** Avis après un changement du panier venu du serveur (rapprochement, journée changée). */

@@ -1,7 +1,7 @@
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { disconnectRealtime } from '../../../shared/realtime'
+import { disconnectRealtime, NOTIFICATION_EVENT } from '../../../shared/realtime'
 import { json, problem } from '../../../test/utils'
 import {
   admin,
@@ -230,6 +230,31 @@ describe('ADV — live monitoring', () => {
 
     act(() => fake.listeners.get(`region-day.3.${DAY}:.OrderSubmitted`)?.forEach((listener) => listener({ id: 'Y', day: DAY })))
     await waitFor(() => expect(reads()).toBe(before + 2))
+  })
+
+  it('rereads the monitoring when the late distribution notification (N-13) arrives', async () => {
+    const user = adv({ realtime: { key: 'app-key' } })
+    const { calls } = renderMonitoring({ user })
+    await screen.findByRole('table', { name: 'Régions' })
+    const channel = `user.${user.id}:.${NOTIFICATION_EVENT}`
+    await waitFor(() => expect(fake.listeners.get(channel)?.size).toBeGreaterThan(0))
+
+    const reads = () => calls.filter((call) => call.path === `/api/v1/adv/days/${DAY}/monitoring`).length
+    const before = reads()
+    const notify = (type: string) =>
+      act(() =>
+        fake.listeners.get(channel)?.forEach((listener) =>
+          listener({ id: 'n1', type, code: null, title: 'Titre', body: '', url: `/adv/journees/${DAY}/suivi`, read_at: null, created_at: '2026-10-08T09:01:00+00:00' }),
+        ),
+      )
+
+    // Une autre notification ne relit pas le suivi.
+    notify('ORDER_SUBMITTED')
+    await act(() => Promise.resolve())
+    expect(reads()).toBe(before)
+
+    notify('DISTRIBUTION_LATE')
+    await waitFor(() => expect(reads()).toBe(before + 1))
   })
 
   it('shows the new numbers once reread', async () => {

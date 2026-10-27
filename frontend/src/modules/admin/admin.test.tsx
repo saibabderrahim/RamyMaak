@@ -129,7 +129,7 @@ describe('admin — settings', () => {
     sessions: { remember_days: 30, staff_absolute_hours: 12, staff_idle_minutes: 120 },
     passwords: { min_length: 8, min_length_staff: 12 },
     auth: { max_failed_logins: 5, lockout_minutes: 15 },
-    notifications: { email_enabled: false, quiet_start: '21:00', quiet_end: '06:00' },
+    notifications: { email_enabled: false, push_enabled: true, quiet_start: '21:00', quiet_end: '06:00' },
   }
 
   it('saves the settings and confirms once the form shows the stored values', async () => {
@@ -153,6 +153,31 @@ describe('admin — settings', () => {
     expect(sent.calendar.working_days).toEqual([0, 1, 2, 3, 4, 6])
     expect(sent.orders.min_amount).toBeNull()
     expect(screen.getByLabelText('Commande (client)')).toHaveValue('13:30')
+  })
+
+  it('switches the push notifications off for everyone (lot 8, notifications.push_enabled)', async () => {
+    const { calls } = mockApi({
+      'GET /api/v1/auth/me': () => json(makeUser('admin')),
+      'GET /api/v1/admin/settings': () => json(settings),
+      'PUT /api/v1/admin/settings': ({ body }) => json(body),
+    })
+    const user = userEvent.setup()
+
+    renderApp('/admin/parametres')
+    const push = await screen.findByRole('checkbox', { name: 'Notifications push' })
+    expect(push).toBeChecked()
+    expect(push).toHaveAccessibleDescription(/Interrupteur général des notifications push/)
+    // Avec la plage sans push, dans la même rubrique.
+    const section = push.closest('section')!
+    expect(within(section).getByLabelText('Pas de push à partir de')).toHaveValue('21:00')
+
+    await user.click(push)
+    await user.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+    expect(await screen.findByText('Paramètres enregistrés.')).toBeInTheDocument()
+    const sent = calls.find((c) => c.method === 'PUT')?.body as typeof settings
+    expect(sent.notifications).toEqual({ email_enabled: false, push_enabled: false, quiet_start: '21:00', quiet_end: '06:00' })
+    expect(screen.getByRole('checkbox', { name: 'Notifications push' })).not.toBeChecked()
   })
 
   it('shows server errors next to the field', async () => {
