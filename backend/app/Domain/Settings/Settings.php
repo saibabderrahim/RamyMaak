@@ -29,11 +29,19 @@ final class Settings
      */
     public function all(): array
     {
-        return $this->resolved ??= $this->cache->rememberForever(self::CACHE_KEY, function (): array {
-            $stored = Setting::query()->pluck('value', 'key')->all();
+        // Le cache ne garde que les valeurs enregistrées ; les défauts sont fusionnés à
+        // chaque lecture : un paramètre ajouté par une nouvelle version existe dès son
+        // déploiement, même avec le cache de la version précédente.
+        if ($this->resolved !== null) {
+            return $this->resolved;
+        }
 
-            return array_merge(self::defaults(), array_intersect_key($stored, self::defaults()));
-        });
+        $stored = $this->cache->rememberForever(
+            self::CACHE_KEY,
+            fn (): array => Setting::query()->pluck('value', 'key')->all(),
+        );
+
+        return $this->resolved = array_merge(self::defaults(), array_intersect_key($stored, self::defaults()));
     }
 
     public function get(string $key): mixed

@@ -34,6 +34,21 @@ it('returns the defaults of the specification', function () {
         ->assertJsonPath('auth.lockout_minutes', 15);
 });
 
+it('gives a setting added by a new version its default, even with the cache of the previous one', function () {
+    // Cache laissé par la v0.7.0 (base de données en production) : tous les paramètres
+    // de l'époque, sans `notifications.push_enabled` apparu au lot 8.
+    $previous = Settings::defaults();
+    unset($previous['notifications.push_enabled']);
+    $previous['orders.max_per_day'] = 2;
+    cache()->forever('ramymaak.settings', $previous);
+    app()->forgetInstance(Settings::class);
+
+    expect(app(Settings::class)->get('notifications.push_enabled'))->toBeTrue()
+        ->and(app(Settings::class)->get('orders.max_per_day'))->toBe(2);
+
+    $this->actingAs(userWithRole(Role::Client))->getJson('/api/v1/auth/me')->assertOk();
+});
+
 it('updates part of the settings and journals old and new values', function () {
     $admin = admin();
     $this->actingAs($admin);

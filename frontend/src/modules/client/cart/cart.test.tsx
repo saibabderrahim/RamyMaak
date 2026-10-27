@@ -167,7 +167,7 @@ describe('cart (EF-CLT-03)', () => {
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(`/client/commandes/${ORDER_ID}`))
     expect(screen.getByTestId('flash')).toHaveTextContent(`Commande ${ORDER_NUMBER} envoyée.`)
     const [sent] = requests(ORDERS_URL)
-    const id = (sent?.body as { client_request_id: string }).client_request_id
+    const id = (sent?.body as { client_request_id: string } | undefined)?.client_request_id ?? ''
     expect(id).toMatch(/^[0-9a-f-]{36}$/)
     expect(sent?.body).toEqual({
       client_request_id: id,
