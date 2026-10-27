@@ -23,7 +23,7 @@ Valeurs par défaut retenues :
 | §4.3 | **Rappels** chaque minute, sur l'heure limite effective de la région (prolongation comprise), une fois par heure limite : **N-10** aux régionaux, 30 min avant la limite de répartition si elle n'est pas envoyée ; **N-11** aux clients notifiés sans commande, 1 h avant la limite de commande ; **N-12** aux régionaux, 30 min avant la limite de validation s'il reste des commandes à valider ; **N-13** « Répartition en retard » à l'ADV de la région et à l'Admin, une fois la limite passée. Une prolongation déclenche un nouveau rappel. Rien après l'heure limite (N-13 excepté). |
 | N-15 | **Sécurité du compte** : après une réinitialisation du mot de passe par l'Admin ou par la commande `ramymaak:reset-password`, le compte reçoit l'avis dans l'application (jamais le mot de passe). |
 | EF-AUTH-06, I-110, I-113 | **Appareils connectés** (Profil) : chaque appareil avec son navigateur, son adresse, sa dernière activité, « Cet appareil », « Reste connecté » et « Notifications activées » ; « Déconnecter » un autre appareil, avec confirmation. « Rester connecté » est désormais **propre à chaque appareil** : un appareil déconnecté depuis la liste ne se reconnecte plus par son cookie, sans toucher aux autres. **Changer son mot de passe** déconnecte ses autres appareils et garde « Rester connecté » sur celui-ci. |
-| I-103 | Un appareil partagé ne reçoit que les notifications du dernier compte ouvert ; les abonnements sont supprimés à la déconnexion, à la déconnexion de tous les appareils, à la désactivation du compte et à la réinitialisation du mot de passe. |
+| I-103 | Un appareil partagé ne reçoit que les notifications du dernier compte ouvert ; les abonnements sont supprimés à la déconnexion, à la déconnexion de tous les appareils, à la désactivation du compte et à la réinitialisation du mot de passe. Au plus 10 appareils abonnés par compte. |
 | EF-CLT-07, §9.5, I-101 | **Lecture hors ligne** : l'accueil, le catalogue, le panier et les commandes du client ; « Ma journée », les quotas, la répartition, les commandes reçues et « Mes clients » du régional ; le centre de notifications. Les données sont enregistrées sur l'appareil pour le compte connecté (7 jours au plus) et effacées à la déconnexion. Bandeau « Hors ligne — données de 09:42 » ; un écran jamais ouvert sur l'appareil le dit. Le back-office n'est jamais enregistré. **Photos** des produits gardées 30 jours (500 au plus). |
 | §9.5, I-102, I-112 | **Envoi différé** : « Envoyer la commande » marche hors ligne. La commande attend sur l'appareil (« Commandes en attente d'envoi » sur l'accueil et dans « Mes commandes », pastille de l'onglet), puis part d'elle-même au retour du réseau, à la réouverture de l'application, toutes les 30 s, et en arrière-plan sur Android (Background Sync, avec une notification « Commande RMK-… envoyée »). Une commande refusée par le serveur (heure limite passée, quantité au-delà du disponible) l'est avec le motif, puis « Reprendre dans le panier » ou « Retirer ». Jamais de doublon : le serveur reconnaît un renvoi. Une seule commande en attente par journée. La déconnexion avec une commande en attente demande confirmation. |
 | D-13 | Hors ligne, les autres écritures (modification et annulation d'une commande, « Recommander », bornes, décisions, réglages) sont désactivées, avec la raison. |
@@ -31,7 +31,33 @@ Valeurs par défaut retenues :
 
 ## Vérifications
 
-_À compléter._
+- **API** : 2 215 tests Pest sur MySQL 8 (2 141 sur SQLite, les tests de concurrence propres à MySQL en plus), tous verts ; la CI les exécute sur MySQL 8.4.
+- **PWA** : 996 tests Vitest ; lint, types et build sans avertissement ; le back-office reste hors du pré-cache et n'est jamais enregistré hors ligne.
+- **Parcours réel dans Chromium** (Playwright), sur la PWA compilée servie par nginx avec les en-têtes de production (CSP comprise), l'API, MySQL, la file d'attente et Reverb ; deux clients sur téléphone (Pixel 7), le régional et l'ADV sur PC ; push écrits dans `push.log` (`PUSH_TRANSPORT=log`) ; 57 contrôles, aucune erreur de page.
+  - Invitation « Recevez vos notifications » sur l'accueil du client, « Activer » : appareil abonné, « Activées » dans le profil ; l'appareil apparaît avec « Cet appareil », « Reste connecté » et « Notifications activées ». Le régional s'abonne depuis son profil sur PC.
+  - N-10 au régional 30 min avant la limite de répartition (en push, priorité haute) ; N-03 en push au client abonné, pas au client non abonné.
+  - Le second client coupe les rappels : N-11 au seul premier client, une seule fois malgré un second passage du planificateur.
+  - Hors ligne, après un rechargement : catalogue avec « Hors ligne — données de 21:19 », photo du produit servie par le cache de l'appareil, « Mes commandes » ; un écran jamais ouvert le dit.
+  - Commande envoyée hors ligne : « Commandes en attente d'envoi », pastille de l'onglet, seconde commande de la journée refusée ; au retour du réseau, elle part seule, une seule fois ; N-05 en push au régional.
+  - Envoi en arrière-plan : commande déposée hors ligne, application fermée, réseau retrouvé ; le service worker l'envoie (jeton CSRF relu par l'API Cookie Store) et affiche « Commande RMK-261028-00002 envoyée ».
+  - Push groupé : deuxième et troisième commandes dans la fenêtre de 5 minutes, puis « 2 nouvelles commandes à valider » à sa fin.
+  - N-12 « Rappel : 3 commandes à valider » ; N-13 « Répartition en retard — Est » dans la cloche de l'ADV, sans push.
+  - Push affiché par le service worker (titre, texte, écran) ; charge illisible : « RamyMaak — Nouvelle notification ».
+  - Plage sans push : la validation d'une commande arrive dans la cloche du client, aucun push ne part.
+  - Appareils connectés : depuis le téléphone, « Déconnecter » le PC (avec confirmation) ; le PC revient à la connexion à sa requête suivante.
+  - Déconnexion avec une commande en attente : confirmation, puis boîte d'envoi et données du compte effacées de l'appareil, abonnement push supprimé sur le serveur, la commande n'est jamais partie.
+  - « Ma journée » du régional lue hors ligne sur PC.
+- **Captures inspectées au regard de Design.md** (téléphone 412 px et PC 1 440 px) : invitation, profil (notifications, rappels, appareils), catalogue et accueil hors ligne, boîte d'envoi, panier bloqué, cloche de l'ADV, confirmation de déconnexion. Reste un point de forme : hors ligne, le bandeau général du lot 1 (« les données affichées peuvent ne pas être à jour ») et celui de l'écran (« données de 21:19 ») se cumulent.
+- **Revue contradictoire** en trois axes (push côté serveur, appareils et rappels, PWA hors ligne et push), plus le parcours réel : 16 défauts confirmés, tous corrigés et couverts par un test.
+  - **Bloquant au déploiement** : le cache des paramètres de la v0.7.0 ne connaissait pas le nouveau paramètre « Notifications push » ; `/auth/me` aurait échoué pour tous les comptes jusqu'au vidage du cache. Les défauts sont maintenant fusionnés à chaque lecture.
+  - Sur un téléphone partagé, une fenêtre restée sur un compte pouvait envoyer les commandes en attente de ce compte sous un autre compte ; un onglet resté ouvert pouvait enregistrer les données d'un compte sous la clé d'un autre.
+  - Après un rechargement, les données enregistrées étaient tenues pour fraîches 5 minutes : un appareil déconnecté depuis la liste restait sur ses écrans.
+  - Un appareil déconnecté depuis la liste pouvait se reconnecter par son cookie après des requêtes parallèles à son retour ; après une reconnexion par le cookie, « Me déconnecter » laissait son abonnement push.
+  - Le changement du mot de passe laissait des appareils fantômes dans la liste, encore abonnés aux push, et faisait perdre « Rester connecté » à l'appareil lui-même (I-114).
+  - Écran blanc à la déconnexion avec une commande en attente ; « Me déconnecter de tous mes appareils » effaçait les commandes en attente sans prévenir.
+  - L'envoi en arrière-plan ne renouvelait pas le jeton CSRF expiré ; un mot de passe à changer rendait la commande « Refusée ».
+  - Push : plage sans push modifiée prise en compte seulement au redémarrage des processus de file d'attente ; push de fin de fenêtre renvoyant la mauvaise notification ; nombre d'abonnements par compte sans limite (10 désormais).
+  - Le compte et la cloche de l'ADV et de l'Admin étaient enregistrés hors ligne ; focus perdu après l'activation des notifications ; liste des appareils en attente sans fin hors ligne.
 
 ## Mettre à jour la production (v0.7.0 → v0.8.0)
 
