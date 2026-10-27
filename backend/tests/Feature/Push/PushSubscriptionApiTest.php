@@ -240,3 +240,18 @@ it('lets the Admin read and switch push off in the settings', function () {
     $response->assertJsonValidationErrors('notifications.push_enabled');
     expect($response->json('errors')['notifications.push_enabled'][0])->toContain('notifications push');
 });
+
+it('keeps the 10 most recently used devices of an account', function () {
+    $user = userWithRole(Role::Client);
+    $this->actingAs($user);
+    $old = PushSubscription::factory()->count(10)->sequence(fn ($sequence) => ['last_used_at' => now()->subDays(10 - $sequence->index)])->create(['user_id' => $user->id]);
+    $other = PushSubscription::factory()->create(['user_id' => userWithRole(Role::Client)->id, 'last_used_at' => now()->subYear()]);
+
+    $this->postJson('/api/v1/push-subscriptions', ($this->body)())->assertCreated();
+
+    expect(PushSubscription::query()->where('user_id', $user->id)->count())->toBe(10)
+        // Le moins récemment utilisé est retiré ; ceux des autres comptes ne sont pas comptés.
+        ->and(PushSubscription::query()->whereKey($old->first()->id)->exists())->toBeFalse()
+        ->and(PushSubscription::query()->where('endpoint', PushTesting::ENDPOINT)->exists())->toBeTrue()
+        ->and($other->fresh())->not->toBeNull();
+});

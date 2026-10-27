@@ -15,12 +15,14 @@ use DateTimeInterface;
  */
 final class QuietHours
 {
-    public function __construct(private readonly Settings $settings) {}
-
     public function active(?DateTimeInterface $at = null): bool
     {
-        $start = self::minutes($this->settings->get('notifications.quiet_start'));
-        $end = self::minutes($this->settings->get('notifications.quiet_end'));
+        // Paramètres relus à chaque décision : le canal push est gardé en mémoire
+        // par le processus de file d'attente, une plage modifiée par l'Admin
+        // s'applique dès la tâche suivante.
+        $settings = app(Settings::class);
+        $start = self::minutes($settings->get('notifications.quiet_start'));
+        $end = self::minutes($settings->get('notifications.quiet_end'));
         if ($start === null || $end === null || $start === $end) {
             return false;
         }

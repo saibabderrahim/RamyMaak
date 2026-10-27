@@ -26,10 +26,21 @@ return new class extends Migration
             $table->timestamp('last_used_at')->nullable();
             $table->timestamps();
         });
+
+        // Sessions ouvertes par chaque jeton (connexion, puis chaque retour par le
+        // cookie) : un appareil est l'ensemble de ses sessions, y compris celles
+        // nées de requêtes parallèles au retour (déconnexion d'un appareil, I-113).
+        Schema::create('remember_token_sessions', function (Blueprint $table) {
+            $table->foreignId('remember_token_id')->constrained()->cascadeOnDelete();
+            $table->string('session_id')->index();
+            $table->timestamp('created_at')->nullable();
+            $table->primary(['remember_token_id', 'session_id']);
+        });
     }
 
     public function down(): void
     {
+        Schema::dropIfExists('remember_token_sessions');
         Schema::dropIfExists('remember_tokens');
     }
 };

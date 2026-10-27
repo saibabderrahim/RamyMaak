@@ -14,12 +14,12 @@ use Illuminate\Support\Carbon;
  * @property string $group
  * @property Carbon|null $last_sent_at
  * @property int $pending
- * @property string|null $last_title
+ * @property array<string, mixed>|null $last_payload
  * @property Carbon|null $flush_at
  */
 class PushThrottle extends Model
 {
-    protected $fillable = ['user_id', 'group', 'last_sent_at', 'pending', 'last_title', 'flush_at'];
+    protected $fillable = ['user_id', 'group', 'last_sent_at', 'pending', 'last_payload', 'flush_at'];
 
     /**
      * @return array<string, string>
@@ -29,6 +29,7 @@ class PushThrottle extends Model
         return [
             'user_id' => 'integer',
             'pending' => 'integer',
+            'last_payload' => 'array',
             'last_sent_at' => 'datetime',
             'flush_at' => 'datetime',
         ];

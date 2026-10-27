@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\Access\Role;
+use App\Http\Controllers\Api\V1\SessionController;
 use App\Models\AuditLog;
 use App\Models\PushSubscription;
 use Carbon\CarbonImmutable;
@@ -220,4 +221,90 @@ it('refuses a token older than the remember-me duration', function () {
 
     expectProblem(($this->me)(), 401, 'UNAUTHENTICATED');
     expect(($this->tokens)())->toBeEmpty();
+});
+
+it('treats the sessions opened by parallel requests on return as one device, and signs them all out', function () {
+    $phone = ($this->signIn)($this->android);
+    $tablet = ($this->signIn)($this->windows);
+
+    // Session expirée : au retour au premier plan, la PWA envoie plusieurs requêtes
+    // à la fois, chacune se reconnecte par le cookie et ouvre sa propre session.
+    $this->travel(3)->hours();
+    $sessions = [];
+    foreach ([1, 2] as $request) {
+        ($this->asDevice)($this->android, $phone);
+        $sessions[] = ($this->me)()->assertOk()->getCookie($this->session)->getValue();
+    }
+    expect($sessions[0])->not->toBe($sessions[1]);
+
+    // L'appareil lui-même ne se voit qu'une fois, comme sur la tablette.
+    ($this->asDevice)($this->android, [$this->session => $sessions[0], $this->recaller => $phone[$this->recaller]]);
+    $own = collect($this->getJson('/api/v1/auth/sessions')->assertOk()->json('data'));
+    expect($own->where('device', 'Chrome sur Android'))->toHaveCount(1)
+        ->and($own->firstWhere('current', true)['remembered'])->toBeTrue();
+    ($this->asDevice)($this->windows, $tablet);
+    $devices = collect($this->getJson('/api/v1/auth/sessions')->assertOk()->json('data'));
+    $phoneItem = $devices->where('device', 'Chrome sur Android')->sole();
+    expect($phoneItem['remembered'])->toBeTrue();
+    // Sa session « jumelle » est aussi l'appareil : elle ne se révoque pas depuis l'appareil même.
+    ($this->asDevice)($this->android, [$this->session => $sessions[0]]);
+    expectProblem($this->deleteJson('/api/v1/auth/sessions/'.SessionController::opaqueId($sessions[1])), 422, 'VALIDATION_FAILED');
+
+    ($this->asDevice)($this->windows, $tablet);
+    $this->deleteJson('/api/v1/auth/sessions/'.$phoneItem['id'])->assertNoContent();
+
+    // Aucune des deux sessions, ni le cookie, ne reconnecte l'appareil.
+    foreach ($sessions as $session) {
+        ($this->asDevice)($this->android, [$this->session => $session, $this->recaller => $phone[$this->recaller]]);
+        expectProblem(($this->me)(), 401, 'UNAUTHENTICATED');
+    }
+    expect(($this->tokens)()->pluck('user_agent')->all())->toBe([$this->windows]);
+});
+
+it('keeps the push subscription of a device signed back in by its cookie with its new session, and removes it on logout (I-103)', function () {
+    $phone = ($this->signIn)($this->android);
+    $subscription = PushSubscription::factory()->for($this->user)->create(['session_id' => $phone[$this->session]]);
+
+    $this->travel(3)->hours();
+    ($this->asDevice)($this->android, $phone);
+    $session = ($this->me)()->assertOk()->getCookie($this->session)->getValue();
+    expect($subscription->fresh()->session_id)->toBe($session);
+
+    // Application reprise depuis l'arrière-plan : pas de nouvel envoi de l'abonnement.
+    ($this->asDevice)($this->android, [$this->session => $session, $this->recaller => $phone[$this->recaller]]);
+    $this->postJson('/api/v1/auth/logout')->assertNoContent();
+
+    expect(PushSubscription::query()->count())->toBe(0)
+        ->and(($this->tokens)())->toBeEmpty();
+});
+
+it('signs the other devices out on a password change, and keeps « Rester connecté » on this one', function () {
+    $phone = ($this->signIn)($this->android);
+    $tablet = ($this->signIn)($this->windows);
+    $pc = ($this->signIn)($this->windows, remember: false);
+    PushSubscription::factory()->for($this->user)->create(['session_id' => $phone[$this->session]]);
+    PushSubscription::factory()->for($this->user)->create(['session_id' => $tablet[$this->session]]);
+
+    ($this->asDevice)($this->android, $phone);
+    $response = $this->putJson('/api/v1/auth/password', [
+        'current_password' => UserFactory::PASSWORD,
+        'password' => 'Nouveau-mot-de-passe-2026',
+        'password_confirmation' => 'Nouveau-mot-de-passe-2026',
+    ])->assertOk();
+    $recaller = $response->getCookie($this->recaller);
+    expect($recaller)->not->toBeNull()
+        ->and(explode('|', $recaller->getValue())[1])->toBe(($this->tokenOf)($phone));
+
+    expect(($this->tokens)()->pluck('session_id')->all())->toBe([$phone[$this->session]])
+        ->and(PushSubscription::query()->pluck('session_id')->all())->toBe([$phone[$this->session]])
+        ->and(DB::table('sessions')->whereIn('id', [$tablet[$this->session], $pc[$this->session]])->exists())->toBeFalse()
+        ->and(AuditLog::query()->where('event', 'password.changed')->sole()->properties['other_devices'])
+        ->toBe(['sessions' => 2, 'push_subscriptions' => 1, 'remember_tokens' => 1]);
+
+    // Session expirée : le nouveau cookie reconnecte le téléphone ; la tablette, plus.
+    $this->travel(3)->hours();
+    ($this->asDevice)($this->android, [$this->recaller => $recaller->getValue()]);
+    ($this->me)()->assertOk();
+    ($this->asDevice)($this->windows, $tablet);
+    expectProblem(($this->me)(), 401, 'UNAUTHENTICATED');
 });

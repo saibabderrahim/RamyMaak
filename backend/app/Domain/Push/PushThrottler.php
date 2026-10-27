@@ -9,7 +9,6 @@ use App\Models\PushThrottle;
 use App\Models\User;
 use App\Notifications\NotificationType;
 use Carbon\CarbonImmutable;
-use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -57,13 +56,13 @@ final class PushThrottler
             $lastSentAt = $throttle->last_sent_at?->toImmutable();
 
             if ($throttle->pending === 0 && ($lastSentAt === null || $lastSentAt->lte($now->subMinutes($window)))) {
-                $throttle->forceFill(['last_sent_at' => $now, 'flush_at' => null, 'last_title' => null])->save();
+                $throttle->forceFill(['last_sent_at' => $now, 'flush_at' => null, 'last_payload' => null])->save();
 
                 return [true, null];
             }
 
             $throttle->pending++;
-            $throttle->last_title = mb_substr((string) ($payload['title'] ?? ''), 0, 255);
+            $throttle->last_payload = $payload;
 
             // Un seul envoi groupé programmé par utilisateur et par groupe. Un
             // envoi resté en plan au-delà d'une fenêtre (tâche perdue) est
@@ -111,13 +110,14 @@ final class PushThrottler
 
             $payload = null;
             if ($throttle->pending > 0 && $this->deliverable($userId)) {
-                $payload = $throttle->pending === 1
-                    ? $this->latestPayload($userId, $group, $throttle->last_title)
-                    : PushPayload::grouped($group, $throttle->pending, $throttle->last_title);
+                $last = $throttle->last_payload;
+                $payload = $throttle->pending === 1 && $last !== null
+                    ? $last
+                    : PushPayload::grouped($group, $throttle->pending, isset($last['title']) ? (string) $last['title'] : null);
                 $throttle->last_sent_at = now();
             }
 
-            $throttle->forceFill(['pending' => 0, 'flush_at' => null, 'last_title' => null])->save();
+            $throttle->forceFill(['pending' => 0, 'flush_at' => null, 'last_payload' => null])->save();
 
             return $payload;
         }, 3);
@@ -130,26 +130,6 @@ final class PushThrottler
     public function windowMinutes(): int
     {
         return max(1, (int) config('ramymaak.push.group_window_minutes'));
-    }
-
-    /**
-     * Une seule notification comptée : elle part seule, avec son texte et son
-     * écran, plutôt qu'en « 1 nouvelle notification ».
-     *
-     * @return array<string, mixed>
-     */
-    private function latestPayload(int $userId, string $group, ?string $lastTitle): array
-    {
-        $notification = DatabaseNotification::query()
-            ->where('notifiable_type', (new User)->getMorphClass())
-            ->where('notifiable_id', $userId)
-            ->where('type', $group)
-            ->latest()
-            ->first();
-
-        return $notification !== null
-            ? PushPayload::stored($notification, $group)
-            : PushPayload::grouped($group, 1, $lastTitle);
     }
 
     /**

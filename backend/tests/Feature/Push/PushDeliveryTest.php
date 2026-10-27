@@ -15,6 +15,7 @@ use App\Models\PushSubscription;
 use App\Models\PushThrottle;
 use App\Models\Region;
 use App\Models\RegionAssignment;
+use App\Models\Setting;
 use App\Models\User;
 use App\Notifications\NotificationType;
 use App\Support\BusinessClock;
@@ -409,4 +410,35 @@ it('pushes the N-05 of a real order to the regionals of its region', function ()
             'tag' => 'ORDER_SUBMITTED',
             'count' => 1,
         ]);
+});
+
+it('applies quiet hours changed by the Admin from the next job of a long-running worker', function () {
+    PushTesting::settings(['quiet_start' => '21:00', 'quiet_end' => '06:00']);
+    $this->travelTo(CarbonImmutable::parse('2026-10-08 22:00', 'Africa/Algiers'));
+    ($this->send)(NotificationType::QuotasPublished, 'k1');
+    expect($this->push->sent)->toBeEmpty();
+
+    // L'Admin raccourcit la plage depuis un autre processus ; le processus de file
+    // d'attente garde son canal push et passe à la tâche suivante.
+    Setting::query()->updateOrCreate(['key' => 'notifications.quiet_start'], ['value' => '23:00']);
+    cache()->forget('ramymaak.settings');
+    app()->forgetScopedInstances();
+    ($this->send)(NotificationType::QuotasPublished, 'k2');
+
+    expect($this->push->sent)->toHaveCount(1);
+});
+
+it('pushes at the end of the window the very notification that was counted, even in the same second', function () {
+    Queue::fake([FlushPush::class]);
+    ($this->send)(NotificationType::OrderShipped, 's1', 'Commande RMK-261008-00001 expédiée');
+    ($this->send)(NotificationType::OrderShipped, 's2', 'Commande RMK-261008-00002 expédiée');
+    $second = DatabaseNotification::query()->whereMorphedTo('notifiable', $this->user)->get()->firstWhere('data.title', 'Commande RMK-261008-00002 expédiée');
+
+    $this->travel(5)->minutes();
+    ($this->runFlush)();
+
+    expect($this->push->payloads())->toHaveCount(2)
+        ->and($this->push->payloads()[1]['title'])->toBe('Commande RMK-261008-00002 expédiée')
+        ->and($this->push->payloads()[1]['id'])->toBe($second->id)
+        ->and($this->push->payloads()[1]['count'])->toBe(1);
 });

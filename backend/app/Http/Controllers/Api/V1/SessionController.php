@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Domain\Auth\AuthAudit;
 use App\Domain\Auth\DeviceLabel;
 use App\Domain\Auth\RememberTokens;
-use App\Domain\Push\PushSubscriptions;
+use App\Domain\Auth\SessionRevoker;
 use App\Http\Controllers\Controller;
 use App\Models\PushSubscription;
 use App\Models\User;
@@ -23,7 +23,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  * au plus ancien :
  *
  * - les sessions actives du compte (table `sessions`), `remembered` quand un
- *   jeton « Rester connecté » y est rattaché ;
+ *   jeton « Rester connecté » l'a ouverte ; un seul appareil par jeton ;
  * - les appareils mémorisés sans session active (session expirée après
  *   inactivité) : ils se reconnectent par leur cookie, dernière activité =
  *   dernière utilisation du jeton.
@@ -54,15 +54,43 @@ class SessionController extends Controller
                 'user_agent' => $request->userAgent(),
                 'last_activity' => now()->getTimestamp(),
             ]);
-        $sessionIds = $sessions->pluck('id')->all();
+
+        // Jeton « Rester connecté » de chaque session qu'il a ouverte.
         $tokens = $this->rememberTokens->active($user);
-        $remembered = $tokens->pluck('session_id')->filter()->flip();
-        $idle = $tokens->reject(fn (object $token) => $token->session_id !== null && in_array($token->session_id, $sessionIds, true));
+        $tokenOfSession = [];
+        $sessionsOfToken = [];
+        foreach ($tokens as $token) {
+            $sessionsOfToken[$token->id] = $this->rememberTokens->sessionsOfTokens([(int) $token->id]);
+            foreach ($sessionsOfToken[$token->id] as $sessionId) {
+                $tokenOfSession[$sessionId] ??= (int) $token->id;
+            }
+        }
+
+        // Un appareil par jeton : sa session la plus récente (la session courante
+        // en tête) ; les autres sessions du même jeton (requêtes parallèles au
+        // retour par le cookie) ne sont pas des appareils de plus.
+        $listedTokens = [];
+        $sessions = $sessions->filter(function (object $session) use ($tokenOfSession, &$listedTokens): bool {
+            $token = $tokenOfSession[$session->id] ?? null;
+            if ($token === null) {
+                return true;
+            }
+            if (isset($listedTokens[$token])) {
+                return false;
+            }
+            $listedTokens[$token] = true;
+
+            return true;
+        });
+        $idle = $tokens->reject(fn (object $token) => isset($listedTokens[$token->id]));
+
+        $deviceSessions = fn (?int $token, ?string $sessionId) => $token === null ? [$sessionId] : [...$sessionsOfToken[$token], ...($sessionId === null ? [] : [$sessionId])];
         $withPush = PushSubscription::query()
             ->where('user_id', $user->id)
-            ->whereIn('session_id', [...$sessionIds, ...$idle->pluck('session_id')->filter()->all()])
+            ->whereIn('session_id', [...$sessions->pluck('id')->all(), ...array_merge([], ...array_values($sessionsOfToken))])
             ->pluck('session_id')
             ->flip();
+        $hasPush = fn (array $sessionIds) => collect($sessionIds)->contains(fn (?string $id) => $id !== null && $withPush->has($id));
 
         $devices = $sessions
             ->map(fn (object $session) => [
@@ -71,8 +99,8 @@ class SessionController extends Controller
                 'ip' => $session->ip_address,
                 'last_active_at' => CarbonImmutable::createFromTimestampUTC((int) $session->last_activity),
                 'current' => $session->id === $current,
-                'push' => $withPush->has($session->id),
-                'remembered' => $remembered->has($session->id),
+                'push' => $hasPush($deviceSessions($tokenOfSession[$session->id] ?? null, $session->id)),
+                'remembered' => isset($tokenOfSession[$session->id]),
             ])
             ->concat($idle->map(fn (object $token) => [
                 'id' => self::rememberedId((int) $token->id),
@@ -80,7 +108,7 @@ class SessionController extends Controller
                 'ip' => $token->ip_address,
                 'last_active_at' => CarbonImmutable::parse($token->last_used_at ?? $token->created_at, 'UTC'),
                 'current' => false,
-                'push' => $token->session_id !== null && $withPush->has($token->session_id),
+                'push' => $hasPush($deviceSessions((int) $token->id, null)),
                 'remembered' => true,
             ]))
             // La session courante (maintenant) reste en tête.
@@ -92,37 +120,29 @@ class SessionController extends Controller
     }
 
     /**
-     * Déconnecte un autre appareil : sa session, ses jetons « Rester
+     * Déconnecte un autre appareil : toutes ses sessions, ses jetons « Rester
      * connecté » (il ne peut plus se reconnecter par son cookie) et ses
      * abonnements push (I-103, I-113). 404 pour un identifiant inconnu ou
-     * d'un autre compte ; la session courante se ferme par « Me déconnecter ».
+     * d'un autre compte ; l'appareil courant se ferme par « Me déconnecter ».
      */
-    public function destroy(Request $request, string $session, PushSubscriptions $pushSubscriptions): Response
+    public function destroy(Request $request, string $session, SessionRevoker $revoker): Response
     {
         /** @var User $user */
         $user = $request->user();
         $target = $this->find($user, $session) ?? throw new NotFoundHttpException;
-        if ($target['session_id'] !== null && $target['session_id'] === $request->session()->getId()) {
+        if (in_array($request->session()->getId(), $target['sessions'], true)) {
             throw ValidationException::withMessages(['session' => [__('auth.session_current')]]);
         }
 
-        DB::transaction(function () use ($request, $user, $target, $session, $pushSubscriptions): void {
-            $tokens = $target['token_id'] === null ? 0 : $this->rememberTokens->forget($user, $target['token_id']);
-            $subscriptions = 0;
-            if ($target['session_id'] !== null) {
-                DB::table(config('session.table', 'sessions'))
-                    ->where('id', $target['session_id'])
-                    ->where('user_id', $user->id)
-                    ->delete();
-                $tokens += $this->rememberTokens->forgetSession($user, $target['session_id']);
-                $subscriptions = $pushSubscriptions->forgetSession($user, $target['session_id']);
-            }
+        DB::transaction(function () use ($request, $user, $target, $session, $revoker): void {
+            $revoked = $revoker->revokeDevice($user, $target['sessions'], $target['tokens']);
 
             $this->audit->record('session.revoked', 'Appareil déconnecté', $request, $user, properties: [
                 'session' => $session,
                 'device' => DeviceLabel::fromUserAgent($target['user_agent']),
-                'remember_tokens_revoked' => $tokens,
-                'push_subscriptions_revoked' => $subscriptions,
+                'sessions_revoked' => $revoked['sessions'],
+                'remember_tokens_revoked' => $revoked['remember_tokens'],
+                'push_subscriptions_revoked' => $revoked['push_subscriptions'],
             ]);
         });
 
@@ -146,20 +166,28 @@ class SessionController extends Controller
 
     /**
      * Appareil du compte désigné par son identifiant exposé : session active
-     * (« s_ ») ou jeton non expiré (« r_ »), avec sa dernière session.
+     * (« s_ ») ou jeton non expiré (« r_ »), avec toutes ses sessions.
      *
-     * @return array{session_id: ?string, token_id: ?int, user_agent: ?string}|null
+     * @return array{sessions: list<string>, tokens: list<int>, user_agent: ?string}|null
      */
     private function find(User $user, string $id): ?array
     {
         if (str_starts_with($id, 'r_')) {
             $token = $this->rememberTokens->active($user)->first(fn (object $row) => hash_equals(self::rememberedId((int) $row->id), $id));
 
-            return $token === null ? null : ['session_id' => $token->session_id, 'token_id' => (int) $token->id, 'user_agent' => $token->user_agent];
+            return $token === null ? null : [
+                'sessions' => $this->rememberTokens->sessionsOfTokens([(int) $token->id]),
+                'tokens' => [(int) $token->id],
+                'user_agent' => $token->user_agent,
+            ];
         }
         $session = $this->sessionsOf($user)->first(fn (object $row) => hash_equals(self::opaqueId($row->id), $id));
 
-        return $session === null ? null : ['session_id' => $session->id, 'token_id' => null, 'user_agent' => $session->user_agent];
+        return $session === null ? null : [
+            'sessions' => $this->rememberTokens->deviceSessions($user, $session->id),
+            'tokens' => $this->rememberTokens->tokensOfSession($user, $session->id),
+            'user_agent' => $session->user_agent,
+        ];
     }
 
     /**

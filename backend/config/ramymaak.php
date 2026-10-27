@@ -64,6 +64,8 @@ return [
         ))))),
         // Fenêtre d'anti-saturation par utilisateur et par groupe (EF-NOT-02, I-109).
         'group_window_minutes' => 5,
+        // Abonnements gardés par compte (appareils), les plus récemment utilisés.
+        'max_per_user' => 10,
         // Durée de vie d'un push non distribué (appareil éteint), en secondes.
         'ttl' => 6 * 3600,
         // Purge nocturne (§9.7).

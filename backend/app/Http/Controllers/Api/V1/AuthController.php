@@ -6,7 +6,6 @@ use App\Domain\Auth\AuthAudit;
 use App\Domain\Auth\Authenticator;
 use App\Domain\Auth\RememberTokens;
 use App\Domain\Auth\SessionRevoker;
-use App\Domain\Push\PushSubscriptions;
 use App\Domain\Settings\Settings;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\EnforceSessionPolicy;
@@ -57,15 +56,17 @@ class AuthController extends Controller
         return (new CurrentUserResource($user))->response();
     }
 
-    public function logout(Request $request, PushSubscriptions $pushSubscriptions, RememberTokens $rememberTokens): Response
+    public function logout(Request $request, SessionRevoker $revoker, RememberTokens $rememberTokens): Response
     {
         /** @var User $user */
         $user = $request->user();
 
         $this->audit->record('logout', 'Déconnexion', $request, $user);
-        // Abonnements push et jeton « Rester connecté » de cet appareil (I-103,
-        // I-113), avant que la session ne change d'identifiant.
-        $pushSubscriptions->forgetSession($user, $request->session()->getId());
+        // Sessions, abonnements push et jeton « Rester connecté » de cet appareil
+        // (I-103, I-113), avant que la session ne change d'identifiant : y compris
+        // les sessions ouvertes par son jeton à un retour précédent.
+        $sessions = $rememberTokens->deviceSessions($user, $request->session()->getId());
+        $revoker->revokeDevice($user, $sessions, $rememberTokens->tokensOfSession($user, $request->session()->getId()));
         $rememberTokens->forgetCurrentDevice($user, $request);
         $this->endCurrentSession($request);
 
@@ -91,19 +92,27 @@ class AuthController extends Controller
         return new CurrentUserResource($request->user());
     }
 
-    public function changePassword(ChangePasswordRequest $request): CurrentUserResource
+    public function changePassword(ChangePasswordRequest $request, SessionRevoker $revoker, RememberTokens $rememberTokens): CurrentUserResource
     {
         /** @var User $user */
         $user = $request->user();
 
-        DB::transaction(function () use ($request, $user): void {
+        DB::transaction(function () use ($request, $user, $revoker, $rememberTokens): void {
             $user->forceFill([
                 'password' => $request->input('password'),
                 'must_change_password' => false,
                 'password_changed_at' => now(),
             ])->save();
 
-            $this->audit->record('password.changed', 'Mot de passe modifié', $request, $user);
+            // Les cookies « Rester connecté » portent une empreinte du mot de passe :
+            // celui de cet appareil est réémis, les autres appareils sont déconnectés
+            // (sessions, jetons, abonnements push) au lieu de rester listés (I-113).
+            $kept = $rememberTokens->keepCurrentDevice($user, $request);
+            $revoked = $revoker->revokeOtherDevices($user, $request->session()->getId(), $kept);
+
+            $this->audit->record('password.changed', 'Mot de passe modifié', $request, $user, properties: [
+                'other_devices' => $revoked,
+            ]);
         });
 
         return new CurrentUserResource($user);

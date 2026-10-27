@@ -36,8 +36,9 @@ return new class extends Migration
             $table->string('group', 40);
             $table->timestamp('last_sent_at')->nullable();
             $table->unsignedInteger('pending')->default(0);
-            // Titre de la dernière notification comptée (texte du push groupé).
-            $table->string('last_title')->nullable();
+            // Charge utile de la dernière notification comptée : envoyée telle quelle
+            // si elle est seule, son titre sert de texte au push groupé sinon.
+            $table->json('last_payload')->nullable();
             // Envoi groupé programmé (fin de la fenêtre), null s'il n'y en a pas.
             $table->timestamp('flush_at')->nullable();
             $table->timestamps();

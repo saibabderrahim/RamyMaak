@@ -2,6 +2,7 @@
 
 namespace App\Domain\Auth;
 
+use App\Domain\Push\PushSubscriptions;
 use App\Domain\Settings\Settings;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -11,6 +12,7 @@ use Illuminate\Auth\SessionGuard;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -22,9 +24,11 @@ use Illuminate\Support\Str;
  *
  * - Durée : celle du cookie (`sessions.remember_days`, depuis la
  *   connexion) ; un jeton plus ancien est refusé et supprimé.
- * - Session : chaque jeton garde la dernière session qu'il a ouverte (à la
- *   connexion, puis au retour par le cookie après expiration de la session),
- *   pour la liste des appareils et la déconnexion d'un appareil.
+ * - Sessions : chaque jeton garde les sessions qu'il a ouvertes (à la
+ *   connexion, puis à chaque retour par le cookie après expiration de la
+ *   session, `remember_token_sessions`) et la dernière d'entre elles. Un
+ *   appareil est l'ensemble de ces sessions : le déconnecter les ferme toutes,
+ *   y compris celles nées de requêtes parallèles au retour.
  * - Réservé aux clients et aux régionaux : un compte passé au back-office
  *   n'est plus reconnu par ses anciens jetons.
  */
@@ -32,7 +36,12 @@ final class RememberTokens
 {
     public const TABLE = 'remember_tokens';
 
-    public function __construct(private readonly Settings $settings) {}
+    public const SESSIONS = 'remember_token_sessions';
+
+    public function __construct(
+        private readonly Settings $settings,
+        private readonly PushSubscriptions $pushSubscriptions,
+    ) {}
 
     /**
      * Jeton de l'appareil à la connexion (SessionGuard::cycleRememberToken) :
@@ -66,7 +75,8 @@ final class RememberTokens
 
     /**
      * Retour par le cookie (SessionGuard::userFromRecaller) : jeton du compte,
-     * non expiré, compte de terrain. Met à jour la dernière utilisation.
+     * non expiré, compte de terrain. Rien n'est mis à jour ici : le guard
+     * vérifie ensuite l'empreinte du mot de passe du cookie (onLogin).
      */
     public function recall(User $user, string $token): bool
     {
@@ -81,11 +91,6 @@ final class RememberTokens
             return false;
         }
 
-        DB::table(self::TABLE)->where('id', $row->id)->update([
-            ...self::device(request()),
-            'last_used_at' => now(),
-            'updated_at' => now(),
-        ]);
         $user->rememberDevice((int) $row->id, $token);
 
         return true;
@@ -94,21 +99,118 @@ final class RememberTokens
     /** Session ouverte par le jeton de l'appareil de la requête en cours. */
     public function attachSession(User $user, string $sessionId): void
     {
-        if ($user->rememberTokenId() !== null) {
-            DB::table(self::TABLE)->where('id', $user->rememberTokenId())->update(['session_id' => $sessionId, 'updated_at' => now()]);
+        $id = $user->rememberTokenId();
+        if ($id === null) {
+            return;
         }
+        DB::table(self::TABLE)->where('id', $id)->update(['session_id' => $sessionId, 'updated_at' => now()]);
+        DB::table(self::SESSIONS)->insertOrIgnore(['remember_token_id' => $id, 'session_id' => $sessionId, 'created_at' => now()]);
     }
 
     /**
-     * Connexion par le cookie (événement Login, `remember`) : le jeton est
-     * rattaché à la nouvelle session.
+     * Retour par le cookie, entièrement vérifié (événement Login du guard) :
+     * dernière utilisation, navigateur et nouvelle session de l'appareil ; ses
+     * abonnements push suivent la nouvelle session (I-103). Une connexion par
+     * le formulaire rattache sa session elle-même (AuthController::login).
      */
     public function onLogin(Login $event): void
     {
         $guard = Auth::guard($event->guard);
-        if ($event->remember && $event->user instanceof User && $guard instanceof SessionGuard) {
-            $this->attachSession($event->user, $guard->getSession()->getId());
+        $user = $event->user;
+        if (! $event->remember || ! $user instanceof User || ! $guard instanceof SessionGuard || ! $guard->viaRemember()) {
+            return;
         }
+        $id = $user->rememberTokenId();
+        if ($id === null) {
+            return;
+        }
+
+        $sessionId = $guard->getSession()->getId();
+        DB::table(self::TABLE)->where('id', $id)->update([
+            ...self::device(request()),
+            'last_used_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->pushSubscriptions->moveSessions($user, $this->sessionsOfTokens([$id]), $sessionId);
+        $this->attachSession($user, $sessionId);
+    }
+
+    /**
+     * Garde « Rester connecté » sur l'appareil de la requête après un
+     * changement de mot de passe : le cookie porte une empreinte du mot de
+     * passe, il est réémis avec la nouvelle. Renvoie le jeton gardé, ou null
+     * si l'appareil n'a pas de cookie valable pour ce compte.
+     */
+    public function keepCurrentDevice(User $user, Request $request): ?int
+    {
+        $guard = Auth::guard('web');
+        if (! $guard instanceof SessionGuard) {
+            return null;
+        }
+        $value = $request->cookies->get($guard->getRecallerName());
+        $recaller = is_string($value) ? new Recaller($value) : null;
+        if ($recaller === null || ! $recaller->valid() || (string) $recaller->id() !== (string) $user->getAuthIdentifier()) {
+            return null;
+        }
+        $row = DB::table(self::TABLE)->where('user_id', $user->id)->where('token_hash', self::hash($recaller->token()))->first();
+        if ($row === null) {
+            return null;
+        }
+
+        $expiresAt = CarbonImmutable::parse($row->created_at, 'UTC')->addDays($this->settings->int('sessions.remember_days'));
+        Cookie::queue(
+            $guard->getRecallerName(),
+            $user->getAuthIdentifier().'|'.$recaller->token().'|'.$guard->hashPasswordForCookie($user->getAuthPassword()),
+            max(1, (int) now()->diffInMinutes($expiresAt)),
+        );
+
+        return (int) $row->id;
+    }
+
+    /**
+     * Sessions de l'appareil d'une session : elle-même et, si un jeton
+     * « Rester connecté » l'a ouverte, toutes les sessions de ce jeton.
+     *
+     * @return list<string>
+     */
+    public function deviceSessions(User $user, string $sessionId): array
+    {
+        return array_values(array_unique([$sessionId, ...$this->sessionsOfTokens($this->tokensOfSession($user, $sessionId))]));
+    }
+
+    /**
+     * Jetons du compte qui ont ouvert cette session.
+     *
+     * @return list<int>
+     */
+    public function tokensOfSession(User $user, string $sessionId): array
+    {
+        return DB::table(self::TABLE)
+            ->where('user_id', $user->id)
+            ->where(fn ($query) => $query
+                ->where('session_id', $sessionId)
+                ->orWhereIn('id', DB::table(self::SESSIONS)->select('remember_token_id')->where('session_id', $sessionId)))
+            ->pluck('id')
+            ->map(fn (mixed $id) => (int) $id)
+            ->all();
+    }
+
+    /**
+     * Sessions ouvertes par ces jetons.
+     *
+     * @param  list<int>  $tokenIds
+     * @return list<string>
+     */
+    public function sessionsOfTokens(array $tokenIds): array
+    {
+        if ($tokenIds === []) {
+            return [];
+        }
+
+        return array_values(array_unique([
+            ...DB::table(self::SESSIONS)->whereIn('remember_token_id', $tokenIds)->pluck('session_id')->all(),
+            ...DB::table(self::TABLE)->whereIn('id', $tokenIds)->whereNotNull('session_id')->pluck('session_id')->all(),
+        ]));
     }
 
     /**
@@ -150,10 +252,27 @@ final class RememberTokens
         return DB::table(self::TABLE)->where('user_id', $user->id)->where('id', $id)->delete();
     }
 
-    /** Jetons rattachés à une session du compte (appareil déconnecté depuis la liste). */
+    /** Jetons qui ont ouvert une session du compte (appareil déconnecté). */
     public function forgetSession(User $user, string $sessionId): int
     {
-        return DB::table(self::TABLE)->where('user_id', $user->id)->where('session_id', $sessionId)->delete();
+        return $this->forgetTokens($user, $this->tokensOfSession($user, $sessionId));
+    }
+
+    /**
+     * @param  list<int>  $tokenIds
+     */
+    public function forgetTokens(User $user, array $tokenIds): int
+    {
+        return $tokenIds === [] ? 0 : DB::table(self::TABLE)->where('user_id', $user->id)->whereIn('id', $tokenIds)->delete();
+    }
+
+    /** Jetons du compte, sauf celui de l'appareil gardé (changement de mot de passe). */
+    public function forgetAllBut(User $user, ?int $keptTokenId): int
+    {
+        return DB::table(self::TABLE)
+            ->where('user_id', $user->id)
+            ->when($keptTokenId !== null, fn ($query) => $query->where('id', '!=', $keptTokenId))
+            ->delete();
     }
 
     /** Tous les jetons du compte (déconnexion de tous les appareils, désactivation, réinitialisation). */

@@ -24,7 +24,7 @@ final class PushSubscriptions
     {
         // Création concurrente du même endpoint (deux onglets) : updateOrCreate
         // retombe sur la mise à jour de la ligne gagnante.
-        return PushSubscription::query()->updateOrCreate(['endpoint' => $data['endpoint']], [
+        $subscription = PushSubscription::query()->updateOrCreate(['endpoint' => $data['endpoint']], [
             'user_id' => $user->id,
             'session_id' => $sessionId,
             'public_key' => $data['keys']['p256dh'],
@@ -34,6 +34,18 @@ final class PushSubscriptions
             'failures' => 0,
             'last_used_at' => now(),
         ]);
+
+        // Plafond par compte : chaque push parcourt tous les abonnements du compte,
+        // les plus anciennement utilisés au-delà du plafond sont retirés.
+        $kept = PushSubscription::query()
+            ->where('user_id', $user->id)
+            ->orderByDesc('last_used_at')
+            ->orderByDesc('id')
+            ->limit(max(1, (int) config('ramymaak.push.max_per_user')))
+            ->pluck('id');
+        PushSubscription::query()->where('user_id', $user->id)->whereNotIn('id', $kept)->delete();
+
+        return $subscription;
     }
 
     /** Désabonnement de l'appareil : seulement un abonnement du compte. */
@@ -48,10 +60,48 @@ final class PushSubscriptions
     /** Fin d'une session (déconnexion de cet appareil) : ses abonnements. */
     public function forgetSession(User $user, string $sessionId): int
     {
+        return $this->forgetSessions($user, [$sessionId]);
+    }
+
+    /**
+     * Fin des sessions d'un appareil : leurs abonnements.
+     *
+     * @param  list<string>  $sessionIds
+     */
+    public function forgetSessions(User $user, array $sessionIds): int
+    {
+        return $sessionIds === [] ? 0 : PushSubscription::query()
+            ->where('user_id', $user->id)
+            ->whereIn('session_id', $sessionIds)
+            ->delete();
+    }
+
+    /**
+     * Abonnements des autres appareils (changement de mot de passe) : seuls
+     * restent ceux des sessions gardées.
+     *
+     * @param  list<string>  $keptSessionIds
+     */
+    public function forgetAllBut(User $user, array $keptSessionIds): int
+    {
         return PushSubscription::query()
             ->where('user_id', $user->id)
-            ->where('session_id', $sessionId)
+            ->where(fn ($query) => $query->whereNull('session_id')->orWhereNotIn('session_id', $keptSessionIds))
             ->delete();
+    }
+
+    /**
+     * Retour d'un appareil par « Rester connecté » : ses abonnements suivent
+     * sa nouvelle session, et disparaîtront avec elle.
+     *
+     * @param  list<string>  $fromSessionIds
+     */
+    public function moveSessions(User $user, array $fromSessionIds, string $toSessionId): int
+    {
+        return $fromSessionIds === [] ? 0 : PushSubscription::query()
+            ->where('user_id', $user->id)
+            ->whereIn('session_id', $fromSessionIds)
+            ->update(['session_id' => $toSessionId]);
     }
 
     /** Fin de toutes les sessions du compte : tous ses abonnements. */
