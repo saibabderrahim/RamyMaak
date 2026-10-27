@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useRef } from 'react'
+import { useState } from 'react'
 import { api, ApiError, NetworkError } from '../api/client'
 import type { CurrentUser, Role } from '../api/types'
 import { purgeAccount } from '../offline/persist'
@@ -39,9 +39,10 @@ export function useCurrentUser() {
  */
 export function useAuthenticatedUser(): CurrentUser {
   const { data } = useCurrentUser()
-  const last = useRef<CurrentUser | null>(null)
-  if (data) last.current = data
-  const user = data ?? last.current
+  // Information du rendu précédent, gardée dans l'état (et non une référence lue pendant le rendu).
+  const [last, setLast] = useState(data)
+  if (data && data !== last) setLast(data)
+  const user = data ?? last
   if (!user) throw new Error('useAuthenticatedUser() utilisé hors d’une route protégée')
   return user
 }

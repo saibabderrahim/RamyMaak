@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Order, SubmitOrderInput } from '../api/types'
 import { db } from './db'
 import {
   claim,
+  CSRF_COOKIE_ENDPOINT,
   decodeXsrf,
   enqueue,
   fill,
@@ -22,6 +23,7 @@ import {
   removeUserEntries,
   SENDING_STALE_MS,
   sendEntry,
+  serviceWorkerXsrf,
   writeSessionUser,
 } from './outbox'
 import { isCacheablePhoto, isPhotoRequest } from './photos'
@@ -45,6 +47,8 @@ function deps(answer: () => Response | Promise<Response>): { fetch: ReturnType<t
   return { fetch, deps: { fetch, xsrf: async () => 'jeton' } }
 }
 
+// Compte connecté sur l'appareil (noté par trackAccount) : celui des commandes déposées.
+beforeEach(() => writeSessionUser(USER))
 afterEach(() => vi.restoreAllMocks())
 
 describe('outbox: sending (§6.3)', () => {
@@ -70,6 +74,7 @@ describe('outbox: sending (§6.3)', () => {
     ['a 429', () => problem(429, 'TOO_MANY_REQUESTS', 'Trop'), { status: 'pending', reason: 'server', httpStatus: 429 }],
     ['a 419', () => problem(419, 'CSRF_TOKEN_MISMATCH', 'Jeton'), { status: 'pending', reason: 'csrf' }],
     ['a 401', () => problem(401, 'UNAUTHENTICATED', 'Session expirée'), { status: 'pending', reason: 'unauthenticated' }],
+    ['a password to change (403)', () => problem(403, 'PASSWORD_CHANGE_REQUIRED', 'Changez votre mot de passe.'), { status: 'pending', reason: 'unauthenticated', httpStatus: 403 }],
     ['an unreadable 201', () => new Response('<html>', { status: 201 }), { status: 'pending', reason: 'server' }],
   ])('turns %s into its outcome', async (_, answer, expected) => {
     expect(await sendEntry({ body: body() }, async () => answer(), null)).toMatchObject(expected as object)
@@ -82,6 +87,38 @@ describe('outbox: sending (§6.3)', () => {
       status: 'refused',
       error: { code: 'HTTP_ERROR', detail: '' },
     })
+    expect(await sendEntry({ body: body() }, async () => problem(403, 'FORBIDDEN', 'Action non autorisée.'), null)).toMatchObject({ status: 'refused' })
+  })
+
+  it.each<[string, number | null]>([
+    ['another account signed in since (other tab)', 10],
+    ['nobody signed in any more', null],
+  ])('never sends an order under the session of %s, and leaves it waiting untouched', async (_, signedIn) => {
+    const { deps: sendDeps, fetch } = deps(() => respond(201, ORDER))
+    await put()
+    await writeSessionUser(signedIn)
+
+    expect(await processEntry('req-1', sendDeps)).toBeNull()
+    expect(await processPending(USER, sendDeps)).toEqual([])
+    expect(fetch).not.toHaveBeenCalled()
+    expect(await getEntry('req-1')).toMatchObject({ status: 'pending', attempts: 0, error: null, sending_at: null })
+
+    // Le compte de la commande de retour : elle part.
+    await writeSessionUser(USER)
+    expect((await processEntry('req-1', sendDeps))?.entry).toMatchObject({ status: 'sent', attempts: 1 })
+  })
+
+  it('checks the account again right before each sending, the token read first', async () => {
+    const { deps: sendDeps, fetch } = deps(() => respond(201, ORDER))
+    await put()
+    // Autre compte connecté pendant la lecture du jeton (autre onglet).
+    const xsrf = async () => {
+      await writeSessionUser(10)
+      return 'jeton'
+    }
+    expect(await processEntry('req-1', { ...sendDeps, xsrf })).toBeNull()
+    expect(fetch).not.toHaveBeenCalled()
+    expect((await getEntry('req-1'))?.status).toBe('pending')
   })
 
   it('records each outcome on the entry, with the number of attempts', async () => {
@@ -209,6 +246,7 @@ describe('outbox: clean-up', () => {
   })
 
   it('keeps the account of the device for the service worker', async () => {
+    await writeSessionUser(null)
     expect(await readSessionUser()).toBeNull()
     await writeSessionUser(9)
     expect(await readSessionUser()).toBe(9)
@@ -237,6 +275,26 @@ describe('outbox: background sync helpers (service worker)', () => {
     expect(needsRetry([{ entry, outcome: { status: 'pending', reason: 'network', httpStatus: null } }])).toBe(true)
     expect(needsRetry([{ entry, outcome: { status: 'pending', reason: 'unauthenticated', httpStatus: 401 } }])).toBe(false)
     expect(needsRetry([{ entry, outcome: { status: 'sent', order: ORDER, created: true } }])).toBe(false)
+  })
+
+  it('renews the anti-CSRF cookie when it has expired with the session, or after a 419', async () => {
+    let cookie: string | undefined
+    const readCookie = vi.fn(async () => cookie)
+    const fetch = vi.fn(async () => {
+      cookie = 'nouveau%3D'
+      return new Response(null, { status: 204 })
+    })
+
+    // Cookie expiré (session de 120 min) : un nouveau jeton est demandé au serveur, puis relu.
+    expect(await serviceWorkerXsrf(false, readCookie, fetch)).toBe('nouveau=')
+    expect(fetch).toHaveBeenCalledWith(CSRF_COOKIE_ENDPOINT, expect.objectContaining({ credentials: 'include' }))
+    // Cookie présent : lu tel quel.
+    expect(await serviceWorkerXsrf(false, readCookie, fetch)).toBe('nouveau=')
+    expect(fetch).toHaveBeenCalledTimes(1)
+    // Refusé (419) : renouvelé même présent.
+    cookie = 'refuse'
+    expect(await serviceWorkerXsrf(true, readCookie, fetch)).toBe('nouveau=')
+    expect(fetch).toHaveBeenCalledTimes(2)
   })
 
   it('reads the anti-CSRF token of the Cookie Store and fills the texts', () => {

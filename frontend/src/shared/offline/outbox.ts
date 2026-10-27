@@ -23,7 +23,7 @@ export const SENDING_STALE_MS = 2 * 60_000
 export const ORDERS_ENDPOINT = '/api/v1/client/orders'
 /** Nouveau cookie anti-CSRF (XSRF-TOKEN) de Sanctum. */
 export const CSRF_COOKIE_ENDPOINT = '/sanctum/csrf-cookie'
-/** Clé `kv` du compte connecté sur l'appareil, lue par le service worker. */
+/** Clé `kv` du compte connecté sur l'appareil, vérifiée avant chaque envoi (application et service worker). */
 export const SESSION_USER_KEY = 'session-user'
 
 /** Une commande de la même journée attend déjà son envoi (I-112). */

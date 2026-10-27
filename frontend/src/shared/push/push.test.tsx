@@ -361,6 +361,26 @@ describe('push — invitation on the home screen (contract §8)', () => {
     expect(calls.find((call) => call.path === '/api/v1/push-subscriptions')?.body).toEqual(SUBSCRIPTION_BODY)
   })
 
+  it.each([
+    ['« Activer » succeeds', 'Activer'],
+    ['« Plus tard » dismisses it', 'Plus tard'],
+  ])('moves the focus to the heading of the screen when %s, the touched button gone with the invitation', async (_, button) => {
+    installPush()
+    api()
+    const user = userEvent.setup()
+    renderWith(
+      <main>
+        <h1>Bonjour</h1>
+        <PushInvite />
+      </main>,
+    )
+
+    await user.click(await screen.findByRole('button', { name: button }))
+
+    await waitFor(() => expect(invite()).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'Bonjour' })).toHaveFocus())
+  })
+
   it('keeps the invitation with the reason when the activation fails', async () => {
     installPush()
     api({ 'POST /api/v1/push-subscriptions': () => problem(503, 'SERVER_ERROR', 'Service indisponible.') })

@@ -2,14 +2,14 @@ import { dehydrate, onlineManager, QueryClient, QueryClientProvider, type QueryK
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { AppRoutes } from '../../App'
 import { createQueryClient } from '../../shared/api/queryClient'
 import type { CurrentUser } from '../../shared/api/types'
-import { meQueryKey } from '../../shared/auth/session'
+import { meQueryKey, useAuthenticatedUser } from '../../shared/auth/session'
 import i18n from '../../shared/i18n'
 import { db, type OutboxEntry } from '../../shared/offline/db'
-import { getEntry, listEntries } from '../../shared/offline/outbox'
+import { getEntry, listEntries, writeSessionUser } from '../../shared/offline/outbox'
 import { LAST_USER_KEY, PERSIST_VERSION, queryCacheKey, startQueryPersistence } from '../../shared/offline/persist'
 import { purgeSessionStorage } from '../../shared/storage'
 import { LocationProbe } from '../../test/LocationProbe'
@@ -22,6 +22,8 @@ import { LIST_URL, makePage, makeSummary } from './orders/testing'
 
 const slow = { timeout: 5000 }
 
+// Compte connecté sur l'appareil (noté par trackAccount au démarrage) : la boîte d'envoi n'envoie que ses commandes.
+beforeEach(() => writeSessionUser(USER_ID))
 afterEach(() => {
   purgeSessionStorage()
   onlineManager.setOnline(true)
@@ -95,6 +97,21 @@ describe('offline start-up (§6.1)', () => {
     await waitFor(async () => expect(await db.kv.get(queryCacheKey(USER_ID))).toBeUndefined())
   })
 
+  it('checks the session again online after a reload, although the saved user is recent: revoked, back to the login', async () => {
+    // Session de ce PC révoquée depuis un autre appareil ; l'utilisateur enregistré date de quelques secondes.
+    await seedCache(clientUser(), [[todayKey(), makeToday()]])
+    const { calls } = mockApi({
+      'GET /api/v1/auth/me': () => problem(401, 'UNAUTHENTICATED', 'Authentification requise'),
+      'GET /api/v1/client/today': () => problem(401, 'UNAUTHENTICATED', 'Authentification requise'),
+    })
+
+    await boot('/client')
+
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/connexion'), slow)
+    expect(calls.filter((call) => call.path === '/api/v1/auth/me').length).toBeGreaterThan(0)
+    await waitFor(async () => expect(await db.kv.get(queryCacheKey(USER_ID))).toBeUndefined())
+  })
+
   it('says offline that nothing is saved on the device when no account was signed in', async () => {
     goOffline()
     mockApi({})
@@ -157,8 +174,10 @@ describe('outbox of the client (§6.3)', () => {
       `/client/commandes/${ORDER_ID}`,
     )
     expect(row('Commande du dimanche 11/10/2026')).toHaveTextContent('Refusée : L’heure limite de commande (13:00) est passée.')
-    // Pastille de l'onglet « Commandes » : à envoyer, en cours et refusées (4), pas la commande envoyée.
-    expect(screen.getAllByText('Commandes (4)').length).toBeGreaterThan(0)
+    // Pastille de l'onglet « Commandes » : à envoyer, en cours et refusées (4), pas la commande envoyée ; son nom
+    // accessible dit ce qu'elle compte.
+    expect(screen.getAllByRole('link', { name: 'Commandes (4 commandes à envoyer ou refusées)' }).length).toBeGreaterThan(0)
+    expect(screen.queryByText('Commandes (4)')).not.toBeInTheDocument()
   })
 
   it('removes a refused order after confirmation, and resumes another one in the cart in place of the current cart', async () => {
@@ -235,7 +254,39 @@ describe('outbox of the client (§6.3)', () => {
 })
 
 describe('logout with orders waiting (§6.3, point 7)', () => {
+  /** Erreurs remontées à la page pendant le test (page blanche : rendu de la coquille tombé). */
+  function pageErrors(): unknown[] {
+    const errors: unknown[] = []
+    const listener = (event: ErrorEvent) => errors.push(event.error)
+    window.addEventListener('error', listener)
+    onTestFinished(() => window.removeEventListener('error', listener))
+    return errors
+  }
+
+  it('keeps the last user for a component of the shell drawn again on its own before the guard, at the end of the session', async () => {
+    // Composant redessiné par sa propre lecture suivie (boîte d'envoi) après `setQueryData(meQueryKey, null)`.
+    function Name() {
+      return <p>{useAuthenticatedUser().name}</p>
+    }
+    const queryClient = createQueryClient()
+    queryClient.setQueryData(meQueryKey, clientUser())
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Name />
+      </QueryClientProvider>,
+    )
+    expect(screen.getByText('Gérant C0012')).toBeInTheDocument()
+
+    // Notifications de TanStack Query différées (notifyManager) : le composant se redessine après.
+    await act(async () => {
+      queryClient.setQueryData(meQueryKey, null)
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+    expect(screen.getByText('Gérant C0012')).toBeInTheDocument()
+  })
+
   it('asks before logging out, then removes the outbox, the saved data and the drafts of the account from the device', async () => {
+    const errors = pageErrors()
     const user = userEvent.setup()
     await db.outbox.bulkPut([entry({ id: 'a', day: DAY }), entry({ id: 'b', day: '2026-10-09' })])
     await db.kv.put({ key: queryCacheKey(USER_ID), value: '{}' })
@@ -271,9 +322,13 @@ describe('logout with orders waiting (§6.3, point 7)', () => {
     expect(localStorage.getItem(`ramymaak:limit-drafts:${USER_ID}:${DAY}:3`)).toBeNull()
     // Brouillons d'un autre compte de l'appareil : gardés.
     expect(localStorage.getItem(`ramymaak:limit-drafts:77:${DAY}:3`)).toBe('[]')
+    // Boîte d'envoi relue après la fin de session : la coquille ne tombe pas avant d'être retirée par le garde.
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(errors).toEqual([])
   })
 
   it('says it for a single order, and logs out at once without any order waiting', async () => {
+    const errors = pageErrors()
     expect(i18n.t('offline.logout.pending', { count: 1 })).toBe('1 commande en attente d’envoi sera supprimée de cet appareil. Se déconnecter quand même ?')
 
     const user = userEvent.setup()
@@ -292,5 +347,7 @@ describe('logout with orders waiting (§6.3, point 7)', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(calls.some((call) => call.path === '/api/v1/auth/logout')).toBe(true)
     await waitFor(async () => expect(await listEntries(USER_ID)).toEqual([]))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(errors).toEqual([])
   })
 })

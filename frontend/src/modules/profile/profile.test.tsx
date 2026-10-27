@@ -1,7 +1,13 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { onlineManager, QueryClientProvider } from '@tanstack/react-query'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it } from 'vitest'
+import { MemoryRouter } from 'react-router'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { AppRoutes } from '../../App'
+import { createQueryClient } from '../../shared/api/queryClient'
 import type { CurrentUser, DeviceSession, Role } from '../../shared/api/types'
+import { meQueryKey } from '../../shared/auth/session'
+import { db } from '../../shared/offline/db'
 import { PUSH_OWNER_KEY } from '../../shared/push'
 import { asIphone, ENDPOINT, installPush, PUBLIC_KEY, uninstallPush } from '../../shared/push/testing'
 import { json, makeUser, mockApi, problem, renderApp } from '../../test/utils'
@@ -37,6 +43,8 @@ afterEach(() => {
   uninstallPush()
   restoreUserAgent?.()
   restoreUserAgent = null
+  onlineManager.setOnline(true)
+  vi.restoreAllMocks()
 })
 
 type Routes = Parameters<typeof mockApi>[0]
@@ -79,6 +87,8 @@ describe('profile — notifications of this device (contract §8)', () => {
 
     expect(await card.findByText('Activées')).toBeInTheDocument()
     expect(card.getByText(/Vous recevez les notifications de RamyMaak sur cet appareil/)).toBeInTheDocument()
+    // Le bouton touché a disparu : le focus passe à celui qui le remplace, pas au corps de la page.
+    await waitFor(() => expect(card.getByRole('button', { name: 'Désactiver sur cet appareil' })).toHaveFocus())
     expect(requests('POST /api/v1/push-subscriptions').map((call) => call.body)).toEqual([
       { endpoint: ENDPOINT, keys: { p256dh: 'BN-p256dh', auth: 'k-auth' }, content_encoding: 'aes128gcm' },
     ])
@@ -88,6 +98,7 @@ describe('profile — notifications of this device (contract §8)', () => {
     await user.click(card.getByRole('button', { name: 'Désactiver sur cet appareil' }))
 
     expect(await card.findByText('Désactivées')).toBeInTheDocument()
+    await waitFor(() => expect(card.getByRole('button', { name: 'Activer les notifications sur cet appareil' })).toHaveFocus())
     expect(requests('DELETE /api/v1/push-subscriptions').map((call) => call.body)).toEqual([{ endpoint: ENDPOINT }])
     expect(localStorage.getItem(PUSH_OWNER_KEY)).toBeNull()
     expect(calls.some((call) => call.method === 'PATCH')).toBe(false)
@@ -332,6 +343,51 @@ describe('profile — connected devices (contract §5)', () => {
     expect(await card.findByText('Aucun appareil connecté.')).toBeInTheDocument()
   })
 
+  it('says offline that the list is not saved on the device, instead of loading endlessly', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    onlineManager.setOnline(false)
+    const { requests } = profileApi(account())
+    // Utilisateur relu du cache de l'appareil, hors ligne.
+    const queryClient = createQueryClient()
+    queryClient.setQueryData(meQueryKey, account())
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/profil']}>
+          <AppRoutes />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    const card = within(await devicesCard())
+    expect(card.getByText('Pas de données enregistrées sur cet appareil pour cet écran : reconnectez-vous au réseau.')).toBeInTheDocument()
+    expect(card.queryByText('Chargement des appareils…')).not.toBeInTheDocument()
+    expect(requests('GET /api/v1/auth/sessions')).toHaveLength(0)
+  })
+
+  it('warns that the orders waiting on this device will be removed with all the devices (§6.3, point 7)', async () => {
+    await db.outbox.put({
+      id: 'w',
+      user_id: 5,
+      client_id: 12,
+      day: '2026-10-08',
+      body: { client_request_id: 'w', day: '2026-10-08', comment: null, lines: [{ product_id: 42, quantity: 1 }] },
+      created_at: '2026-10-08T07:00:00.000Z',
+      status: 'pending',
+      attempts: 1,
+      error: null,
+      order: null,
+    })
+    profileApi(account())
+    const user = userEvent.setup()
+
+    renderApp('/profil')
+    const card = within(await devicesCard())
+    await user.click(card.getByRole('button', { name: 'Me déconnecter de tous mes appareils' }))
+    const dialog = within(await screen.findByRole('dialog', { name: 'Me déconnecter de tous mes appareils' }))
+    expect(dialog.getByText(/y compris celui-ci/)).toBeInTheDocument()
+    expect(dialog.getByText('1 commande en attente d’envoi sera supprimée de cet appareil. Se déconnecter quand même ?')).toBeInTheDocument()
+  })
+
   it('disconnects from all devices after confirmation (EF-AUTH-07)', async () => {
     let session = true
     const { requests } = profileApi(account(), {
@@ -348,6 +404,8 @@ describe('profile — connected devices (contract §5)', () => {
     await user.click(card.getByRole('button', { name: 'Me déconnecter de tous mes appareils' }))
     const dialog = within(await screen.findByRole('dialog', { name: 'Me déconnecter de tous mes appareils' }))
     expect(dialog.getByText(/y compris celui-ci/)).toBeInTheDocument()
+    // Aucune commande en attente d'envoi : rien à annoncer.
+    expect(dialog.queryByText(/en attente d’envoi/)).not.toBeInTheDocument()
     await user.click(dialog.getByRole('button', { name: 'Tout déconnecter' }))
 
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/connexion'))

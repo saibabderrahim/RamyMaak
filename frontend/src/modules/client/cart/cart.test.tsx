@@ -1,12 +1,12 @@
 import { onlineManager } from '@tanstack/react-query'
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent, { type UserEvent } from '@testing-library/user-event'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClientToday, Order } from '../../../shared/api/types'
 import { formatAmount } from '../../../shared/format'
 import { totals } from '../../../shared/money'
 import type { OutboxEntry } from '../../../shared/offline/db'
-import { enqueue, getEntry, listEntries } from '../../../shared/offline/outbox'
+import { enqueue, getEntry, listEntries, writeSessionUser } from '../../../shared/offline/outbox'
 import { sendPendingEntries } from '../../../shared/offline/useOutbox'
 import { purgeSessionStorage } from '../../../shared/storage'
 import { json, problem } from '../../../test/utils'
@@ -33,6 +33,8 @@ import {
 } from './testing'
 import type { Cart } from './store'
 
+// Compte connecté sur l'appareil (noté par trackAccount au démarrage) : la boîte d'envoi n'envoie que ses commandes.
+beforeEach(() => writeSessionUser(USER_ID))
 afterEach(() => {
   purgeSessionStorage()
   vi.restoreAllMocks()

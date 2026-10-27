@@ -94,6 +94,7 @@ describe('persisted query cache: allowlist (§6.1)', () => {
     queryClient.setQueryData(['adv', 'dashboard'], { secret: true })
     queryClient.setQueryData(['backoffice', 'orders', 'list'], { secret: true })
     queryClient.setQueryData(['distribution', 'backoffice', '2026-10-08', 3], { secret: true })
+    localStorage.setItem(LAST_USER_KEY, '9')
 
     await save(queryClient)
 
@@ -179,6 +180,77 @@ describe('persisted query cache: accounts', () => {
     expect(await listEntries(10)).toHaveLength(1)
   })
 
+  it('drops the queries of the previous account from memory when a tab left on it reads another account, before saving', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    localStorage.setItem(LAST_USER_KEY, '9')
+    const queryClient = createQueryClient()
+    queryClient.setQueryData(meQueryKey, client)
+    queryClient.setQueryData(['client', 'today', 'default'], { owner: 9 })
+    queryClient.setQueryData(['client', 'orders', { page: 1 }], { owner: 9 })
+    const stop = await startQueryPersistence(queryClient)
+    queryClient.setQueryData(['client', 'today', 'default'], { owner: 9, read: 2 })
+    await vi.advanceTimersByTimeAsync(1100)
+    expect(await storedKeys(9)).toHaveLength(3)
+    // Plus d'une seconde après : l'enregistrement suivant part aussitôt, sans attendre.
+    await vi.advanceTimersByTimeAsync(1100)
+
+    // Un autre compte s'est connecté dans un autre onglet ; cet onglet relit /auth/me et le trouve.
+    localStorage.setItem(LAST_USER_KEY, '10')
+    queryClient.setQueryData(meQueryKey, other)
+    // Pendant le retrait, chaque requête retirée déclenche un enregistrement : aucun n'emporte une donnée du compte précédent.
+    await vi.advanceTimersByTimeAsync(10)
+    expect((await storedKeys(10)).some((key) => key[0] === 'client')).toBe(false)
+    await vi.advanceTimersByTimeAsync(1100)
+    await vi.advanceTimersByTimeAsync(1100)
+
+    expect(queryClient.getQueryData(['client', 'today', 'default'])).toBeUndefined()
+    expect(queryClient.getQueryCache().getAll().map((query) => query.queryKey)).toEqual([meQueryKey])
+    expect(await storedKeys(10)).toEqual([['auth', 'me']])
+    expect(await stored(9)).toBeNull()
+    stop()
+  })
+
+  it('never writes back the cache of an account logged out in another tab', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    localStorage.setItem(LAST_USER_KEY, '9')
+    const queryClient = createQueryClient()
+    queryClient.setQueryData(meQueryKey, client)
+    const stop = await startQueryPersistence(queryClient)
+    queryClient.setQueryData(['client', 'today', 'default'], { owner: 9 })
+    await vi.advanceTimersByTimeAsync(1100)
+    expect(await stored(9)).not.toBeNull()
+
+    // Déconnexion dans un autre onglet : compte oublié du navigateur, cache effacé ; cet onglet affiche encore le compte.
+    localStorage.removeItem(LAST_USER_KEY)
+    await purgeAccount(9)
+    queryClient.setQueryData(['client', 'today', 'default'], { owner: 9, read: 2 })
+    await vi.advanceTimersByTimeAsync(1100)
+    await vi.advanceTimersByTimeAsync(1100)
+
+    expect(await stored(9)).toBeNull()
+    stop()
+  })
+
+  it.each(['adv', 'admin'] as const)('saves nothing for the back office (%s), and drops a cache saved before (§1)', async (role) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    const backOffice = makeUser(role, { id: 3 })
+    await db.kv.put({ key: queryCacheKey(3), value: '{}' })
+    localStorage.setItem(LAST_USER_KEY, '3')
+    const queryClient = createQueryClient()
+    queryClient.setQueryData(meQueryKey, backOffice)
+    const stop = await startQueryPersistence(queryClient)
+
+    queryClient.setQueryData(['notifications', 'list', 'all'], { data: [] })
+    await vi.advanceTimersByTimeAsync(1100)
+    await vi.advanceTimersByTimeAsync(1100)
+
+    expect(await db.kv.get(queryCacheKey(3))).toBeUndefined()
+    // Compte connecté toujours noté : la boîte d'envoi d'un client de l'appareil ne part pas sous cette session.
+    expect(readLastUser()).toBe(3)
+    expect(await readSessionUser()).toBe(3)
+    stop()
+  })
+
   it('names the limit drafts of an account like the distribution grid does (draftStorageKey)', () => {
     expect(limitDraftsPrefix(9)).toBe('ramymaak:limit-drafts:9:')
   })
@@ -200,6 +272,17 @@ describe('persisted query cache: start-up', () => {
     const stop = await startQueryPersistence(queryClient)
     expect(queryClient.getQueryData(meQueryKey)).toEqual(client)
     expect(queryClient.getQueryData(['client', 'today', 'default'])).toEqual({ day: '2026-10-08' })
+    stop()
+  })
+
+  it('marks the restored queries stale, without reading them at once: each screen reads them again when shown online', async () => {
+    await seed()
+    const queryClient = createQueryClient()
+    const stop = await startQueryPersistence(queryClient)
+    const cache = queryClient.getQueryCache()
+    expect(cache.find({ queryKey: meQueryKey })?.isStale()).toBe(true)
+    expect(cache.find({ queryKey: ['client', 'today', 'default'] })?.isStale()).toBe(true)
+    expect(cache.getAll().every((query) => query.state.fetchStatus === 'idle')).toBe(true)
     stop()
   })
 
