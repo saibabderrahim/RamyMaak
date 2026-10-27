@@ -58,11 +58,14 @@ Paramètre général `notifications.push_enabled` (Admin → Paramètres, vrai p
   - L'abonnement est rattaché à l'utilisateur et à la **session** courante, avec le navigateur (`user_agent`, 255 caractères) et `last_used_at`.
   - Un `endpoint` déjà rattaché à un autre compte (appareil partagé) **passe au compte courant** : l'ancien propriétaire ne reçoit plus rien sur cet appareil (I-103).
   - La PWA renvoie son abonnement à chaque ouverture, ce qui met à jour la session et `last_used_at`.
+  - **Au plus 10 abonnements par compte** : au-delà, le moins récemment utilisé est retiré (chaque push parcourt tous les appareils du compte).
 - **DELETE** `{ "endpoint": "…" }` : 204, y compris pour un endpoint inconnu ou appartenant à un autre compte, qui reste alors intact.
 - Limitation : 20 requêtes par minute et par utilisateur.
 
 **Fin de session et abonnements** (I-103). Les abonnements de l'appareil sont supprimés :
-- à la déconnexion (`POST /auth/logout`) : ceux de la session courante ;
+- à la déconnexion (`POST /auth/logout`) : ceux de l'appareil, c'est-à-dire de sa session et des sessions ouvertes par son jeton « Rester connecté » (§5) ;
+- au retour d'un appareil par son cookie « Rester connecté » après expiration de sa session, ses abonnements suivent la nouvelle session ;
+- au changement du mot de passe : ceux des autres appareils (I-114) ;
 - à la déconnexion de tous les appareils, à la désactivation du compte et à une réinitialisation du mot de passe par l'Admin (`SessionRevoker::revokeAll`) : tous ;
 - à la déconnexion d'un appareil depuis le profil (§5) : ceux de la session révoquée.
 
@@ -98,7 +101,7 @@ Paramètre général `notifications.push_enabled` (Admin → Paramètres, vrai p
 2. **Anti-saturation**, état par utilisateur et par groupe dans `push_throttles`, verrouillé pendant la décision :
    - si aucun push de ce groupe n'est parti depuis 5 minutes, le push part tout de suite (tâche `DeliverPush`) ;
    - sinon il est compté (`pending + 1`) et une tâche `FlushPush` est programmée pour la fin de la fenêtre, une seule par utilisateur et par groupe ;
-   - à son tour, cette tâche envoie un push **groupé** (§2.5) s'il reste des notifications comptées, hors de la plage sans push. Le délai est en configuration (`ramymaak.push.group_window_minutes`, 5).
+   - à son tour, cette tâche envoie un push **groupé** (§2.5) s'il reste des notifications comptées, hors de la plage sans push ; une seule notification comptée part seule, avec son texte et son écran. Le délai est en configuration (`ramymaak.push.group_window_minutes`, 5).
 3. `DeliverPush` (file d'attente, 3 essais) chiffre la charge pour chaque abonnement de l'utilisateur :
    - réponse 404 ou 410 → abonnement supprimé ;
    - autre échec → `failures + 1` ;
@@ -135,7 +138,7 @@ Commande `ramymaak:send-reminders`, planifiée `everyMinute()` et `withoutOverla
 | N-10 | quotas publiés, répartition non envoyée | [limite de répartition − 30 min ; limite[ | régionaux de la région à cette date (`RegionStaff::regionals`) | « Rappel : répartition du 08/10 — Centre » / « Envoyez la répartition avant 10:00. » | `/regional/repartition?day=…&region=…` |
 | N-11 | répartition envoyée | [limite de commande − 1 h ; limite[ | clients notifiés **sans commande comptée** (même calcul que « Clients sans commande », I-88), comptes actifs de rôle client | « Rappel : commande avant 13:00 » / « Vous n'avez pas encore commandé pour le 08/10. » | `/client` |
 | N-12 | commandes **Envoyées** de la région ce jour-là | [limite de validation − 30 min ; limite[ | régionaux de la région | « Rappel : 3 commandes à valider » / « Centre : validez avant 15:00. » | `/regional/commandes?day=…` |
-| N-13 | quotas publiés, répartition non envoyée | [limite de répartition ; clôture[ | ADV dont le périmètre comprend la région à cette date, et Admin | « Répartition en retard — Centre » / « La répartition du 08/10 n'est pas envoyée (limite 10:00). » | `/adv/journees/{day}/suivi` |
+| N-13 | quotas publiés, répartition non envoyée | [limite de répartition ; clôture[ | ADV dont le périmètre comprend la région à cette date, et Admin | « Répartition en retard — Centre » / « La répartition du 08/10 n'est pas envoyée (limite 10:00). » | `/adv/journees/{day}/suivi` (Admin : `/admin/journees/{day}/suivi`) |
 
 - **Une fois par heure limite** : la clé d'unicité est formée du code, de la journée régionale et de l'heure limite effective. Une prolongation déclenche donc un nouveau rappel avant la nouvelle heure (I-107).
 - **Hors fenêtre, rien** : un planificateur arrêté puis relancé après l'heure limite n'envoie pas de rappel en retard (N-13 excepté, jusqu'à la clôture).
@@ -160,7 +163,7 @@ Commande `ramymaak:send-reminders`, planifiée `everyMinute()` et `withoutOverla
 ```
 
 - **Appareils**, du plus récent au plus ancien (la session courante en tête) :
-  - les **sessions actives** du compte (table `sessions`, hors sessions expirées) ;
+  - les **sessions actives** du compte (table `sessions`, hors sessions expirées) ; un appareil « Rester connecté » n'apparaît qu'une fois, par sa session la plus récente, même si des requêtes parallèles à son retour par le cookie ont ouvert plusieurs sessions ;
   - les **appareils mémorisés** (« Rester connecté ») dont la session a expiré après inactivité : ils se reconnectent par leur cookie (I-113). Dernière activité : dernière utilisation du jeton.
 - **`id`** : identifiant opaque, jamais l'identifiant de session ni le jeton (§12) :
   - `s_` suivi des 12 premiers caractères hexadécimaux d'un HMAC de l'identifiant de session avec la clé de l'application ;
@@ -173,14 +176,15 @@ Commande `ramymaak:send-reminders`, planifiée `everyMinute()` et `withoutOverla
 - **`remembered`** : « Rester connecté » sur cet appareil (un jeton y est rattaché).
 - **DELETE** (`s_…` ou `r_…`) :
   - 204 ;
-  - supprime la session, les jetons « Rester connecté » qui lui sont rattachés et ses abonnements push : l'appareil ne peut plus se reconnecter par son cookie ;
+  - supprime **toutes les sessions de l'appareil** (celles ouvertes par son jeton), son jeton « Rester connecté » et ses abonnements push : l'appareil ne peut plus se reconnecter par son cookie ;
   - journal `auth`, événement `session.revoked`.
-  - **Refus** : 404 si l'identifiant est inconnu, expiré ou appartient à un autre compte ; 422 si c'est l'appareil courant (utiliser « Me déconnecter »).
+  - **Refus** : 404 si l'identifiant est inconnu, expiré ou appartient à un autre compte ; 422 si c'est l'appareil courant, ou une autre session du même appareil (utiliser « Me déconnecter »).
 
 **Jetons « Rester connecté » par appareil** (I-113, EF-AUTH-06) :
-- table `remember_tokens` : un jeton par connexion avec « Rester connecté » (clients et régionaux seulement), enregistré haché (SHA-256), avec le navigateur, l'adresse, la dernière utilisation et la dernière session qu'il a ouverte ;
+- table `remember_tokens` : un jeton par connexion avec « Rester connecté » (clients et régionaux seulement), enregistré haché (SHA-256), avec le navigateur, l'adresse, la dernière utilisation et la dernière session qu'il a ouverte ; table `remember_token_sessions` : toutes les sessions qu'il a ouvertes (l'appareil) ;
 - durée : celle du cookie (`sessions.remember_days`, depuis la connexion) ; un jeton plus ancien, ou d'un compte passé au back-office, est refusé et supprimé ;
 - « Me déconnecter » supprime le jeton de cet appareil ; la déconnexion de tous les appareils, la désactivation du compte et la réinitialisation du mot de passe suppriment tous les jetons du compte ; une nouvelle connexion sur l'appareil remplace son ancien jeton ;
+- **changement du mot de passe** (`PUT /auth/password`, I-114) : les autres appareils sont déconnectés (sessions, jetons, abonnements push) ; le cookie « Rester connecté » de cet appareil porte une empreinte du mot de passe, il est réémis avec la nouvelle ;
 - `users.remember_token` est gardé, mais n'ouvre plus de session.
 
 ## 6. Hors ligne (EF-CLT-07, §9.5)
@@ -297,6 +301,7 @@ Côté serveur, le socle fournit aussi `NotificationType::pushable()`, `isRemind
 | I-111 | N-15 (sécurité du compte) dans l'application seulement, à la réinitialisation du mot de passe par l'Admin ou par la commande `ramymaak:reset-password` ; l'e-mail reste reporté |
 | I-112 | Une seule commande en attente d'envoi par journée sur un appareil ; le serveur reste juge (RG-C04) |
 | I-113 | « Rester connecté » par appareil : un jeton haché par connexion (`remember_tokens`) au lieu du jeton unique du compte ; « Déconnecter » un appareil depuis la liste supprime aussi son jeton, il ne se reconnecte plus ; un appareil mémorisé dont la session a expiré reste listé (`r_…`) |
+| I-114 | Changer son mot de passe déconnecte ses autres appareils et garde « Rester connecté » sur celui-ci : les cookies des autres ne s'ouvraient déjà plus (empreinte du mot de passe), ils ne restent plus listés ni abonnés aux push |
 
 ## 11. Tests sur appareils réels (critère de fin)
 

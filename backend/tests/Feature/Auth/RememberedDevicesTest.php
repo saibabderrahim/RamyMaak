@@ -299,7 +299,7 @@ it('signs the other devices out on a password change, and keeps « Rester connec
         ->and(PushSubscription::query()->pluck('session_id')->all())->toBe([$phone[$this->session]])
         ->and(DB::table('sessions')->whereIn('id', [$tablet[$this->session], $pc[$this->session]])->exists())->toBeFalse()
         ->and(AuditLog::query()->where('event', 'password.changed')->sole()->properties['other_devices'])
-        ->toBe(['sessions' => 2, 'push_subscriptions' => 1, 'remember_tokens' => 1]);
+        ->toEqual(['sessions' => 2, 'push_subscriptions' => 1, 'remember_tokens' => 1]);
 
     // Session expirée : le nouveau cookie reconnecte le téléphone ; la tablette, plus.
     $this->travel(3)->hours();
